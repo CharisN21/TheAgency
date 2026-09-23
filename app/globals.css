@@ -1,0 +1,208 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* The Agency — maroon on warm greige. Values from the design system (tokens.json v2). */
+  --background: #f5f3f2;
+  --foreground: #1b1719;
+  --card: #ffffff;
+  --card-foreground: #1b1719;
+  --popover: #ffffff;
+  --popover-foreground: #1b1719;
+  --primary: #7c1f35;
+  --primary-foreground: #ffffff;
+  --primary-hover: #6e1b2e;
+  --secondary: #edeae9;
+  --secondary-foreground: #1b1719;
+  --muted: #edeae9;
+  --muted-foreground: #5e5659;
+  --accent: #f7eaed;
+  --accent-foreground: #6e1b2e;
+  --destructive: #b3261e;
+  --border: #e4e0df;
+  --input: #8a8285;
+  --ring: #7c1f35;
+  --radius: 0.625rem;
+
+  /* extras beyond the shadcn roles */
+  --ink-3: #8a8285;
+  --fill-strong: #e2dedc;
+  --brass: #9c7a45;
+  --ok: #186b33;
+  --ok-soft: #e6f2e8;
+  --warn: #a63f08;
+  --warn-soft: #fbeadf;
+  --danger-soft: #fbe6e4;
+  --info: #0b62c4;
+  --info-soft: #e4eefa;
+  --scrim: rgba(27, 23, 25, 0.32);
+  --bar: rgba(250, 249, 248, 0.86);
+
+  --chart-1: #7c1f35;
+  --chart-2: #9e2c46;
+  --chart-3: #9c7a45;
+  --chart-4: #186b33;
+  --chart-5: #5e5659;
+
+  --sidebar: rgba(244, 241, 240, 0.82);
+  --sidebar-foreground: #1b1719;
+  --sidebar-primary: #7c1f35;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f7eaed;
+  --sidebar-accent-foreground: #6e1b2e;
+  --sidebar-border: #e4e0df;
+  --sidebar-ring: #7c1f35;
+}
+
+.dark {
+  --background: #121011;
+  --foreground: #f5f2f1;
+  --card: #1c1a1b;
+  --card-foreground: #f5f2f1;
+  --popover: #262324;
+  --popover-foreground: #f5f2f1;
+  --primary: #9e2c46;
+  --primary-foreground: #ffffff;
+  --primary-hover: #b23350;
+  --secondary: #2a2728;
+  --secondary-foreground: #f5f2f1;
+  --muted: #2a2728;
+  --muted-foreground: #aea6a8;
+  --accent: #3a2027;
+  --accent-foreground: #f0b3bf;
+  --destructive: #ff6b61;
+  --border: #332f30;
+  --input: #7c7476;
+  --ring: #f0b3bf;
+
+  --ink-3: #6e6668;
+  --fill-strong: #383335;
+  --brass: #c8a96a;
+  --ok: #3ddc68;
+  --ok-soft: #15301e;
+  --warn: #ff9a4d;
+  --warn-soft: #3a2410;
+  --danger-soft: #3b1a18;
+  --info: #5aa9ff;
+  --info-soft: #14263d;
+  --scrim: rgba(0, 0, 0, 0.58);
+  --bar: rgba(22, 20, 21, 0.86);
+
+  --chart-1: #c9566b;
+  --chart-2: #9e2c46;
+  --chart-3: #c8a96a;
+  --chart-4: #3ddc68;
+  --chart-5: #aea6a8;
+
+  --sidebar: rgba(28, 26, 27, 0.78);
+  --sidebar-foreground: #f5f2f1;
+  --sidebar-primary: #9e2c46;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #3a2027;
+  --sidebar-accent-foreground: #f0b3bf;
+  --sidebar-border: #332f30;
+  --sidebar-ring: #f0b3bf;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* The Agency's own tokens, exposed as Tailwind utilities (bg-ok-soft, text-brass, …) */
+@theme inline {
+  --color-brass: var(--brass);
+  --color-ink-3: var(--ink-3);
+  --color-fill-strong: var(--fill-strong);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-bar: var(--bar);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, sans-serif;
+}
+
+@layer base {
+  /* 150–250ms ease-out, and nothing at all when the reader asks for less motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ---- Brand: the landing-page logo sequence (see the design system, Brand · Logo motion) ---- */
+.brand-sheen { position: absolute; inset: 0; border-radius: 15px; overflow: hidden; pointer-events: none; }
+.brand-sheen i { position: absolute; top: -40%; left: -60%; width: 40%; height: 180%; transform: rotate(18deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent); display: block; opacity: 0; }
+.brand-word span { display: inline-block; white-space: pre; }
+.brand-intro.run #lgTile { animation: brandTile 520ms cubic-bezier(.16,1,.3,1) both; transform-origin: 32px 32px; }
+.brand-intro.run #lgArc { animation: brandArc 700ms cubic-bezier(.16,1,.3,1) 120ms both; transform-origin: 32px 34px; }
+.brand-intro.run #lgA { animation: brandDraw 460ms cubic-bezier(.16,1,.3,1) 300ms both; }
+.brand-intro.run #lgBar { animation: brandDraw 300ms cubic-bezier(.16,1,.3,1) 520ms both; }
+.brand-intro.run .brand-sheen i { animation: brandSweep 900ms cubic-bezier(.4,0,.2,1) 620ms both; }
+.brand-intro.run .brand-word span { animation: brandRise 620ms cubic-bezier(.16,1,.3,1) both; animation-delay: calc(520ms + var(--k) * 26ms); }
+@keyframes brandTile { from { opacity: 0; transform: scale(.88); filter: blur(10px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
+@keyframes brandArc { from { stroke-dashoffset: 120; transform: rotate(-38deg); opacity: 0; } to { stroke-dashoffset: 0; transform: rotate(0deg); opacity: 1; } }
+@keyframes brandDraw { from { stroke-dasharray: 60; stroke-dashoffset: 60; } to { stroke-dasharray: 60; stroke-dashoffset: 0; } }
+@keyframes brandSweep { from { left: -60%; opacity: 0; } 30% { opacity: 1; } to { left: 130%; opacity: 0; } }
+@keyframes brandRise { from { opacity: 0; transform: translateY(14px); filter: blur(7px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
