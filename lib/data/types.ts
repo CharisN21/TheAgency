@@ -185,6 +185,34 @@ export type Activity = {
   deal_id?: string
 }
 
+/** A filter the person built, kept so they can come back to it. */
+export type SavedView = {
+  id: string
+  workspace_id: string
+  user_id: string
+  object: "organisations" | "people" | "deals"
+  name: string
+  /** The query string the list page reads, e.g. "category=supplier&stale=30". */
+  query: string
+  shared: boolean
+  created_at: string
+}
+
+export type FilterField =
+  | "category"
+  | "owner"
+  | "tag"
+  | "stale"
+  | "hasDeals"
+
+export const FILTER_LABEL: Record<FilterField, string> = {
+  category: "Type",
+  owner: "Owner",
+  tag: "Tag",
+  stale: "Last contact",
+  hasDeals: "Open deals",
+}
+
 export type Database = {
   profiles: Profile[]
   workspaces: Workspace[]
@@ -194,6 +222,7 @@ export type Database = {
   contacts: Contact[]
   deals: Deal[]
   activities: Activity[]
+  views: SavedView[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */

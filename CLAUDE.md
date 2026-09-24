@@ -55,11 +55,13 @@ The look is fixed and lives in a published design system (maroon `#7c1f35` on wa
 2. Today dashboard, Quick Capture, Notebook, Ctrl K palette.
 3. Network depth: import, merge duplicates, saved views, segments.
 4. Meetings (Google Calendar + Meet, notes to tasks).
-5. Team comms & alerts (announcements, email, WhatsApp).
+5. Team comms: **5a** notification centre, then **5b** end-to-end encrypted channels and DMs. Full design in `docs/phase-5-messaging-and-notifications.md` — read it before writing any key-handling code.
 6. AI Mentor & Insights (weekly recap, decision log, coaching).
 7. Harden & productize (offline, backups, data protection, M-Pesa pricing test).
 
 One phase at a time. Phase 1 must be used on a real project before Phase 2 starts.
+
+`HANDOFF.md` says where the work stands, what is next and how to split phases across sessions. Open it first in a new session.
 
 ## Data while we build
 

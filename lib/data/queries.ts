@@ -11,6 +11,7 @@ import {
   type Organisation,
   type Profile,
   type Role,
+  type SavedView,
   type StageId,
 } from "./types"
 
@@ -59,9 +60,21 @@ export type OrganisationRow = Organisation & {
 const daysSince = (iso?: string) =>
   iso === undefined ? null : Math.floor((Date.now() - new Date(iso).getTime()) / 864e5)
 
+export type OrgFilters = {
+  q?: string
+  category?: string
+  owner?: string
+  tag?: string
+  /** Days without contact, e.g. 30. */
+  stale?: number
+  /** "open" = has open deals, "none" = has none. */
+  hasDeals?: string
+  sort?: string
+}
+
 export async function listOrganisations(
   workspaceId: string,
-  opts: { q?: string; category?: string; owner?: string; stale?: boolean } = {}
+  opts: OrgFilters = {}
 ): Promise<OrganisationRow[]> {
   const db = await readDb()
   const q = opts.q?.trim().toLowerCase()
@@ -90,10 +103,25 @@ export async function listOrganisations(
         return false
       if (opts.category && o.category !== opts.category) return false
       if (opts.owner && o.owner_id !== opts.owner) return false
-      if (opts.stale && (o.daysSinceContact ?? 999) < 30) return false
+      if (opts.tag && !o.tags.some((t) => t.toLowerCase() === opts.tag!.toLowerCase()))
+        return false
+      if (opts.stale && (o.daysSinceContact ?? 9999) < opts.stale) return false
+      if (opts.hasDeals === "open" && o.openDeals === 0) return false
+      if (opts.hasDeals === "none" && o.openDeals > 0) return false
       return true
     })
-    .sort((a, b) => b.openValue - a.openValue || a.name.localeCompare(b.name))
+    .sort((a, b) => {
+      switch (opts.sort) {
+        case "name":
+          return a.name.localeCompare(b.name)
+        case "recent":
+          return (a.daysSinceContact ?? 9999) - (b.daysSinceContact ?? 9999)
+        case "quiet":
+          return (b.daysSinceContact ?? -1) - (a.daysSinceContact ?? -1)
+        default:
+          return b.openValue - a.openValue || a.name.localeCompare(b.name)
+      }
+    })
 }
 
 export async function getOrganisation(workspaceId: string, id: string) {
@@ -276,4 +304,32 @@ export async function getTodayNumbers(workspaceId: string) {
 export async function stageTotals(workspaceId: string): Promise<Record<StageId, number>> {
   const { columns } = await getPipeline(workspaceId)
   return Object.fromEntries(columns.map((c) => [c.stage.id, c.total])) as Record<StageId, number>
+}
+
+
+/* ------------------------------------------------------------ saved views */
+
+export async function listViews(
+  workspaceId: string,
+  userId: string,
+  object: SavedView["object"]
+): Promise<SavedView[]> {
+  const db = await readDb()
+  return db.views
+    .filter(
+      (v) =>
+        v.workspace_id === workspaceId &&
+        v.object === object &&
+        (v.shared || v.user_id === userId)
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Every tag in use, so the filter builder can offer real ones. */
+export async function listTags(workspaceId: string): Promise<string[]> {
+  const db = await readDb()
+  const all = db.organisations
+    .filter((o) => o.workspace_id === workspaceId)
+    .flatMap((o) => o.tags)
+  return [...new Set(all)].sort()
 }

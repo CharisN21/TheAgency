@@ -576,3 +576,203 @@ export async function resetDemoData(): Promise<Result> {
   revalidatePath("/", "layout")
   return { ok: true, message: "Demo data reset. Sign in again." }
 }
+
+/* --------------------------------------------------------- bulk + views */
+
+/** Everything that acts on a selection goes through here: authorise once, log once. */
+async function bulkGuard(ids: string[]) {
+  const ctx = await requireContext()
+  if (!can.edit(ctx.role)) {
+    return { ctx, error: { ok: false as const, message: "Viewers cannot change records" } }
+  }
+  if (ids.length === 0) {
+    return { ctx, error: { ok: false as const, message: "Nothing selected" } }
+  }
+  return { ctx, error: null }
+}
+
+const countWord = (n: number) => `${n} organisation${n === 1 ? "" : "s"}`
+
+export async function bulkAssignOwner(ids: string[], userId: string): Promise<Result> {
+  const { ctx, error } = await bulkGuard(ids)
+  if (error) return error
+
+  const db = await readDb()
+  const target = db.profiles.find((p) => p.id === userId)
+  const isMember = db.memberships.some(
+    (m) => m.workspace_id === ctx.workspace.id && m.user_id === userId
+  )
+  if (!target || !isMember) {
+    return { ok: false, message: "That person is not in this workspace" }
+  }
+
+  await mutate((d) => {
+    for (const o of d.organisations) {
+      if (o.workspace_id === ctx.workspace.id && ids.includes(o.id)) o.owner_id = userId
+    }
+    log(d, ctx.workspace.id, ctx.user.id, `gave ${countWord(ids.length)} to ${target.full_name}`)
+  })
+
+  revalidatePath("/organisations")
+  return { ok: true, message: `${countWord(ids.length)} now owned by ${target.full_name}` }
+}
+
+export async function bulkAddTag(ids: string[], tag: string): Promise<Result> {
+  const { ctx, error } = await bulkGuard(ids)
+  if (error) return error
+  const clean = tag.trim()
+  if (!clean) return { ok: false, message: "Type a tag first" }
+
+  await mutate((d) => {
+    for (const o of d.organisations) {
+      if (o.workspace_id === ctx.workspace.id && ids.includes(o.id)) {
+        if (!o.tags.some((t) => t.toLowerCase() === clean.toLowerCase())) o.tags.push(clean)
+      }
+    }
+    log(d, ctx.workspace.id, ctx.user.id, `tagged ${countWord(ids.length)} "${clean}"`)
+  })
+
+  revalidatePath("/organisations")
+  return { ok: true, message: `Tagged ${countWord(ids.length)} "${clean}"` }
+}
+
+export async function bulkSetCategory(ids: string[], category: OrgCategory): Promise<Result> {
+  const { ctx, error } = await bulkGuard(ids)
+  if (error) return error
+
+  await mutate((d) => {
+    for (const o of d.organisations) {
+      if (o.workspace_id === ctx.workspace.id && ids.includes(o.id)) o.category = category
+    }
+    log(d, ctx.workspace.id, ctx.user.id, `set ${countWord(ids.length)} to ${category}`)
+  })
+
+  revalidatePath("/organisations")
+  return { ok: true, message: `${countWord(ids.length)} updated` }
+}
+
+export async function bulkDelete(ids: string[]): Promise<Result> {
+  const ctx = await requireContext()
+  if (!can.editWorkspace(ctx.role)) {
+    return { ok: false, message: "Only owners and admins can delete records" }
+  }
+  if (ids.length === 0) return { ok: false, message: "Nothing selected" }
+
+  const db = await readDb()
+  const blocked = db.organisations.filter(
+    (o) =>
+      ids.includes(o.id) &&
+      db.deals.some(
+        (d) => d.organisation_id === o.id && !["won", "lost"].includes(d.stage)
+      )
+  )
+  if (blocked.length > 0) {
+    return {
+      ok: false,
+      message: `${blocked.map((b) => b.name).join(", ")} still ${blocked.length === 1 ? "has" : "have"} open deals. Close those first.`,
+    }
+  }
+
+  await mutate((d) => {
+    d.organisations = d.organisations.filter(
+      (o) => !(o.workspace_id === ctx.workspace.id && ids.includes(o.id))
+    )
+    d.contacts = d.contacts.map((c) =>
+      c.organisation_id && ids.includes(c.organisation_id)
+        ? { ...c, organisation_id: undefined }
+        : c
+    )
+    log(d, ctx.workspace.id, ctx.user.id, `deleted ${countWord(ids.length)}`)
+  })
+
+  revalidatePath("/organisations")
+  return { ok: true, message: `${countWord(ids.length)} deleted. Their people were kept.` }
+}
+
+/** CSV of what is on screen. Returned as text so the browser can save it. */
+export async function exportOrganisations(ids: string[]): Promise<{ filename: string; csv: string }> {
+  const { workspace } = await requireContext()
+  const db = await readDb()
+  const rows = db.organisations.filter(
+    (o) => o.workspace_id === workspace.id && (ids.length === 0 || ids.includes(o.id))
+  )
+
+  const cell = (v: string | number | undefined) => {
+    const s = String(v ?? "")
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+
+  const header = ["Name", "Type", "What they do", "Location", "Phone", "Email", "Tags", "Owner", "Open deals", "Open value"]
+  const lines = rows.map((o) => {
+    const open = db.deals.filter(
+      (d) => d.organisation_id === o.id && !["won", "lost"].includes(d.stage)
+    )
+    return [
+      o.name,
+      o.category,
+      o.what_they_do,
+      o.location,
+      o.phone,
+      o.email,
+      o.tags.join(" | "),
+      db.profiles.find((p) => p.id === o.owner_id)?.full_name,
+      open.length,
+      open.reduce((s, d) => s + d.value, 0),
+    ]
+      .map(cell)
+      .join(",")
+  })
+
+  return {
+    filename: `${workspace.name.toLowerCase().replace(/\s+/g, "-")}-organisations.csv`,
+    csv: [header.join(","), ...lines].join("\n"),
+  }
+}
+
+export async function saveView(
+  object: "organisations" | "people" | "deals",
+  name: string,
+  query: string,
+  shared: boolean
+): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  const clean = name.trim()
+  if (clean.length < 2) return { ok: false, message: "Give the view a name" }
+  if (shared && !can.edit(role)) {
+    return { ok: false, message: "Viewers can only save views for themselves" }
+  }
+
+  await mutate((db) => {
+    db.views.push({
+      id: newId(),
+      workspace_id: workspace.id,
+      user_id: user.id,
+      object,
+      name: clean,
+      query,
+      shared,
+      created_at: now(),
+    })
+  })
+
+  revalidatePath(`/${object}`)
+  return { ok: true, message: `Saved "${clean}"${shared ? " for everyone" : ""}` }
+}
+
+export async function deleteView(viewId: string): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+
+  const db = await readDb()
+  const view = db.views.find((v) => v.id === viewId && v.workspace_id === workspace.id)
+  if (!view) return { ok: false, message: "That view is gone already" }
+  if (view.user_id !== user.id && !can.editWorkspace(role)) {
+    return { ok: false, message: "Only the person who saved it, or an admin, can remove it" }
+  }
+
+  await mutate((d) => {
+    d.views = d.views.filter((v) => v.id !== viewId)
+  })
+
+  revalidatePath(`/${view.object}`)
+  return { ok: true, message: `Removed "${view.name}"` }
+}

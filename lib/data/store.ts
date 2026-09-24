@@ -160,6 +160,7 @@ export function seed(): Database {
     organisations: [vision, safaricom, county, ridge, lab],
     contacts: [mercy, james, grace, peter, sam],
     deals,
+    views: [],
     activities: [
       act("call", "Called about mask pricing — promised band 3 rates", 6, { organisation_id: vision.id, contact_id: mercy.id, deal_id: deals[0].id }),
       act("note", "Will discount at 500 units", 6, { organisation_id: vision.id, contact_id: mercy.id }),
@@ -179,6 +180,7 @@ export async function readDb(): Promise<Database> {
     const parsed = JSON.parse(await readFile(FILE, "utf8")) as Partial<Database>
     // A store written before the workspace rename is not worth migrating by hand.
     if (!parsed.workspaces || !parsed.deals) throw new Error("stale shape")
+    parsed.views ??= []
     cache = parsed as Database
   } catch {
     cache = seed()
