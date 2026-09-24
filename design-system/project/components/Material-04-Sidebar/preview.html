@@ -1,0 +1,54 @@
+<!-- @dsCard group="Reference &middot; Material" height=720 width=1000 page subtitle="Navigation drawer vs our sidebar" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Material-04-Sidebar</title><style>
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap');
+.mat { --mp:#1976d2; --ms:#2196f3; --mbg:#fafafa; --msurface:#ffffff; --merr:#f44336; --mon:#ffffff;
+  --mtxt:rgba(0,0,0,.87); --mtxt2:rgba(0,0,0,.54); --mtxt3:rgba(0,0,0,.38); --mdiv:rgba(0,0,0,.12);
+  --d1:0 .5px .5px rgba(0,0,0,.3); --d2:0 1px 1px rgba(0,0,0,.3); --d3:0 2px 2px rgba(0,0,0,.3); --d4:0 4px 4px rgba(0,0,0,.3); --d5:0 8px 8px rgba(0,0,0,.3);
+  font-family:Roboto, "Helvetica Neue", Arial, sans-serif; color:var(--mtxt); }
+.mat.dark { --mp:#202020; --ms:#009688; --mbg:#303030; --msurface:#303030; --mtxt:#fff; --mtxt2:rgba(255,255,255,.7); --mtxt3:rgba(255,255,255,.5); --mdiv:rgba(255,255,255,.12); }
+.m-btn { height:36px; padding:0 16px; border:0; border-radius:2px; font:500 16px/36px Roboto, sans-serif; letter-spacing:.4px; background:transparent; color:var(--mp); cursor:pointer; }
+.m-btn.raised { background:var(--ms); color:var(--mon); box-shadow:var(--d2); }
+.m-btn.flat-err { color:var(--merr); }
+.m-fab { width:56px; height:56px; border-radius:50%; border:0; background:var(--ms); color:var(--mon); box-shadow:var(--d3); display:inline-flex; align-items:center; justify-content:center; }
+.m-icon-btn { width:44px; height:44px; border-radius:50%; border:0; background:transparent; color:var(--mtxt2); display:inline-flex; align-items:center; justify-content:center; }
+.m-bar { height:52px; background:var(--mp); color:var(--mon); display:flex; align-items:center; gap:16px; padding:0 16px; box-shadow:var(--d2); position:relative; z-index:2; }
+.m-bar .t { font:500 17px/1 Roboto, sans-serif; flex:1; }
+.m-bar .m-icon-btn { color:var(--mon); }
+.m-drawer { width:280px; background:var(--msurface); box-shadow:var(--d4); display:flex; flex-direction:column; position:relative; z-index:3; }
+.m-drawer-head { height:104px; background:var(--mp); color:var(--mon); padding:16px; display:flex; flex-direction:column; justify-content:flex-end; gap:4px; }
+.m-item { height:48px; display:flex; align-items:center; gap:32px; padding:0 16px; font:400 14px/48px Roboto, sans-serif; color:var(--mtxt); }
+.m-item.sel { background:rgba(25,118,210,.12); color:var(--mp); font-weight:500; }
+.m-item .ag-ico { color:var(--mtxt2); width:24px; height:24px; }
+.m-item.sel .ag-ico { color:var(--mp); }
+.m-divider { height:1px; background:var(--mdiv); margin:8px 0; }
+.m-card { background:var(--msurface); border-radius:2px; box-shadow:var(--d2); }
+.m-chip { height:32px; border-radius:16px; background:#eee; color:var(--mtxt); font:400 13px/32px Roboto, sans-serif; padding:0 12px; display:inline-flex; align-items:center; gap:6px; }
+.m-tabs { height:49px; background:var(--msurface); box-shadow:0 -1px 1px rgba(0,0,0,.3); display:grid; grid-template-columns:repeat(4,1fr); }
+.m-tab { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font:400 10px/12px Roboto, sans-serif; color:var(--mtxt3); }
+.m-tab.on, .m-tab.on .ag-ico { color:var(--mp); }
+.m-tab .ag-ico { width:24px; height:24px; color:var(--mtxt3); }
+.m-lrow { display:flex; align-items:center; gap:16px; padding:12px 16px; min-height:72px; }
+.m-lrow + .m-lrow { border-top:1px solid var(--mdiv); }
+.m-av { width:40px; height:40px; border-radius:50%; background:#e0e0e0; color:var(--mtxt); display:flex; align-items:center; justify-content:center; font:500 14px/1 Roboto, sans-serif; flex:none; }
+.m-label { font:500 11px/16px Roboto, sans-serif; letter-spacing:.8px; text-transform:uppercase; color:var(--mtxt2); }
+.m-h1 { font:300 34px/40px Roboto, sans-serif; margin:0; }
+.m-h2 { font:400 20px/28px Roboto, sans-serif; margin:0; }
+.m-body { font:400 16px/24px Roboto, sans-serif; }
+.m-cap { font:400 14px/20px Roboto, sans-serif; color:var(--mtxt2); }
+.board { padding:32px; display:flex; flex-direction:column; gap:24px; background:var(--bg); }
+.side { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+.lbl { display:flex; align-items:center; gap:8px; font:600 12px/16px var(--font-sans); letter-spacing:.3px; text-transform:uppercase; color:var(--ink-2); margin-bottom:10px; }
+.lbl b { padding:2px 8px; border-radius:999px; font-size:11px; }
+.lbl .now { background:var(--accent-soft); color:var(--accent-ink); }
+.lbl .alt { background:#e3f2fd; color:#0d47a1; }
+.frame { border-radius:var(--radius-card); overflow:hidden; box-shadow:var(--shadow-card); }
+</style></head>
+<body>
+<div class="board"><div><h2 class="ag-h2">Sidebar</h2><p class="ag-sub">Material's <code>NavigationDrawerController</code>: 280px on phone, 320px on tablet, slides over the content with a scrim, 0.25s.</p></div><div class="mat"><div class="lbl"><b class="alt">Material drawer</b> 280px · header 104px · rows 48px · depth4</div><div class="frame" style="display:flex;height:560px;background:var(--mbg)"><div class="m-drawer"><div class="m-drawer-head"><span class="m-av" style="background:rgba(255,255,255,.25);color:#fff">CN</span><div style="font:500 14px/20px Roboto,sans-serif">Charis N.</div><div style="font:400 14px/20px Roboto,sans-serif;opacity:.7;display:flex;align-items:center;gap:6px">Kilima Labs <i data-i="down" class="ag-ico ag-ico-sm"></i></div></div><div class="m-item sel"><i data-i="today"></i>Today</div><div class="m-item"><i data-i="projects"></i>Projects</div><div class="m-item"><i data-i="network"></i>Network</div><div class="m-item"><i data-i="meetings"></i>Meetings</div><div class="m-item"><i data-i="notebook"></i>Notebook</div><div class="m-divider"></div><div class="m-item"><i data-i="team"></i>Team</div><div class="m-item"><i data-i="mentor"></i>Mentor</div><div class="m-item"><i data-i="settings"></i>Settings</div></div><div style="flex:1;display:flex;flex-direction:column;background:var(--mbg)"><div class="m-bar"><button class="m-icon-btn"><i data-i="panel"></i></button><span class="t">Today</span><button class="m-icon-btn"><i data-i="search"></i></button><button class="m-icon-btn"><i data-i="more"></i></button></div><div style="flex:1;padding:16px;position:relative"><div class="m-card" style="padding:16px"><div class="m-label">Get set up</div><div class="m-h2" style="margin-top:4px">2 of 4 done</div><div style="height:4px;background:#e0e0e0;border-radius:2px;margin:16px 0"><div style="width:50%;height:4px;background:var(--ms);border-radius:2px"></div></div><div class="m-cap">Invite your office team &middot; Install on your iPhone</div><div style="display:flex;gap:8px;margin-top:12px"><button class="m-btn">MANAGE</button><button class="m-btn">SHOW ME</button></div></div><button class="m-fab" style="position:absolute;right:24px;bottom:24px"><i data-i="plus"></i></button></div></div></div></div><div><div class="lbl"><b class="now">The Agency sidebar</b> 232px · rows 31px · translucent, always visible</div><div class="frame" style="display:flex;height:560px;background:var(--surface);width:100%"><div style="width:232px;flex:none;display:flex">
+<div style="height:560px;width:232px;display:flex"><aside class="ag-sidebar"><div class="ag-lights"><i></i><i></i><i></i></div><div class="ag-switcher"><span class="ag-co  ">K</span><span class="name">Kilima Labs</span><i data-i="updown"></i></div><div class="ag-side-item"><i data-i="today"></i>Today</div><div class="ag-side-item is-soon"><i data-i="projects"></i>Projects<span class="count">Soon</span></div><div class="ag-side-item is-soon"><i data-i="network"></i>Network<span class="count">Soon</span></div><div class="ag-side-item is-soon"><i data-i="meetings"></i>Meetings<span class="count">Soon</span></div><div class="ag-side-item is-soon"><i data-i="notebook"></i>Notebook<span class="count">Soon</span></div><div class="ag-side-sep"></div><div class="ag-side-item is-active"><i data-i="team"></i>Team</div><div class="ag-side-item is-soon"><i data-i="mentor"></i>Mentor<span class="count">Soon</span></div><div class="ag-side-item"><i data-i="settings"></i>Settings</div><div class="ag-side-foot"><span class="ag-av sm gold">CN</span><div style="flex:1;min-width:0"><div style="font:500 13px/17px var(--font-sans)">Charis N.</div><div class="ag-sub" style="font-size:12px;line-height:15px">Owner</div></div><span class="ag-kbd">Ctrl K</span></div></aside></div>
+</div><div style="flex:1;display:flex;flex-direction:column;background:var(--bg)"><div class="ag-toolbar" style="background:var(--surface)"><span class="ag-search" style="flex:1"><i data-i="search"></i>Search <span class="ag-kbd" style="margin-left:auto">Ctrl K</span></span><button class="ag-btn ag-btn-tinted"><i data-i="userplus"></i> Invite</button></div><div style="padding:16px"><div class="ag-card ag-card-pad"><div class="ag-row-x" style="gap:16px"><div class="ag-ring" data-p="50"><span>2/4</span></div><div><h3 class="ag-h3">Get Kilima Labs set up</h3><div class="ag-sub">Invite your office team · Install on your iPhone</div></div></div></div></div></div></div></div></div>
+<script>Agency.ready();</script>
+</body>
+</html>

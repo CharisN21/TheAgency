@@ -1,0 +1,52 @@
+<!-- @dsCard group="Reference &middot; Material" height=1020 width=1000 page subtitle="The same Today screen, both ways" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Material-05-ComparePhone</title><style>
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&display=swap');
+.mat { --mp:#1976d2; --ms:#2196f3; --mbg:#fafafa; --msurface:#ffffff; --merr:#f44336; --mon:#ffffff;
+  --mtxt:rgba(0,0,0,.87); --mtxt2:rgba(0,0,0,.54); --mtxt3:rgba(0,0,0,.38); --mdiv:rgba(0,0,0,.12);
+  --d1:0 .5px .5px rgba(0,0,0,.3); --d2:0 1px 1px rgba(0,0,0,.3); --d3:0 2px 2px rgba(0,0,0,.3); --d4:0 4px 4px rgba(0,0,0,.3); --d5:0 8px 8px rgba(0,0,0,.3);
+  font-family:Roboto, "Helvetica Neue", Arial, sans-serif; color:var(--mtxt); }
+.mat.dark { --mp:#202020; --ms:#009688; --mbg:#303030; --msurface:#303030; --mtxt:#fff; --mtxt2:rgba(255,255,255,.7); --mtxt3:rgba(255,255,255,.5); --mdiv:rgba(255,255,255,.12); }
+.m-btn { height:36px; padding:0 16px; border:0; border-radius:2px; font:500 16px/36px Roboto, sans-serif; letter-spacing:.4px; background:transparent; color:var(--mp); cursor:pointer; }
+.m-btn.raised { background:var(--ms); color:var(--mon); box-shadow:var(--d2); }
+.m-btn.flat-err { color:var(--merr); }
+.m-fab { width:56px; height:56px; border-radius:50%; border:0; background:var(--ms); color:var(--mon); box-shadow:var(--d3); display:inline-flex; align-items:center; justify-content:center; }
+.m-icon-btn { width:44px; height:44px; border-radius:50%; border:0; background:transparent; color:var(--mtxt2); display:inline-flex; align-items:center; justify-content:center; }
+.m-bar { height:52px; background:var(--mp); color:var(--mon); display:flex; align-items:center; gap:16px; padding:0 16px; box-shadow:var(--d2); position:relative; z-index:2; }
+.m-bar .t { font:500 17px/1 Roboto, sans-serif; flex:1; }
+.m-bar .m-icon-btn { color:var(--mon); }
+.m-drawer { width:280px; background:var(--msurface); box-shadow:var(--d4); display:flex; flex-direction:column; position:relative; z-index:3; }
+.m-drawer-head { height:104px; background:var(--mp); color:var(--mon); padding:16px; display:flex; flex-direction:column; justify-content:flex-end; gap:4px; }
+.m-item { height:48px; display:flex; align-items:center; gap:32px; padding:0 16px; font:400 14px/48px Roboto, sans-serif; color:var(--mtxt); }
+.m-item.sel { background:rgba(25,118,210,.12); color:var(--mp); font-weight:500; }
+.m-item .ag-ico { color:var(--mtxt2); width:24px; height:24px; }
+.m-item.sel .ag-ico { color:var(--mp); }
+.m-divider { height:1px; background:var(--mdiv); margin:8px 0; }
+.m-card { background:var(--msurface); border-radius:2px; box-shadow:var(--d2); }
+.m-chip { height:32px; border-radius:16px; background:#eee; color:var(--mtxt); font:400 13px/32px Roboto, sans-serif; padding:0 12px; display:inline-flex; align-items:center; gap:6px; }
+.m-tabs { height:49px; background:var(--msurface); box-shadow:0 -1px 1px rgba(0,0,0,.3); display:grid; grid-template-columns:repeat(4,1fr); }
+.m-tab { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font:400 10px/12px Roboto, sans-serif; color:var(--mtxt3); }
+.m-tab.on, .m-tab.on .ag-ico { color:var(--mp); }
+.m-tab .ag-ico { width:24px; height:24px; color:var(--mtxt3); }
+.m-lrow { display:flex; align-items:center; gap:16px; padding:12px 16px; min-height:72px; }
+.m-lrow + .m-lrow { border-top:1px solid var(--mdiv); }
+.m-av { width:40px; height:40px; border-radius:50%; background:#e0e0e0; color:var(--mtxt); display:flex; align-items:center; justify-content:center; font:500 14px/1 Roboto, sans-serif; flex:none; }
+.m-label { font:500 11px/16px Roboto, sans-serif; letter-spacing:.8px; text-transform:uppercase; color:var(--mtxt2); }
+.m-h1 { font:300 34px/40px Roboto, sans-serif; margin:0; }
+.m-h2 { font:400 20px/28px Roboto, sans-serif; margin:0; }
+.m-body { font:400 16px/24px Roboto, sans-serif; }
+.m-cap { font:400 14px/20px Roboto, sans-serif; color:var(--mtxt2); }
+.board { padding:32px; display:flex; flex-direction:column; gap:24px; background:var(--bg); }
+.side { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+.lbl { display:flex; align-items:center; gap:8px; font:600 12px/16px var(--font-sans); letter-spacing:.3px; text-transform:uppercase; color:var(--ink-2); margin-bottom:10px; }
+.lbl b { padding:2px 8px; border-radius:999px; font-size:11px; }
+.lbl .now { background:var(--accent-soft); color:var(--accent-ink); }
+.lbl .alt { background:#e3f2fd; color:#0d47a1; }
+.frame { border-radius:var(--radius-card); overflow:hidden; box-shadow:var(--shadow-card); }
+</style></head>
+<body>
+<div class="board"><div><h2 class="ag-h2">Today on iPhone, both ways</h2><p class="ag-sub">Same content, same data. Left: large title, translucent 5-tab bar, gold accent, system font. Right: blue app bar with a hamburger, Roboto, cards with shadows, a floating action button, 4 tabs.</p></div><div style="display:flex;gap:40px;justify-content:center;padding:8px 0"><div class="ag-phone-wrap"><div class="ag-phone"><div class="ag-status"><span>9:41</span><span class="island"></span><span class="bat"></span></div><div class="ag-navbar"><div class="ag-row-x" style="gap:6px;font:600 15px/20px var(--font-sans)"><span class="ag-co  ">K</span>Kilima Labs<i data-i="down" class="ag-ico ag-ico-sm"></i></div><span class="ag-av sm gold" style="width:32px;height:32px;font-size:12px">CN</span></div><div class="ag-ltitle"><h1 class="ag-lt">Today</h1></div><div class="ag-phone-body" style="padding-top:0"><div class="ag-sub" style="margin-top:-6px">Monday, 21 September · Morning, Charis</div><div class="ag-group"><div class="ag-lrow flat"><div class="ag-ring" data-p="50"><span>2/4</span></div><div class="body"><div class="t">Get Kilima Labs set up</div><div class="m">2 steps left</div></div><i data-i="chevron" class="ag-ico chev ag-ico-sm"></i></div><div class="ag-lrow flat" style="padding:14px 16px"><span style="width:24px;height:24px;border-radius:50%;border:2px solid var(--control-border);flex:none"></span><div class="body"><div class="t">Invite your office team</div><div class="m">3 invites pending</div></div></div><div class="ag-lrow flat" style="padding:14px 16px"><span style="width:24px;height:24px;border-radius:50%;border:2px solid var(--control-border);flex:none"></span><div class="body"><div class="t">Add to Home Screen</div><div class="m">One-tap access, no browser bar</div></div></div></div><div class="ag-empty" style="padding:24px"><i data-i="today"></i><h3 class="ag-h3">Nothing due today</h3><p class="ag-sub">Tasks and check-ins show up here once projects start.</p></div></div><nav class="ag-tabbar"><div class="ag-tab is-active"><i data-i="today"></i>Today</div><div class="ag-tab"><i data-i="projects"></i>Projects</div><div class="ag-tab"><span class="ag-tab-cap"><i data-i="plus"></i></span></div><div class="ag-tab"><i data-i="network"></i>Network</div><div class="ag-tab"><i data-i="moreTab"></i>More</div></nav><div class="ag-home-ind"></div></div><div class="ag-phone-cap">Now: Apple feel</div></div><div class="ag-phone-wrap"><div class="ag-phone mat" style="background:var(--mbg);border-color:#202020"><div class="ag-status" style="background:#0d47a1;color:#fff;height:44px;padding-top:8px"><span style="font:500 14px/1 Roboto,sans-serif">9:41</span><span class="island" style="width:100px;height:26px;top:6px;margin-left:-50px"></span><span class="bat" style="border-color:#fff"></span></div><div class="m-bar" style="height:56px"><button class="m-icon-btn"><i data-i="panel"></i></button><span class="t">Today</span><button class="m-icon-btn"><i data-i="search"></i></button><button class="m-icon-btn"><i data-i="more"></i></button></div><div style="flex:1;padding:16px;display:flex;flex-direction:column;gap:16px;position:relative"><div class="m-card"><div class="m-lrow"><span class="m-av" style="background:#e3f2fd;color:#1976d2">50%</span><div style="flex:1"><div style="font:400 16px/24px Roboto,sans-serif">Get Kilima Labs set up</div><div class="m-cap">2 steps left</div></div><i data-i="chevron"></i></div><div class="m-lrow"><span class="m-av" style="background:transparent;box-shadow:inset 0 0 0 2px rgba(0,0,0,.38)"></span><div style="flex:1"><div style="font:400 16px/24px Roboto,sans-serif">Invite your office team</div><div class="m-cap">3 invites pending</div></div></div><div class="m-lrow"><span class="m-av" style="background:transparent;box-shadow:inset 0 0 0 2px rgba(0,0,0,.38)"></span><div style="flex:1"><div style="font:400 16px/24px Roboto,sans-serif">Add to Home Screen</div><div class="m-cap">One-tap access</div></div></div></div><div style="text-align:center;padding:24px 16px;color:var(--mtxt2)"><i data-i="today" class="ag-ico" style="width:40px;height:40px"></i><div class="m-h2" style="margin-top:8px;color:var(--mtxt)">Nothing due today</div><div class="m-cap">Tasks and check-ins show up here once projects start.</div></div><button class="m-fab" style="position:absolute;right:16px;bottom:16px"><i data-i="plus"></i></button></div><div class="m-tabs"><div class="m-tab on"><i data-i="today"></i>Today</div><div class="m-tab"><i data-i="projects"></i>Projects</div><div class="m-tab"><i data-i="network"></i>Network</div><div class="m-tab"><i data-i="moreTab"></i>More</div></div></div><div class="ag-phone-cap">Alternative: Material feel</div></div></div></div>
+<script>Agency.ready();</script>
+</body>
+</html>

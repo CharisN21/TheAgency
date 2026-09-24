@@ -1,0 +1,58 @@
+<!-- @dsCard group="Reference &middot; shadcn/ui" height=1100 width=1000 page subtitle="Sidebar block vs ours" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Shadcn-03-Sidebar</title><style>
+.sh { --background:oklch(1 0 0); --foreground:oklch(0.145 0 0); --card:oklch(1 0 0); --popover:oklch(1 0 0);
+  --primary:oklch(0.205 0 0); --primary-foreground:oklch(0.985 0 0); --secondary:oklch(0.97 0 0); --secondary-foreground:oklch(0.205 0 0);
+  --muted:oklch(0.97 0 0); --muted-foreground:oklch(0.556 0 0); --accentc:oklch(0.97 0 0); --destructive:oklch(0.577 0.245 27.325);
+  --border:oklch(0.922 0 0); --input:oklch(0.922 0 0); --ring:oklch(0.708 0 0);
+  --sidebar:oklch(0.985 0 0); --sidebar-accent:oklch(0.97 0 0); --sidebar-border:oklch(0.922 0 0);
+  --r:0.625rem; --r-sm:calc(var(--r) * 0.6); --r-md:calc(var(--r) * 0.8); --r-lg:var(--r); --r-xl:calc(var(--r) * 1.4);
+  font-family:ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--foreground); }
+.sh.dark { --background:oklch(0.145 0 0); --foreground:oklch(0.985 0 0); --card:oklch(0.205 0 0); --popover:oklch(0.205 0 0);
+  --primary:oklch(0.922 0 0); --primary-foreground:oklch(0.205 0 0); --secondary:oklch(0.269 0 0); --secondary-foreground:oklch(0.985 0 0);
+  --muted:oklch(0.269 0 0); --muted-foreground:oklch(0.708 0 0); --accentc:oklch(0.371 0 0); --destructive:oklch(0.704 0.191 22.216);
+  --border:oklch(1 0 0 / 10%); --input:oklch(1 0 0 / 15%); --ring:oklch(0.556 0 0); --sidebar:oklch(0.205 0 0); --sidebar-accent:oklch(0.269 0 0); --sidebar-border:oklch(1 0 0 / 10%); }
+.s-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:36px; padding:0 16px; border:1px solid transparent; border-radius:var(--r-md); font:500 14px/1 inherit; cursor:pointer; background:var(--primary); color:var(--primary-foreground); transition:all 150ms; }
+.s-btn.secondary { background:var(--secondary); color:var(--secondary-foreground); }
+.s-btn.outline { background:var(--background); color:var(--foreground); border-color:var(--border); box-shadow:0 1px 2px rgba(0,0,0,.05); }
+.s-btn.ghost { background:transparent; color:var(--foreground); }
+.s-btn.destructive { background:var(--destructive); color:#fff; }
+.s-btn.link { background:transparent; color:var(--foreground); text-decoration:underline; text-underline-offset:4px; padding:0; }
+.s-btn.xs { height:24px; padding:0 8px; font-size:12px; gap:4px; }
+.s-btn.sm { height:32px; padding:0 12px; gap:6px; }
+.s-btn.lg { height:40px; padding:0 24px; }
+.s-btn.icon { width:36px; padding:0; }
+.s-btn.ring { outline:3px solid color-mix(in oklch, var(--ring) 50%, transparent); outline-offset:0; border-color:var(--ring); }
+.s-btn[disabled] { opacity:.5; }
+.s-btn .ag-ico { width:16px; height:16px; }
+.s-card { background:var(--card); border:1px solid var(--border); border-radius:var(--r-xl); }
+.s-input { height:36px; border:1px solid var(--input); border-radius:var(--r-md); background:var(--background); padding:0 12px; display:flex; align-items:center; font-size:14px; color:var(--muted-foreground); box-shadow:0 1px 2px rgba(0,0,0,.05); }
+.s-badge { display:inline-flex; align-items:center; gap:4px; height:20px; padding:0 8px; border-radius:var(--r-md); font:500 12px/1 inherit; background:var(--secondary); color:var(--secondary-foreground); border:1px solid transparent; }
+.s-badge.outline { background:transparent; border-color:var(--border); }
+.s-sidebar { width:256px; background:var(--sidebar); border-right:1px solid var(--sidebar-border); padding:8px; display:flex; flex-direction:column; gap:2px; }
+.s-item { height:32px; display:flex; align-items:center; gap:8px; padding:0 8px; border-radius:var(--r-md); font:400 14px/1 inherit; color:var(--foreground); }
+.s-item.on { background:var(--sidebar-accent); font-weight:500; }
+.s-item .ag-ico { width:16px; height:16px; color:var(--muted-foreground); }
+.s-label { font:500 12px/1 inherit; color:var(--muted-foreground); padding:8px; }
+.s-sep { height:1px; background:var(--sidebar-border); margin:8px 0; }
+.s-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border-bottom:1px solid var(--border); font-size:14px; }
+.s-av { width:32px; height:32px; border-radius:999px; background:var(--muted); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; font:500 12px/1 inherit; flex:none; }
+.s-bar { height:48px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; }
+.board { padding:32px; display:flex; flex-direction:column; gap:24px; background:var(--bg); }
+.side { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+.lbl { display:flex; align-items:center; gap:8px; font:600 12px/16px var(--font-sans); letter-spacing:.3px; text-transform:uppercase; color:var(--ink-2); margin-bottom:10px; }
+.lbl b { padding:2px 8px; border-radius:999px; font-size:11px; }
+.lbl .now { background:var(--accent-soft); color:var(--accent-ink); }
+.lbl .alt { background:var(--fill-strong); color:var(--ink); }
+.frame { border-radius:var(--radius-card); overflow:hidden; box-shadow:var(--shadow-card); border:1px solid var(--separator); }
+.swatch { display:flex; align-items:center; gap:10px; padding:6px 0; font:400 12px/16px var(--font-mono); color:var(--ink-2); }
+.swatch i { width:36px; height:24px; border-radius:4px; box-shadow:inset 0 0 0 1px rgba(128,128,128,.3); flex:none; display:block; }
+</style></head>
+<body>
+<div class="board"><div><h2 class="ag-h2">Sidebar</h2><p class="ag-sub">From <code>ui/sidebar.tsx</code>: 16rem (256px) wide, 18rem on mobile in a sheet, collapses to a 3rem icon rail, toggled with <code>Ctrl/⌘ B</code>, width animates over 200ms linear. Rows are 32px with an 8px radius.</p></div><div><div class="lbl"><b class="alt">shadcn sidebar-07 pattern</b> 256px · rows 32px · breadcrumb header · company + account switchers</div><div class="frame sh" style="display:flex;height:480px;background:var(--background)"><div class="s-sidebar"><div class="s-item" style="height:48px"><span class="s-av" style="width:32px;height:32px;border-radius:8px;background:var(--primary);color:var(--primary-foreground)">K</span><div style="flex:1;line-height:1.2"><div style="font-weight:500">Kilima Labs</div><div style="font-size:12px;color:var(--muted-foreground)">Owner</div></div><i data-i="updown"></i></div><div class="s-sep"></div><div class="s-label">Platform</div><div class="s-item on"><i data-i="today"></i>Today</div><div class="s-item"><i data-i="projects"></i>Projects</div><div class="s-item"><i data-i="network"></i>Network</div><div class="s-item"><i data-i="meetings"></i>Meetings</div><div class="s-item"><i data-i="notebook"></i>Notebook</div><div class="s-label">Company</div><div class="s-item"><i data-i="team"></i>Team</div><div class="s-item"><i data-i="mentor"></i>Mentor</div><div class="s-item"><i data-i="settings"></i>Settings</div><div style="margin-top:auto"><div class="s-sep"></div><div class="s-item" style="height:48px"><span class="s-av">CN</span><div style="flex:1;line-height:1.2"><div style="font-weight:500">Charis N.</div><div style="font-size:12px;color:var(--muted-foreground)">charis@…</div></div><i data-i="updown"></i></div></div></div><div style="flex:1;display:flex;flex-direction:column"><div class="s-bar"><i data-i="panel"></i><span style="color:var(--muted-foreground)">Kilima Labs / </span><span style="font-weight:500">Today</span><span style="flex:1"></span><div class="s-input" style="width:200px">Search…</div><button class="s-btn sm">Invite</button></div><div style="padding:16px;display:flex;flex-direction:column;gap:16px"><div class="s-card" style="padding:20px"><div style="font-weight:600;font-size:16px">Get Kilima Labs set up</div><div style="font-size:14px;color:var(--muted-foreground);margin-top:4px">2 of 4 steps done</div><div style="height:8px;background:var(--secondary);border-radius:999px;margin:16px 0"><div style="width:50%;height:8px;background:var(--primary);border-radius:999px"></div></div><div style="display:flex;gap:8px"><button class="s-btn sm">Invite your team</button><button class="s-btn sm outline">Install the app</button></div></div></div></div></div></div><div><div class="lbl"><b class="now">The Agency sidebar</b> 232px · rows 31px · translucent · switcher on top, account at the bottom</div><div class="frame" style="display:flex;height:560px;background:var(--surface);width:100%"><div style="width:232px;flex:none;display:flex">
+<div style="height:560px;width:232px;display:flex"><aside class="ag-sidebar"><div class="ag-lights"><i></i><i></i><i></i></div><div class="ag-switcher"><span class="ag-co  ">K</span><span class="name">Kilima Labs</span><i data-i="updown"></i></div><div class="ag-side-item"><i data-i="today"></i>Today</div><div class="ag-side-item is-soon"><i data-i="projects"></i>Projects<span class="count">Soon</span></div><div class="ag-side-item is-soon"><i data-i="network"></i>Network<span class="count">Soon</span></div><div class="ag-side-item is-soon"><i data-i="meetings"></i>Meetings<span class="count">Soon</span></div><div class="ag-side-item is-soon"><i data-i="notebook"></i>Notebook<span class="count">Soon</span></div><div class="ag-side-sep"></div><div class="ag-side-item is-active"><i data-i="team"></i>Team</div><div class="ag-side-item is-soon"><i data-i="mentor"></i>Mentor<span class="count">Soon</span></div><div class="ag-side-item"><i data-i="settings"></i>Settings</div><div class="ag-side-foot"><span class="ag-av sm gold">CN</span><div style="flex:1;min-width:0"><div style="font:500 13px/17px var(--font-sans)">Charis N.</div><div class="ag-sub" style="font-size:12px;line-height:15px">Owner</div></div><span class="ag-kbd">Ctrl K</span></div></aside></div>
+</div><div style="flex:1;display:flex;flex-direction:column;background:var(--bg)"><div class="ag-toolbar" style="background:var(--surface)"><span class="ag-search" style="flex:1"><i data-i="search"></i>Search <span class="ag-kbd" style="margin-left:auto">Ctrl K</span></span><button class="ag-btn ag-btn-tinted"><i data-i="userplus"></i> Invite</button></div><div style="padding:16px"><div class="ag-card ag-card-pad"><div class="ag-row-x" style="gap:16px"><div class="ag-ring" data-p="50"><span>2/4</span></div><div><h3 class="ag-h3">Get Kilima Labs set up</h3><div class="ag-sub">Invite your office team · Install on your iPhone</div></div></div></div></div></div></div></div></div><div class="ag-banner is-gold"><i data-i="info"></i><span>Their header carries a breadcrumb (Company / Screen) and their account switcher sits at the bottom of the sidebar — both worth stealing for the desktop shell.</span></div></div>
+<script>Agency.ready();</script>
+</body>
+</html>

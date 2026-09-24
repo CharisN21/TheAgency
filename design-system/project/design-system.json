@@ -1,0 +1,27 @@
+{
+  "v": 3,
+  "layout": "files",
+  "createdOnFiles": { "v": 1, "at": "2026-09-21T12:00:00Z" },
+  "title": "The Agency",
+  "namespace": "Agency",
+  "libraries": [],
+  "sections": {},
+  "groups": ["Logos"],
+  "assetGroups": {
+    "Logos": {
+      "name": "Logos",
+      "tile": "m",
+      "order": ["agency-mark.svg", "agency-lockup.svg", "agency-lockup-reverse.svg", "agency-mark-ink.svg", "agency-wordmark.svg"],
+      "files": {
+        "agency-mark.svg": { "name": "agency-mark.svg", "blob": "9426f9e4486599e5ac29239790b810e6", "size": 611, "type": "image/svg+xml" },
+        "agency-mark-ink.svg": { "name": "agency-mark-ink.svg", "blob": "83a6c142343c42d43c14dad92c1a57d4", "size": 540, "type": "image/svg+xml" },
+        "agency-lockup.svg": { "name": "agency-lockup.svg", "blob": "349c84ec6adf8390faefccff74d3a6cb", "size": 820, "type": "image/svg+xml" },
+        "agency-lockup-reverse.svg": { "name": "agency-lockup-reverse.svg", "blob": "38867288f813387b414a3c8cc2846e0b", "size": 749, "type": "image/svg+xml" },
+        "agency-wordmark.svg": { "name": "agency-wordmark.svg", "blob": "b8d1909079e0996ad84636d2fc696db4", "size": 325, "type": "image/svg+xml" }
+      }
+    }
+  },
+  "blobs": {},
+  "docs": { "readme": "project/README.md", "sections": [] },
+  "lastChange": { "by": "Charis", "at": "2026-09-24T12:00:00Z", "via": "Claude Code", "note": "CRM direction: capability gap and the four patterns to add" }
+}

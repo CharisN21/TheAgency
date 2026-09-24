@@ -1,0 +1,61 @@
+<!-- @dsCard height=300 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Agency</title>
+<style>
+  html, body { margin:0; height:100%; }
+  body { background:var(--bg); color:var(--ink); font-family:var(--font-sans); overflow:hidden; }
+  .cover { position:relative; height:300px; overflow:hidden; }
+  .art { position:absolute; top:0; left:480px; width:480px; height:300px; overflow:hidden; }
+  .art svg { display:block; width:480px; height:300px; }
+  .gold { fill:var(--accent); }
+  .soft { fill:var(--accent-soft); }
+  .deep { fill:var(--ink); }
+  .ok { fill:var(--green); }
+  .blk { rx:var(--radius-card); }
+  .pill { rx:12px; }
+  .ring { fill:none; stroke-linecap:round; stroke-width:12px; }
+  .ring.track { stroke:var(--ink-2); opacity:.45; }
+  .ring.r-gold { stroke:var(--accent); }
+  .ring.r-ok { stroke:var(--green); }
+  .ring.r-soft { stroke:var(--accent-soft); }
+  .mini { fill:none; stroke:var(--accent-soft); stroke-width:6px; stroke-linecap:round; }
+  .words { position:absolute; left:var(--space-6); bottom:var(--space-6); max-width:440px; }
+  .name { margin:0; font-size:104px; line-height:.95; font-weight:700; letter-spacing:-.03em; color:var(--ink); }
+  .tag { margin:var(--space-4) 0 0 4px; font-size:14px; line-height:20px; color:var(--ink-2); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 480 300" width="480" height="300">
+<!--
+  blocks      accent 160x252 slab bled off the top (the one brand hue, largest) · ink 192x240 bleeding off the right edge · accent-soft 96x104 tint · green 48x24 pill once (it only means "on track") — about a third of 960x300
+  arrangement one tall gold slab with satellites, bottoms on one line space-6 above the edge, space-4 gutters
+  pattern     progress rings, from "Progress visuals: Apple Fitness rings": three concentric rings on the ink block, three small rings cut into the slab in accent-soft
+  scales      sides in space-2 multiples; gutters space-4; ring stroke space-3; corners radius-card, pill rx half its height
+-->
+<rect class="gold blk" x="16" y="-16" width="160" height="292" rx="10"/>
+<circle class="mini" cx="96" cy="72" r="14" stroke-dasharray="88 88"/>
+<circle class="mini" cx="96" cy="124" r="14" stroke-dasharray="60 88" transform="rotate(-90 96 124)"/>
+<circle class="mini" cx="96" cy="176" r="14" stroke-dasharray="30 88" transform="rotate(-90 96 176)"/>
+<rect class="soft blk" x="192" y="132" width="96" height="104" rx="10"/>
+<rect class="ok pill" x="192" y="252" width="48" height="24" rx="12"/>
+<rect class="deep blk" x="304" y="36" width="192" height="240" rx="10"/>
+<circle class="ring track" cx="392" cy="156" r="64"/>
+<circle class="ring track" cx="392" cy="156" r="46"/>
+<circle class="ring track" cx="392" cy="156" r="28"/>
+<circle class="ring r-gold" cx="392" cy="156" r="64" stroke-dasharray="289 402" transform="rotate(-90 392 156)"/>
+<circle class="ring r-ok" cx="392" cy="156" r="46" stroke-dasharray="289 289" transform="rotate(-90 392 156)"/>
+<circle class="ring r-soft" cx="392" cy="156" r="28" stroke-dasharray="70 176" transform="rotate(-90 392 156)"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">The<br>Agency</h1>
+<p class="tag">Every company, project and person in one place.</p>
+</div>
+</div>
+</body>
+</html>

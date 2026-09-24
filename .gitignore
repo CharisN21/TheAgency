@@ -46,3 +46,4 @@ next-env.d.ts
 
 # local data store (stands in for Supabase)
 .data/
+.preview/

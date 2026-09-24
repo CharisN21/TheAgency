@@ -1,0 +1,40 @@
+<!-- @dsCard group="Brand" height=520 width=980 subtitle="Blur-in, stroke draw, per-letter rise" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Brand-02-LogoMotion</title><style>
+.stage { background: var(--bg); border-radius: var(--radius-sheet); padding: 40px; display: flex; flex-direction: column; align-items: center; gap: 28px; position: relative; overflow: hidden; }
+.lock { display: flex; align-items: center; gap: 18px; }
+.lock svg { display: block; overflow: visible; }
+.word { display: flex; font: 600 30px/1 var(--font-sans); letter-spacing: 5px; color: var(--ink); }
+.word span { display: inline-block; white-space: pre; }
+.sheen { position: absolute; inset: 0; border-radius: 15px; overflow: hidden; pointer-events: none; }
+.sheen i { position: absolute; top: -40%; left: -60%; width: 40%; height: 180%; transform: rotate(18deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); display: block; }
+.markwrap { position: relative; }
+/* the sequence */
+.run #lgTile { animation: tileIn 520ms cubic-bezier(.16,1,.3,1) both; transform-origin: 32px 32px; }
+.run #lgArc { animation: arcIn 700ms cubic-bezier(.16,1,.3,1) 120ms both; transform-origin: 32px 34px; }
+.run #lgA { animation: draw 460ms cubic-bezier(.16,1,.3,1) 300ms both; }
+.run #lgBar { animation: draw 300ms cubic-bezier(.16,1,.3,1) 520ms both; }
+.run .sheen i { animation: sweep 900ms cubic-bezier(.4,0,.2,1) 620ms both; }
+.run .word span { animation: rise 620ms cubic-bezier(.16,1,.3,1) both; animation-delay: calc(520ms + var(--k) * 26ms); }
+.run .lock { animation: settle 700ms cubic-bezier(.16,1,.3,1) 900ms both; }
+@keyframes tileIn { from { opacity: 0; transform: scale(.88); filter: blur(10px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
+@keyframes arcIn { from { stroke-dashoffset: 120; transform: rotate(-38deg); opacity: 0; } to { stroke-dashoffset: 0; transform: rotate(0deg); opacity: 1; } }
+@keyframes draw { from { stroke-dasharray: 60; stroke-dashoffset: 60; } to { stroke-dasharray: 60; stroke-dashoffset: 0; } }
+@keyframes sweep { from { left: -60%; opacity: 0; } 30% { opacity: 1; } to { left: 130%; opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); filter: blur(7px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+@keyframes settle { 0% { transform: scale(1.03); } 100% { transform: scale(1); } }
+.steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; width: 100%; max-width: 860px; }
+.steps div { background: var(--surface); border-radius: var(--radius-card); padding: 12px; box-shadow: var(--shadow-card); }
+.steps b { display: block; font: 600 12px/16px var(--font-sans); color: var(--accent-ink); margin-bottom: 4px; }
+.steps span { font-size: 12px; line-height: 17px; color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { .run * { animation-duration: 1ms !important; } }
+</style></head>
+<body>
+<div class="ag-pad" style="display:flex;flex-direction:column;gap:20px"><div class="stage" id="stage"><div class="lock"><span class="markwrap"><svg viewBox="0 0 64 64" width="104" height="104" role="img" aria-label="The Agency"><rect id="lgTile" x="0" y="0" width="64" height="64" rx="15" fill="var(--accent)"/><circle id="lgArc" cx="32" cy="34" r="19" fill="none" stroke="var(--brass)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="86.0 119.4" transform="rotate(128 32 34)"/><path id="lgA" d="M21.6 43.4 32 20.6 42.4 43.4" fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/><path id="lgBar" d="M26.2 35.2h11.6" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round"/></svg><span class="sheen"><i></i></span></span><span class="word"><span style="--k:0">T</span><span style="--k:1">H</span><span style="--k:2">E</span><span style="--k:3"> </span><span style="--k:4">A</span><span style="--k:5">G</span><span style="--k:6">E</span><span style="--k:7">N</span><span style="--k:8">C</span><span style="--k:9">Y</span></span></div><button class="ag-btn ag-btn-secondary" id="replay"><i data-i="refresh" class="ag-ico ag-ico-sm"></i> Replay</button></div><div class="steps"><div><b>0–520ms · Tile</b><span>Blurs in from 10px and scales 0.88 → 1. No fade-up, no slide.</span></div><div><b>120–820ms · Ring</b><span>Draws itself while swinging 38° into place.</span></div><div><b>300–820ms · The A</b><span>Strokes draw on, apex first, then the crossbar.</span></div><div><b>620–1520ms · Sheen</b><span>One brass sweep across the tile. Once only, never a loop.</span></div><div><b>520–1200ms · Name</b><span>Letters rise 14px out of a 7px blur, 26ms apart.</span></div></div><div class="ag-banner is-gold"><i data-i="info"></i><span>Everything eases on <code>cubic-bezier(.16, 1, .3, 1)</code> — a spring-like curve that overshoots slightly and settles, which is what makes it read as current rather than 2016. Under <code>prefers-reduced-motion</code> the whole sequence collapses to a fade.</span></div></div>
+<script>Agency.ready();
+var st=document.getElementById('stage');function run(){st.classList.remove('run');void st.offsetWidth;st.classList.add('run');}
+document.getElementById('replay').addEventListener('click',run);run();setInterval(run,5200);
+</script>
+</body>
+</html>

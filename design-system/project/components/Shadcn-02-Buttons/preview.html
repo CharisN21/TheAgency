@@ -1,0 +1,56 @@
+<!-- @dsCard group="Reference &middot; shadcn/ui" height=560 width=1000 page subtitle="Six variants, five sizes" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Shadcn-02-Buttons</title><style>
+.sh { --background:oklch(1 0 0); --foreground:oklch(0.145 0 0); --card:oklch(1 0 0); --popover:oklch(1 0 0);
+  --primary:oklch(0.205 0 0); --primary-foreground:oklch(0.985 0 0); --secondary:oklch(0.97 0 0); --secondary-foreground:oklch(0.205 0 0);
+  --muted:oklch(0.97 0 0); --muted-foreground:oklch(0.556 0 0); --accentc:oklch(0.97 0 0); --destructive:oklch(0.577 0.245 27.325);
+  --border:oklch(0.922 0 0); --input:oklch(0.922 0 0); --ring:oklch(0.708 0 0);
+  --sidebar:oklch(0.985 0 0); --sidebar-accent:oklch(0.97 0 0); --sidebar-border:oklch(0.922 0 0);
+  --r:0.625rem; --r-sm:calc(var(--r) * 0.6); --r-md:calc(var(--r) * 0.8); --r-lg:var(--r); --r-xl:calc(var(--r) * 1.4);
+  font-family:ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--foreground); }
+.sh.dark { --background:oklch(0.145 0 0); --foreground:oklch(0.985 0 0); --card:oklch(0.205 0 0); --popover:oklch(0.205 0 0);
+  --primary:oklch(0.922 0 0); --primary-foreground:oklch(0.205 0 0); --secondary:oklch(0.269 0 0); --secondary-foreground:oklch(0.985 0 0);
+  --muted:oklch(0.269 0 0); --muted-foreground:oklch(0.708 0 0); --accentc:oklch(0.371 0 0); --destructive:oklch(0.704 0.191 22.216);
+  --border:oklch(1 0 0 / 10%); --input:oklch(1 0 0 / 15%); --ring:oklch(0.556 0 0); --sidebar:oklch(0.205 0 0); --sidebar-accent:oklch(0.269 0 0); --sidebar-border:oklch(1 0 0 / 10%); }
+.s-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:36px; padding:0 16px; border:1px solid transparent; border-radius:var(--r-md); font:500 14px/1 inherit; cursor:pointer; background:var(--primary); color:var(--primary-foreground); transition:all 150ms; }
+.s-btn.secondary { background:var(--secondary); color:var(--secondary-foreground); }
+.s-btn.outline { background:var(--background); color:var(--foreground); border-color:var(--border); box-shadow:0 1px 2px rgba(0,0,0,.05); }
+.s-btn.ghost { background:transparent; color:var(--foreground); }
+.s-btn.destructive { background:var(--destructive); color:#fff; }
+.s-btn.link { background:transparent; color:var(--foreground); text-decoration:underline; text-underline-offset:4px; padding:0; }
+.s-btn.xs { height:24px; padding:0 8px; font-size:12px; gap:4px; }
+.s-btn.sm { height:32px; padding:0 12px; gap:6px; }
+.s-btn.lg { height:40px; padding:0 24px; }
+.s-btn.icon { width:36px; padding:0; }
+.s-btn.ring { outline:3px solid color-mix(in oklch, var(--ring) 50%, transparent); outline-offset:0; border-color:var(--ring); }
+.s-btn[disabled] { opacity:.5; }
+.s-btn .ag-ico { width:16px; height:16px; }
+.s-card { background:var(--card); border:1px solid var(--border); border-radius:var(--r-xl); }
+.s-input { height:36px; border:1px solid var(--input); border-radius:var(--r-md); background:var(--background); padding:0 12px; display:flex; align-items:center; font-size:14px; color:var(--muted-foreground); box-shadow:0 1px 2px rgba(0,0,0,.05); }
+.s-badge { display:inline-flex; align-items:center; gap:4px; height:20px; padding:0 8px; border-radius:var(--r-md); font:500 12px/1 inherit; background:var(--secondary); color:var(--secondary-foreground); border:1px solid transparent; }
+.s-badge.outline { background:transparent; border-color:var(--border); }
+.s-sidebar { width:256px; background:var(--sidebar); border-right:1px solid var(--sidebar-border); padding:8px; display:flex; flex-direction:column; gap:2px; }
+.s-item { height:32px; display:flex; align-items:center; gap:8px; padding:0 8px; border-radius:var(--r-md); font:400 14px/1 inherit; color:var(--foreground); }
+.s-item.on { background:var(--sidebar-accent); font-weight:500; }
+.s-item .ag-ico { width:16px; height:16px; color:var(--muted-foreground); }
+.s-label { font:500 12px/1 inherit; color:var(--muted-foreground); padding:8px; }
+.s-sep { height:1px; background:var(--sidebar-border); margin:8px 0; }
+.s-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border-bottom:1px solid var(--border); font-size:14px; }
+.s-av { width:32px; height:32px; border-radius:999px; background:var(--muted); color:var(--muted-foreground); display:flex; align-items:center; justify-content:center; font:500 12px/1 inherit; flex:none; }
+.s-bar { height:48px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; }
+.board { padding:32px; display:flex; flex-direction:column; gap:24px; background:var(--bg); }
+.side { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+.lbl { display:flex; align-items:center; gap:8px; font:600 12px/16px var(--font-sans); letter-spacing:.3px; text-transform:uppercase; color:var(--ink-2); margin-bottom:10px; }
+.lbl b { padding:2px 8px; border-radius:999px; font-size:11px; }
+.lbl .now { background:var(--accent-soft); color:var(--accent-ink); }
+.lbl .alt { background:var(--fill-strong); color:var(--ink); }
+.frame { border-radius:var(--radius-card); overflow:hidden; box-shadow:var(--shadow-card); border:1px solid var(--separator); }
+.swatch { display:flex; align-items:center; gap:10px; padding:6px 0; font:400 12px/16px var(--font-mono); color:var(--ink-2); }
+.swatch i { width:36px; height:24px; border-radius:4px; box-shadow:inset 0 0 0 1px rgba(128,128,128,.3); flex:none; display:block; }
+</style></head>
+<body>
+<div class="board"><div><h2 class="ag-h2">Buttons</h2><p class="ag-sub">From <code>registry/new-york-v4/ui/button.tsx</code>. Variants and sizes are declared with <code>cva</code>, so the set is fixed and named.</p></div><div class="side"><div><div class="lbl"><b class="alt">shadcn/ui</b></div><div class="s-card sh" style="padding:24px;display:flex;flex-direction:column;gap:18px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="s-btn">Create company</button><button class="s-btn secondary">Secondary</button><button class="s-btn outline">Outline</button><button class="s-btn ghost">Ghost</button><button class="s-btn destructive">Delete</button><button class="s-btn link">Link</button></div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="s-btn xs">xs · 24px</button><button class="s-btn sm">sm · 32px</button><button class="s-btn ">default · 36px</button><button class="s-btn lg">lg · 40px</button><button class="s-btn icon"><i data-i="more"></i></button><button class="s-btn outline icon"><i data-i="plus"></i></button></div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="s-btn outline ring">Focused</button><button class="s-btn" disabled>Disabled</button><button class="s-btn outline"><i data-i="userplus"></i> With icon</button></div><div style="font-size:13px;color:var(--muted-foreground)">36px default &middot; radius 8px &middot; 14px medium &middot; icons 16px &middot; focus = 3px ring at 50% &middot; disabled = 50% opacity</div><div class="s-sep"></div><div style="display:flex;gap:8px"><span class="s-badge">Owner</span><span class="s-badge outline">Admin</span><span class="s-badge" style="background:var(--destructive);color:#fff">Blocked</span></div></div></div><div><div class="lbl"><b class="now">The Agency today</b></div><div class="ag-card ag-card-pad" style="display:flex;flex-direction:column;gap:18px"><div class="ag-row-x"><button class="ag-btn ag-btn-primary">Create company</button><button class="ag-btn ag-btn-secondary">Cancel</button><button class="ag-btn ag-btn-tinted"><i data-i="userplus"></i> Invite</button><button class="ag-btn ag-btn-plain">Skip for now</button><button class="ag-btn ag-btn-danger">Remove</button></div><div class="ag-row-x"><button class="ag-btn ag-btn-secondary" style="height:24px;font-size:12px">24px</button><button class="ag-btn ag-btn-secondary">32px</button><button class="ag-btn ag-btn-secondary ag-btn-lg">44px (iPhone)</button></div><div class="ag-sub">32px default &middot; radius 8px &middot; 14px medium &middot; icons 16px &middot; focus = 3px solid ring &middot; sentence case</div><div class="ag-hr"></div><div class="ag-row-x"><span class="ag-pill is-gold">Owner</span><span class="ag-pill is-blue">Admin</span><span class="ag-pill is-red"><i></i>Blocked</span></div></div></div></div><div class="ag-banner is-gold"><i data-i="check"></i><span>These are nearly the same button: same radius, same type size, same icon size, same focus idea. Ours is 4px shorter and uses a gold fill where theirs uses near-black.</span></div></div>
+<script>Agency.ready();</script>
+</body>
+</html>
