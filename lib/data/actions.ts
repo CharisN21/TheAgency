@@ -776,3 +776,213 @@ export async function deleteView(viewId: string): Promise<Result> {
   revalidatePath(`/${view.object}`)
   return { ok: true, message: `Removed "${view.name}"` }
 }
+
+/* ----------------------------------------------------------------- import */
+
+export type ImportRow = {
+  name: string
+  category?: string
+  what_they_do?: string
+  location?: string
+  phone?: string
+  email?: string
+  tags?: string
+  contact_name?: string
+  contact_title?: string
+  contact_phone?: string
+  contact_email?: string
+}
+
+export type ImportPlan = {
+  /** Rows whose name already exists here. */
+  duplicates: { row: number; name: string; existingId: string }[]
+  /** Rows that repeat a name inside the file itself. */
+  repeats: { row: number; name: string }[]
+  newCount: number
+  peopleCount: number
+}
+
+const CATEGORY_WORDS: Record<string, OrgCategory> = {
+  supplier: "supplier",
+  suppliers: "supplier",
+  vendor: "supplier",
+  client: "client",
+  clients: "client",
+  customer: "client",
+  buyer: "client",
+  partner: "partner",
+  partners: "partner",
+  prospect: "prospect",
+  lead: "prospect",
+  service: "service",
+  contractor: "service",
+}
+
+const readCategory = (raw?: string): OrgCategory =>
+  CATEGORY_WORDS[(raw ?? "").trim().toLowerCase()] ?? "prospect"
+
+/** What would happen if we imported this. Nothing is written. */
+export async function planImport(rows: ImportRow[]): Promise<ImportPlan> {
+  const { workspace } = await requireContext()
+  const db = await readDb()
+  const existing = new Map(
+    db.organisations
+      .filter((o) => o.workspace_id === workspace.id)
+      .map((o) => [o.name.trim().toLowerCase(), o.id])
+  )
+
+  const duplicates: ImportPlan["duplicates"] = []
+  const repeats: ImportPlan["repeats"] = []
+  const seen = new Set<string>()
+
+  rows.forEach((r, i) => {
+    const key = r.name.trim().toLowerCase()
+    const hit = existing.get(key)
+    if (hit) duplicates.push({ row: i, name: r.name, existingId: hit })
+    else if (seen.has(key)) repeats.push({ row: i, name: r.name })
+    seen.add(key)
+  })
+
+  return {
+    duplicates,
+    repeats,
+    newCount: rows.length - duplicates.length - repeats.length,
+    peopleCount: rows.filter((r) => (r.contact_name ?? "").length > 1).length,
+  }
+}
+
+export type ImportResult = Result & {
+  created: number
+  updated: number
+  skipped: number
+  people: number
+}
+
+/**
+ * Writes the rows. `onDuplicate` decides what happens to names that already
+ * exist: leave them alone, or fill in blanks from the file without overwriting
+ * anything already filled in.
+ */
+export async function importOrganisations(
+  rows: ImportRow[],
+  onDuplicate: "skip" | "fill"
+): Promise<ImportResult> {
+  const { user, workspace, role } = await requireContext()
+  const blank = { created: 0, updated: 0, skipped: 0, people: 0 }
+  if (!can.edit(role)) {
+    return { ok: false, message: "Viewers cannot import", ...blank }
+  }
+  if (rows.length === 0) {
+    return { ok: false, message: "Nothing to import", ...blank }
+  }
+  if (rows.length > 2000) {
+    return { ok: false, message: "That is over 2,000 rows. Split the file and try again.", ...blank }
+  }
+
+  const counts = { ...blank }
+
+  await mutate((db) => {
+    const byName = new Map(
+      db.organisations
+        .filter((o) => o.workspace_id === workspace.id)
+        .map((o) => [o.name.trim().toLowerCase(), o])
+    )
+    // Names that were here before this import started. A second row for a name
+    // created *during* this import is not a duplicate — it is another person at
+    // the same place, and their row still counts.
+    const before = new Set(byName.keys())
+
+    for (const row of rows) {
+      const name = row.name.trim()
+      if (name.length < 2) {
+        counts.skipped++
+        continue
+      }
+
+      const key = name.toLowerCase()
+      let org = byName.get(key)
+
+      if (org) {
+        if (before.has(key)) {
+          if (onDuplicate === "skip") {
+            counts.skipped++
+            continue
+          }
+          // Fill blanks only. What is already there was checked by a person.
+          org.what_they_do ||= row.what_they_do
+          org.location ||= row.location
+          org.phone ||= row.phone
+          org.email ||= row.email
+          for (const t of (row.tags ?? "").split(/[,|;]/).map((s) => s.trim()).filter(Boolean)) {
+            if (!org.tags.some((x) => x.toLowerCase() === t.toLowerCase())) org.tags.push(t)
+          }
+          counts.updated++
+        }
+      } else {
+        org = {
+          id: newId(),
+          workspace_id: workspace.id,
+          name,
+          category: readCategory(row.category),
+          what_they_do: row.what_they_do,
+          location: row.location,
+          phone: row.phone,
+          email: row.email,
+          owner_id: user.id,
+          tags: (row.tags ?? "")
+            .split(/[,|;]/)
+            .map((s) => s.trim())
+            .filter(Boolean),
+          created_at: now(),
+        }
+        db.organisations.push(org)
+        byName.set(key, org)
+        counts.created++
+      }
+
+      const personName = (row.contact_name ?? "").trim()
+      if (personName.length > 1) {
+        const already = db.contacts.some(
+          (c) =>
+            c.workspace_id === workspace.id &&
+            c.organisation_id === org!.id &&
+            c.full_name.trim().toLowerCase() === personName.toLowerCase()
+        )
+        if (!already) {
+          db.contacts.push({
+            id: newId(),
+            workspace_id: workspace.id,
+            organisation_id: org.id,
+            full_name: personName,
+            title: row.contact_title,
+            email: row.contact_email,
+            phone: row.contact_phone,
+            tags: [],
+            owner_id: user.id,
+            created_at: now(),
+          })
+          counts.people++
+        }
+      }
+    }
+
+    log(
+      db,
+      workspace.id,
+      user.id,
+      `imported ${counts.created} organisation${counts.created === 1 ? "" : "s"}` +
+        (counts.updated ? ` and filled in ${counts.updated}` : "") +
+        (counts.people ? ` with ${counts.people} people` : "")
+    )
+  })
+
+  revalidatePath("/organisations")
+  revalidatePath("/people")
+  revalidatePath("/today")
+
+  return {
+    ok: true,
+    message: `${counts.created} added${counts.updated ? `, ${counts.updated} filled in` : ""}${counts.skipped ? `, ${counts.skipped} left alone` : ""}`,
+    ...counts,
+  }
+}

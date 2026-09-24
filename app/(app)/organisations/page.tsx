@@ -1,7 +1,10 @@
 import { Suspense } from "react"
-import { Building2 } from "lucide-react"
+import { Building2, Upload } from "lucide-react"
+
+import Link from "next/link"
 
 import { PageHeader } from "@/components/app/page-header"
+import { Button } from "@/components/ui/button"
 import { listMembers, listOrganisations, listTags, listViews } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can, money } from "@/lib/data/types"
@@ -46,7 +49,16 @@ export default async function OrganisationsPage({
   return (
     <div className="flex min-h-svh flex-col">
       <PageHeader title="Organisations" meta={`${rows.length} · ${money(totalOpen)} open`}>
-        {can.edit(role) && <NewOrganisation />}
+        {can.edit(role) && (
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/organisations/import">
+                <Upload /> Import
+              </Link>
+            </Button>
+            <NewOrganisation />
+          </>
+        )}
       </PageHeader>
 
       <main className="flex-1 px-4 py-6 md:px-8">
@@ -76,7 +88,16 @@ export default async function OrganisationsPage({
                 ? "Clear a filter, or try another saved view."
                 : "Every supplier, client and partner you deal with lives here, with their people and their deals."}
             </p>
-            {!filtered && can.edit(role) && <NewOrganisation variant="empty" />}
+            {!filtered && can.edit(role) && (
+              <div className="flex flex-wrap justify-center gap-2">
+                <NewOrganisation variant="empty" />
+                <Button asChild variant="outline" size="lg">
+                  <Link href="/organisations/import">
+                    <Upload /> Import a spreadsheet
+                  </Link>
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <OrgTable
