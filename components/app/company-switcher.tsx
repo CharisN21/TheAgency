@@ -1,6 +1,9 @@
 "use client"
 
+import Link from "next/link"
+import { useTransition } from "react"
 import { Check, ChevronsUpDown, LogOut, Plus, UserPlus } from "lucide-react"
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,70 +17,87 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { signOut, switchCompany } from "@/lib/data/actions"
+import { ROLE_LABEL, can, type Role } from "@/lib/data/types"
 
-export type Company = {
+export type SwitcherCompany = {
   id: string
   name: string
-  initial: string
-  role: "Owner" | "Admin" | "Member" | "Viewer"
+  role: Role
   people: number
 }
 
-/** Top-left switcher. Every company keeps its own data; switching reloads the panes. */
+/** Top-left switcher. Switching reloads every pane for that company only. */
 export function CompanySwitcher({
   companies,
   currentId,
 }: {
-  companies: Company[]
+  companies: SwitcherCompany[]
   currentId: string
 }) {
+  const [pending, start] = useTransition()
   const current = companies.find((c) => c.id === currentId) ?? companies[0]
+  const initial = current.name.trim()[0]?.toUpperCase() ?? "?"
 
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" className="gap-3">
+            <SidebarMenuButton size="lg" className="gap-3" disabled={pending}>
               <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-bold">
-                {current.initial}
+                {initial}
               </span>
               <span className="grid flex-1 text-left leading-tight">
                 <span className="truncate font-medium">{current.name}</span>
                 <span className="text-muted-foreground truncate text-xs">
-                  {current.role} · {current.people} people
+                  {ROLE_LABEL[current.role]} · {current.people}{" "}
+                  {current.people === 1 ? "person" : "people"}
                 </span>
               </span>
               <ChevronsUpDown className="text-muted-foreground size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
+
           <DropdownMenuContent align="start" className="min-w-64">
             <DropdownMenuLabel className="text-muted-foreground text-xs">
               Your companies
             </DropdownMenuLabel>
             {companies.map((c) => (
-              <DropdownMenuItem key={c.id} className="gap-3">
+              <DropdownMenuItem
+                key={c.id}
+                className="gap-3"
+                onSelect={() => start(() => switchCompany(c.id).then(() => {}))}
+              >
                 <span className="bg-primary text-primary-foreground flex size-6 shrink-0 items-center justify-center rounded text-[11px] font-bold">
-                  {c.initial}
+                  {c.name.trim()[0]?.toUpperCase()}
                 </span>
                 <span className="grid flex-1 leading-tight">
                   <span>{c.name}</span>
                   <span className="text-muted-foreground text-xs">
-                    {c.role} · {c.people} people
+                    {ROLE_LABEL[c.role]} · {c.people}{" "}
+                    {c.people === 1 ? "person" : "people"}
                   </span>
                 </span>
                 {c.id === current.id && <Check className="size-4" />}
               </DropdownMenuItem>
             ))}
+
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Plus /> Create company
+            <DropdownMenuItem asChild>
+              <Link href="/new-company">
+                <Plus /> Create company
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <UserPlus /> Invite people to {current.name}
-            </DropdownMenuItem>
+            {can.invite(current.role) && (
+              <DropdownMenuItem asChild>
+                <Link href="/team?invite=1">
+                  <UserPlus /> Invite people to {current.name}
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => start(() => signOut().then(() => {}))}>
               <LogOut /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>

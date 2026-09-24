@@ -24,16 +24,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { CompanySwitcher, type Company } from "./company-switcher"
-
-const COMPANIES: Company[] = [
-  { id: "kilima", name: "Kilima Labs", initial: "K", role: "Owner", people: 5 },
-  { id: "ppe", name: "Nairobi PPE Supply", initial: "N", role: "Owner", people: 3 },
-  { id: "ridge", name: "Ridge Moto Spares", initial: "R", role: "Admin", people: 7 },
-]
+import { ROLE_LABEL, type Role } from "@/lib/data/types"
+import { CompanySwitcher, type SwitcherCompany } from "./company-switcher"
 
 // Order follows the build plan. `soon` modules arrive in later phases.
-const NAV = [
+const WORK = [
   { href: "/today", label: "Today", icon: Sun, soon: false },
   { href: "/projects", label: "Projects", icon: FolderKanban, soon: true },
   { href: "/network", label: "Network", icon: Share2, soon: true },
@@ -41,29 +36,52 @@ const NAV = [
   { href: "/notebook", label: "Notebook", icon: NotebookPen, soon: true },
 ]
 
-const COMPANY_NAV = [
+const COMPANY = [
   { href: "/team", label: "Team", icon: Users, soon: false },
   { href: "/mentor", label: "Mentor", icon: Sparkles, soon: true },
-  { href: "/settings", label: "Settings", icon: SlidersHorizontal, soon: true },
+  { href: "/settings", label: "Settings", icon: SlidersHorizontal, soon: false },
 ]
 
-export function AppSidebar() {
+export function AppSidebar({
+  companies,
+  currentId,
+  user,
+  role,
+}: {
+  companies: SwitcherCompany[]
+  currentId: string
+  user: { full_name: string; email: string }
+  role: Role
+}) {
   const pathname = usePathname()
+  const initials = user.full_name
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase()
 
-  const item = (n: (typeof NAV)[number]) => (
+  const item = (n: (typeof WORK)[number]) => (
     <SidebarMenuItem key={n.href}>
       <SidebarMenuButton
-        asChild
+        asChild={!n.soon}
         isActive={pathname.startsWith(n.href)}
-        className={n.soon ? "text-muted-foreground" : undefined}
+        disabled={n.soon}
+        className={n.soon ? "text-muted-foreground cursor-default" : undefined}
+        tooltip={n.soon ? `${n.label} — a later phase` : n.label}
       >
-        <Link href={n.soon ? "#" : n.href} aria-disabled={n.soon}>
-          <n.icon />
-          <span>{n.label}</span>
-          {n.soon && (
+        {n.soon ? (
+          <>
+            <n.icon />
+            <span>{n.label}</span>
             <span className="text-muted-foreground ml-auto text-xs">Soon</span>
-          )}
-        </Link>
+          </>
+        ) : (
+          <Link href={n.href}>
+            <n.icon />
+            <span>{n.label}</span>
+          </Link>
+        )}
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
@@ -71,29 +89,31 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <CompanySwitcher companies={COMPANIES} currentId="kilima" />
+        <CompanySwitcher companies={companies} currentId={currentId} />
       </SidebarHeader>
+
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Work</SidebarGroupLabel>
-          <SidebarMenu>{NAV.map(item)}</SidebarMenu>
+          <SidebarMenu>{WORK.map(item)}</SidebarMenu>
         </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Company</SidebarGroupLabel>
-          <SidebarMenu>{COMPANY_NAV.map(item)}</SidebarMenu>
+          <SidebarMenu>{COMPANY.map(item)}</SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" className="gap-3">
               <span className="bg-accent text-accent-foreground flex size-8 items-center justify-center rounded-full text-xs font-semibold">
-                CN
+                {initials}
               </span>
               <span className="grid flex-1 text-left leading-tight">
-                <span className="truncate font-medium">Charis N.</span>
+                <span className="truncate font-medium">{user.full_name}</span>
                 <span className="text-muted-foreground truncate text-xs">
-                  Owner · Kilima Labs
+                  {ROLE_LABEL[role]}
                 </span>
               </span>
             </SidebarMenuButton>

@@ -1,50 +1,36 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createServerClient } from "@supabase/ssr"
 
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/config"
-
-const PROTECTED = ["/today", "/team", "/projects", "/network", "/meetings", "/notebook"]
+const PROTECTED = [
+  "/today",
+  "/team",
+  "/settings",
+  "/projects",
+  "/network",
+  "/meetings",
+  "/notebook",
+  "/new-company",
+]
 
 /**
- * Refreshes the Supabase session on every request and keeps signed-out people out of
- * the app. While Supabase is not configured the app runs in preview mode and this
- * does nothing.
+ * Keeps signed-out people out of the app. While we are on local data the session is
+ * a cookie; when Supabase arrives this refreshes the Supabase session instead.
  */
-export async function proxy(request: NextRequest) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return NextResponse.next()
-
-  let response = NextResponse.next({ request })
-
-  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-        response = NextResponse.next({ request })
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
-        )
-      },
-    },
-  })
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+export function proxy(request: NextRequest) {
+  const signedIn = Boolean(request.cookies.get("agency_user")?.value)
   const needsAuth = PROTECTED.some((p) => request.nextUrl.pathname.startsWith(p))
-  if (!user && needsAuth) {
+
+  if (!signedIn && needsAuth) {
     const url = request.nextUrl.clone()
     url.pathname = "/sign-in"
-    url.searchParams.set("next", request.nextUrl.pathname)
+    url.search = `?next=${encodeURIComponent(request.nextUrl.pathname)}`
     return NextResponse.redirect(url)
   }
 
-  return response
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon.svg|.*\\.png$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon.svg|icon-maskable.svg|.*\\.png$).*)",
+  ],
 }

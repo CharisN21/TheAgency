@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Toaster } from "@/components/ui/sonner"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -32,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        {children}
+        <TooltipProvider delayDuration={400}>{children}</TooltipProvider>
         <Toaster position="bottom-center" />
       </body>
     </html>

@@ -43,3 +43,6 @@ next-env.d.ts
 
 # local
 .next-dev.log
+
+# local data store (stands in for Supabase)
+.data/
