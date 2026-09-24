@@ -18,12 +18,14 @@ There is **no database on purpose**. Everything lives in `.data/agency.json`, wr
 
 **CRM** — organisations (list, saved views, filter builder, bulk actions, CSV export, record page with properties, activity timeline, people and deals), people with next-touch dates and one-tap call/WhatsApp/email, deals on a pipeline board with drag-and-drop, stage totals, weighted forecast and a required reason when a deal is lost. Today leads with open pipeline, who to speak to and what is going quiet.
 
+**Import** — Organisations → Import: upload a CSV, map your own column names, see which names already exist, then skip them or fill in their blanks. People on the same row come in attached to their organisation.
+
 Every action returns a result and raises a toast. Lists have skeletons and empty states. `app/(app)/error.tsx` catches the rest.
 
 ## What is next, in order
 
-1. **Import wizard** — CSV upload, map your own column names, catch duplicates, import. The real supplier and Safaricom sheets are the first test.
-2. **Duplicate detection and merge** — two Mercy Wambuis is how a CRM dies.
+1. **Duplicate detection and merge** — two Mercy Wambuis is how a CRM dies. The import only catches exact name matches; this catches the rest.
+2. **Try the import on the real supplier and Safaricom sheets.**
 3. **Deal detail page** — deal cards currently link to their organisation.
 4. **Bulk actions and filters on people and deals** — the organisations pattern, copied across (`org-table.tsx` and `filter-bar.tsx` are the models).
 5. **Custom fields** — per workspace, per object, AI-suggested and approved.
