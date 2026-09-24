@@ -44,7 +44,7 @@ export default function LandingPage() {
         <section className="flex flex-col items-center gap-5 px-6 pt-16 pb-14 text-center md:pt-20">
           <LogoIntro />
           <h1 className="mt-2 max-w-3xl text-4xl font-bold tracking-tight text-balance md:text-5xl lg:text-6xl">
-            Run every company you own from one calm place.
+            Run every venture you own from one calm place.
           </h1>
           <p className="text-muted-foreground max-w-xl text-lg text-pretty">
             Projects, people, meetings and the leadership coaching that comes from your own

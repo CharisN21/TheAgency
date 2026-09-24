@@ -6,7 +6,7 @@ import "./globals.css"
 export const metadata: Metadata = {
   title: "The Agency",
   description:
-    "Run every company you own from one calm place: projects, people, meetings and the coaching that comes from your own decisions.",
+    "Run every venture you own from one calm place: projects, people, meetings and the coaching that comes from your own decisions.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

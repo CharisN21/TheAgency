@@ -19,7 +19,7 @@ export default async function SignInPage() {
         </Link>
         <div>
           <h2 className="max-w-md text-4xl font-bold tracking-tight text-balance">
-            Every company, project and person in one place.
+            Every venture, organisation and person in one place.
           </h2>
           <p className="text-muted-foreground mt-4 max-w-sm text-lg">
             Run your ventures, remember every relationship and get better at leading, a
@@ -46,7 +46,7 @@ export default async function SignInPage() {
 
           <p className="text-muted-foreground mt-8 flex items-start gap-2 text-sm">
             <ShieldCheck className="mt-0.5 size-4 shrink-0" />
-            Private by default. Only people you invite can see your company, and you can
+            Private by default. Only people you invite can see your workspace, and you can
             export or delete your data at any time.
           </p>
         </div>
