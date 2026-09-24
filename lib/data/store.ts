@@ -58,6 +58,8 @@ export function seed(): Database {
   const county = org("Kiambu County Office", "client", "County health procurement", "Kiambu", ["Public sector"])
   const ridge = org("Ridge Moto Spares", "partner", "Motorcycle parts and service", "Thika", ["Logistics"], otieno.id)
   const lab = org("Eastern Reagents", "supplier", "Laboratory reagents and glassware", "Mombasa Road, Nairobi", ["Lab"], achieng.id)
+  // Entered twice by two people — what the duplicates review is for.
+  const visionAgain = { ...org("Vision Safety Ltd", "supplier", "Safety boots and overalls", "", ["Boots"], otieno.id), location: undefined }
 
   const contact = (
     full_name: string,
@@ -80,7 +82,12 @@ export function seed(): Database {
     created_at: now(),
   })
 
-  const mercy = contact("Mercy Wambui", "Sales lead", vision.id, charis.id, days(0), ["Decision maker"])
+  const mercy = { ...contact("Mercy Wambui", "Sales lead", vision.id, charis.id, days(0), ["Decision maker"]), phone: "+254 722 410 118" }
+  const mercyAgain = {
+    ...contact("Mercy W.", "Sales", visionAgain.id, otieno.id, undefined, ["Boots"]),
+    phone: "0722410118",
+    email: "mercy.wambui@visionsafety.co.ke",
+  }
   const james = contact("James Kiprono", "Partner manager", safaricom.id, wanjiru.id, days(4))
   const grace = contact("Grace Atieno", "Procurement officer", county.id, charis.id, days(-2), ["Slow to reply"])
   const peter = contact("Peter Njoroge", "Workshop manager", ridge.id, otieno.id, days(11))
@@ -157,10 +164,11 @@ export function seed(): Database {
         created_at: now(),
       },
     ],
-    organisations: [vision, safaricom, county, ridge, lab],
-    contacts: [mercy, james, grace, peter, sam],
+    organisations: [vision, safaricom, county, ridge, lab, visionAgain],
+    contacts: [mercy, james, grace, peter, sam, mercyAgain],
     deals,
     views: [],
+    not_duplicates: [],
     activities: [
       act("call", "Called about mask pricing — promised band 3 rates", 6, { organisation_id: vision.id, contact_id: mercy.id, deal_id: deals[0].id }),
       act("note", "Will discount at 500 units", 6, { organisation_id: vision.id, contact_id: mercy.id }),
@@ -168,6 +176,7 @@ export function seed(): Database {
       act("whatsapp", "Sent the revised quote", 2, { organisation_id: safaricom.id, contact_id: james.id, deal_id: deals[1].id }, wanjiru.id),
       act("email", "Delivery note and invoice", 1, { organisation_id: county.id, contact_id: grace.id, deal_id: deals[2].id }),
       act("visit", "Walked the Thika depot", 9, { organisation_id: ridge.id, contact_id: peter.id }, otieno.id),
+      act("whatsapp", "Asked for the safety boots price list", 4, { organisation_id: visionAgain.id, contact_id: mercyAgain.id }, otieno.id),
     ],
   }
 }
@@ -181,6 +190,7 @@ export async function readDb(): Promise<Database> {
     // A store written before the workspace rename is not worth migrating by hand.
     if (!parsed.workspaces || !parsed.deals) throw new Error("stale shape")
     parsed.views ??= []
+    parsed.not_duplicates ??= []
     cache = parsed as Database
   } catch {
     cache = seed()

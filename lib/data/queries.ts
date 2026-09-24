@@ -1,8 +1,20 @@
 import "server-only"
 
+import {
+  emailKey,
+  findPairs,
+  ORG_FIELDS,
+  orgNameKey,
+  pairKey,
+  PERSON_FIELDS,
+  personNameKey,
+  phoneKey,
+  type MatchReason,
+} from "./match"
 import { readDb } from "./store"
 import {
   OPEN_STAGES,
+  ORG_CATEGORY_LABEL,
   STAGES,
   type Activity,
   type Contact,
@@ -332,4 +344,155 @@ export async function listTags(workspaceId: string): Promise<string[]> {
     .filter((o) => o.workspace_id === workspaceId)
     .flatMap((o) => o.tags)
   return [...new Set(all)].sort()
+}
+
+
+/* ------------------------------------------------------------- duplicates */
+
+export type DuplicateSide = {
+  id: string
+  name: string
+  /** One line under the name: where they work, or what the organisation does. */
+  subtitle: string
+  href?: string
+  deals: number
+  activities: number
+  /** Organisations only. */
+  people?: number
+  created_at: string
+}
+
+export type DuplicateField = {
+  key: string
+  label: string
+  a: string
+  b: string
+  /** Both sides filled in and different, so the person must pick one. */
+  clash: boolean
+}
+
+export type DuplicatePair = {
+  a: DuplicateSide
+  b: DuplicateSide
+  reasons: MatchReason[]
+  fields: DuplicateField[]
+  /** Tags from both, which a merge keeps together. */
+  tags: string[]
+}
+
+const shortDate = (iso?: string) =>
+  iso
+    ? new Date(iso).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
+    : ""
+
+function ignored(db: Awaited<ReturnType<typeof readDb>>, workspaceId: string, object: "people" | "organisations") {
+  return new Set(
+    db.not_duplicates
+      .filter((n) => n.workspace_id === workspaceId && n.object === object)
+      .map((n) => pairKey(n.a_id, n.b_id))
+  )
+}
+
+function fieldRows(
+  fields: readonly (readonly [string, string])[],
+  show: (key: string, side: "a" | "b") => string
+): DuplicateField[] {
+  return fields.map(([key, label]) => {
+    const a = show(key, "a")
+    const b = show(key, "b")
+    const same = key === "phone" ? phoneKey(a) === phoneKey(b) : a.toLowerCase() === b.toLowerCase()
+    return { key, label, a, b, clash: Boolean(a && b && !same) }
+  })
+}
+
+const mergedTags = (a: string[], b: string[]) =>
+  [...a, ...b.filter((t) => !a.some((x) => x.toLowerCase() === t.toLowerCase()))]
+
+export async function listDuplicatePeople(workspaceId: string): Promise<DuplicatePair[]> {
+  const db = await readDb()
+  const people = db.contacts.filter((c) => c.workspace_id === workspaceId)
+  const orgOf = (id?: string) => db.organisations.find((o) => o.id === id)
+
+  const pairs = findPairs(
+    people.map((c) => {
+      const org = orgOf(c.organisation_id)
+      // The office line or info@ address is shared by everyone there; it proves nothing.
+      const phone = phoneKey(c.phone)
+      const email = emailKey(c.email)
+      return {
+        id: c.id,
+        keys: {
+          phone: phone && phone !== phoneKey(org?.phone) ? phone : null,
+          email: email && email !== emailKey(org?.email) ? email : null,
+          name: personNameKey(c.full_name),
+        },
+      }
+    }),
+    ignored(db, workspaceId, "people")
+  )
+
+  return pairs.map(({ a, b, reasons }) => {
+    const sides = { a: people.find((c) => c.id === a)!, b: people.find((c) => c.id === b)! }
+    const side = (c: (typeof people)[number]): DuplicateSide => ({
+      id: c.id,
+      name: c.full_name,
+      subtitle: [c.title, orgOf(c.organisation_id)?.name].filter(Boolean).join(" · ") || "No organisation",
+      href: c.organisation_id ? `/organisations/${c.organisation_id}` : undefined,
+      deals: db.deals.filter((d) => d.contact_id === c.id).length,
+      activities: db.activities.filter((x) => x.contact_id === c.id && x.type !== "system").length,
+      created_at: c.created_at,
+    })
+    return {
+      a: side(sides.a),
+      b: side(sides.b),
+      reasons,
+      tags: mergedTags(sides.a.tags, sides.b.tags),
+      fields: fieldRows(PERSON_FIELDS, (key, s) => {
+        const c = sides[s]
+        if (key === "organisation_id") return orgOf(c.organisation_id)?.name ?? ""
+        if (key === "owner_id") return db.profiles.find((p) => p.id === c.owner_id)?.full_name ?? ""
+        if (key === "next_touch_at") return shortDate(c.next_touch_at)
+        return String(c[key as keyof typeof c] ?? "")
+      }),
+    }
+  })
+}
+
+export async function listDuplicateOrganisations(workspaceId: string): Promise<DuplicatePair[]> {
+  const db = await readDb()
+  const orgs = db.organisations.filter((o) => o.workspace_id === workspaceId)
+
+  const pairs = findPairs(
+    orgs.map((o) => ({
+      id: o.id,
+      keys: { phone: phoneKey(o.phone), email: emailKey(o.email), name: orgNameKey(o.name) },
+    })),
+    ignored(db, workspaceId, "organisations")
+  )
+
+  return pairs.map(({ a, b, reasons }) => {
+    const sides = { a: orgs.find((o) => o.id === a)!, b: orgs.find((o) => o.id === b)! }
+    const side = (o: (typeof orgs)[number]): DuplicateSide => ({
+      id: o.id,
+      name: o.name,
+      subtitle: [ORG_CATEGORY_LABEL[o.category], o.location].filter(Boolean).join(" · "),
+      href: `/organisations/${o.id}`,
+      deals: db.deals.filter((d) => d.organisation_id === o.id).length,
+      activities: db.activities.filter((x) => x.organisation_id === o.id && x.type !== "system").length,
+      people: db.contacts.filter((c) => c.organisation_id === o.id).length,
+      created_at: o.created_at,
+    })
+    return {
+      a: side(sides.a),
+      b: side(sides.b),
+      reasons,
+      tags: mergedTags(sides.a.tags, sides.b.tags),
+      fields: fieldRows(ORG_FIELDS, (key, s) => {
+        const o = sides[s]
+        if (key === "category") return ORG_CATEGORY_LABEL[o.category]
+        if (key === "owner_id") return db.profiles.find((p) => p.id === o.owner_id)?.full_name ?? ""
+        return String(o[key as keyof typeof o] ?? "")
+      }),
+    }
+  })
 }

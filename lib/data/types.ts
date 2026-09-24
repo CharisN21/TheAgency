@@ -198,6 +198,18 @@ export type SavedView = {
   created_at: string
 }
 
+/** Two records a person looked at and said are different. Never suggested again. */
+export type NotDuplicate = {
+  id: string
+  workspace_id: string
+  object: "people" | "organisations"
+  /** The two ids, in either order. */
+  a_id: string
+  b_id: string
+  marked_by: string
+  created_at: string
+}
+
 export type FilterField =
   | "category"
   | "owner"
@@ -223,6 +235,7 @@ export type Database = {
   deals: Deal[]
   activities: Activity[]
   views: SavedView[]
+  not_duplicates: NotDuplicate[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */
@@ -235,6 +248,8 @@ export const can = {
   /** Viewers read everything they can see, and change nothing. */
   edit: (r: Role) => r !== "viewer",
   seeFlags: (r: Role) => r === "owner" || r === "admin",
+  /** Merging removes a record, so it follows the same rule as deleting. */
+  merge: (r: Role) => r === "owner" || r === "admin",
 }
 
 /** KSh 480,000 — the way money is written everywhere in this app. */

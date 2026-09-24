@@ -1,11 +1,12 @@
 import Link from "next/link"
 import { Contact, Mail, MessageCircle, Phone } from "lucide-react"
 
+import { DuplicatesNotice } from "@/components/app/duplicates"
 import { PageHeader } from "@/components/app/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { listContacts } from "@/lib/data/queries"
+import { listContacts, listDuplicatePeople } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 
 const initials = (name: string) =>
@@ -26,7 +27,10 @@ function touch(days: number | null) {
 
 export default async function PeoplePage() {
   const { workspace } = await requireContext()
-  const people = await listContacts(workspace.id)
+  const [people, duplicates] = await Promise.all([
+    listContacts(workspace.id),
+    listDuplicatePeople(workspace.id),
+  ])
   const due = people.filter((p) => (p.touchDueInDays ?? 99) <= 0).length
 
   return (
@@ -37,6 +41,7 @@ export default async function PeoplePage() {
       />
 
       <main className="flex-1 px-4 py-6 md:px-8">
+        <DuplicatesNotice count={duplicates.length} href="/people/duplicates" />
         {people.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
             <Contact className="text-ink-3 size-9" />
