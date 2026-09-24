@@ -2,12 +2,14 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { NoDuplicates, PairCard } from "@/components/app/duplicates"
+import { MergeDialog } from "@/components/app/merge-dialog"
 import { PageHeader } from "@/components/app/page-header"
 import { listDuplicatePeople } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
+import { can } from "@/lib/data/types"
 
 export default async function PeopleDuplicatesPage() {
-  const { workspace } = await requireContext()
+  const { workspace, role } = await requireContext()
   const pairs = await listDuplicatePeople(workspace.id)
 
   return (
@@ -31,7 +33,17 @@ export default async function PeopleDuplicatesPage() {
         ) : (
           <div className="flex flex-col gap-4">
             {pairs.map((pair) => (
-              <PairCard key={`${pair.a.id}|${pair.b.id}`} pair={pair} />
+              <PairCard key={`${pair.a.id}|${pair.b.id}`} pair={pair}>
+                {can.merge(role) ? (
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <MergeDialog pair={pair} object="people" />
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">
+                    Only owners and admins can merge. Let one of them know.
+                  </p>
+                )}
+              </PairCard>
             ))}
           </div>
         )}

@@ -10,11 +10,14 @@ import {
   setCurrentWorkspace,
   setSession,
 } from "./session"
+import { pairKey, PERSON_FIELDS, phoneKey, type PersonField } from "./match"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
   can,
+  ORG_CATEGORY_LABEL,
   stageOf,
   type ActivityType,
+  type Database,
   type OrgCategory,
   type Role,
   type StageId,
@@ -985,4 +988,113 @@ export async function importOrganisations(
     message: `${counts.created} added${counts.updated ? `, ${counts.updated} filled in` : ""}${counts.skipped ? `, ${counts.skipped} left alone` : ""}`,
     ...counts,
   }
+}
+
+/* ------------------------------------------------------------------ merge */
+
+/** How a stored value reads to a person, for the "not kept" line in the timeline. */
+function readable(db: Database, key: string, value: string): string {
+  if (key === "owner_id") return db.profiles.find((p) => p.id === value)?.full_name ?? value
+  if (key === "organisation_id") return db.organisations.find((o) => o.id === value)?.name ?? value
+  if (key === "category") return ORG_CATEGORY_LABEL[value as OrgCategory] ?? value
+  if (key === "next_touch_at")
+    return new Date(value).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
+  return value
+}
+
+const sameValue = (key: string, a: string, b: string) =>
+  key === "phone" ? phoneKey(a) === phoneKey(b) : a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/**
+ * Folds `from` into `into`, field by field. Blanks are filled from `from`.
+ * Where both are filled in and differ, `into` wins unless the field is listed
+ * in `take`. Returns the values that were dropped, so the timeline can say so.
+ */
+function foldFields<T extends Record<string, unknown>>(
+  db: Database,
+  into: T,
+  from: T,
+  fields: readonly (readonly [string, string])[],
+  take: string[]
+): string[] {
+  const dropped: string[] = []
+  for (const [key, label] of fields) {
+    const mine = String(into[key] ?? "")
+    const theirs = String(from[key] ?? "")
+    if (!theirs) continue
+    if (!mine) {
+      ;(into as Record<string, unknown>)[key] = from[key]
+    } else if (!sameValue(key, mine, theirs)) {
+      const loser = take.includes(key) ? mine : theirs
+      if (take.includes(key)) (into as Record<string, unknown>)[key] = from[key]
+      dropped.push(`${label.toLowerCase()} "${readable(db, key, loser)}"`)
+    }
+  }
+  return dropped
+}
+
+const joinTags = (a: string[], b: string[]) => [
+  ...a,
+  ...b.filter((t) => !a.some((x) => x.toLowerCase() === t.toLowerCase())),
+]
+
+/**
+ * Two people who are one. Their deals and history move to the one that stays,
+ * then the other is removed. Owners and admins only: it removes a record.
+ */
+export async function mergePeople(
+  keepId: string,
+  dropId: string,
+  take: PersonField[]
+): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.merge(role)) return { ok: false, message: "Only owners and admins can merge records" }
+  if (keepId === dropId) return { ok: false, message: "Pick two different people" }
+
+  const allowed = PERSON_FIELDS.map(([k]) => k as string)
+  if (!take.every((f) => allowed.includes(f))) return { ok: false, message: "That merge asked for an unknown field" }
+
+  const db = await readDb()
+  const mine = (id: string) => db.contacts.find((c) => c.id === id && c.workspace_id === workspace.id)
+  if (!mine(keepId) || !mine(dropId)) {
+    return { ok: false, message: "One of these people is no longer here. Refresh and look again." }
+  }
+
+  const summary = await mutate((d) => {
+    const keep = d.contacts.find((c) => c.id === keepId)!
+    const drop = d.contacts.find((c) => c.id === dropId)!
+
+    const dropped = foldFields(d, keep, drop, PERSON_FIELDS, take)
+    keep.tags = joinTags(keep.tags, drop.tags)
+
+    let moved = 0
+    for (const deal of d.deals) {
+      if (deal.contact_id === dropId) {
+        deal.contact_id = keepId
+        moved++
+      }
+    }
+    for (const a of d.activities) if (a.contact_id === dropId) a.contact_id = keepId
+
+    d.contacts = d.contacts.filter((c) => c.id !== dropId)
+    d.not_duplicates = d.not_duplicates.filter((n) => n.a_id !== dropId && n.b_id !== dropId)
+
+    log(
+      d,
+      workspace.id,
+      user.id,
+      `merged ${drop.full_name} into ${keep.full_name}` +
+        (moved ? `, with ${moved} deal${moved === 1 ? "" : "s"}` : "") +
+        (dropped.length ? `. Not kept: ${dropped.join(", ")}` : ""),
+      { organisation_id: keep.organisation_id, contact_id: keepId }
+    )
+    return keep.full_name
+  })
+
+  revalidatePath("/people")
+  revalidatePath("/people/duplicates")
+  revalidatePath("/organisations", "layout")
+  revalidatePath("/deals")
+  revalidatePath("/today")
+  return { ok: true, message: `Merged into ${summary}` }
 }
