@@ -32,7 +32,7 @@ export default async function JoinPage({
   const found = await getInviteByToken(token)
   const user = await getUser()
 
-  if (!found?.company) {
+  if (!found?.workspace) {
     return (
       <Shell>
         <span className="bg-danger-soft text-destructive mx-auto grid size-14 place-items-center rounded-2xl">
@@ -48,7 +48,7 @@ export default async function JoinPage({
     )
   }
 
-  const { invite, company, inviter } = found
+  const { invite, workspace, inviter } = found
   const expired = new Date(invite.expires_at) < new Date()
 
   if (invite.accepted_at || expired) {
@@ -62,7 +62,7 @@ export default async function JoinPage({
         </h1>
         <p className="text-muted-foreground mt-2">
           {invite.accepted_at
-            ? `Someone already joined ${company.name} with this link.`
+            ? `Someone already joined ${workspace.name} with this link.`
             : `It was good for 7 days. Ask ${inviter?.full_name ?? "the owner"} for a new one.`}
         </p>
         <Button asChild variant="outline" size="lg" className="mt-6 w-full">
@@ -76,15 +76,15 @@ export default async function JoinPage({
     <Shell>
       <span
         className="mx-auto grid size-16 place-items-center rounded-2xl text-2xl font-bold text-white"
-        style={{ backgroundColor: company.accent_color }}
+        style={{ backgroundColor: workspace.accent_color }}
       >
-        {company.name.trim()[0]?.toUpperCase()}
+        {workspace.name.trim()[0]?.toUpperCase()}
       </span>
 
       <p className="text-muted-foreground mt-5 text-sm">
         {inviter?.full_name ?? "Someone"} invited you to join
       </p>
-      <h1 className="mt-1 text-3xl font-bold tracking-tight">{company.name}</h1>
+      <h1 className="mt-1 text-3xl font-bold tracking-tight">{workspace.name}</h1>
       <Badge className="mt-3" variant="secondary">
         as {ROLE_LABEL[invite.role]}
       </Badge>
@@ -95,7 +95,7 @@ export default async function JoinPage({
 
       {user ? (
         <>
-          <AcceptButton token={token} companyName={company.name} />
+          <AcceptButton token={token} workspaceName={workspace.name} />
           <p className="text-muted-foreground mt-4 text-sm">
             Signed in as {user.email}
           </p>
@@ -106,7 +106,7 @@ export default async function JoinPage({
             <Link href={`/sign-in?next=/join/${token}`}>Sign in to join</Link>
           </Button>
           <p className="text-muted-foreground mt-4 flex items-center justify-center gap-1.5 text-sm">
-            <Check className="size-3.5" /> You will only see {company.name}
+            <Check className="size-3.5" /> You will only see {workspace.name}
           </p>
         </>
       )}

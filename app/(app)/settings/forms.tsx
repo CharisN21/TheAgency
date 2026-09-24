@@ -18,16 +18,16 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { resetDemoData, updateCompany } from "@/lib/data/actions"
+import { resetDemoData, updateWorkspace } from "@/lib/data/actions"
 
-export function CompanyNameForm({ name }: { name: string }) {
+export function WorkspaceNameForm({ name }: { name: string }) {
   const [pending, start] = useTransition()
   const [saved, setSaved] = useState(false)
   const [value, setValue] = useState(name)
 
   function submit(formData: FormData) {
     start(async () => {
-      const result = await updateCompany(formData)
+      const result = await updateWorkspace(formData)
       if (result.ok) {
         setSaved(true)
         toast.success(result.message)
@@ -40,10 +40,10 @@ export function CompanyNameForm({ name }: { name: string }) {
 
   return (
     <form action={submit} className="flex flex-col gap-2">
-      <Label htmlFor="company-name">Name</Label>
+      <Label htmlFor="workspace-name">Name</Label>
       <div className="flex gap-2">
         <Input
-          id="company-name"
+          id="workspace-name"
           name="name"
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -74,7 +74,7 @@ export function ResetDemo() {
         <AlertDialogHeader>
           <AlertDialogTitle>Start again with the demo data?</AlertDialogTitle>
           <AlertDialogDescription>
-            Every company, person and invite you created locally is replaced with the
+            Every workspace, person and invite you created locally is replaced with the
             original demo set, and you are signed out. Nothing outside this laptop is
             touched.
           </AlertDialogDescription>

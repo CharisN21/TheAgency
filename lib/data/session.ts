@@ -4,10 +4,10 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { readDb } from "./store"
-import type { Company, Membership, Profile, Role } from "./types"
+import type { Membership, Profile, Role, Workspace } from "./types"
 
 export const SESSION_COOKIE = "agency_user"
-export const COMPANY_COOKIE = "agency_company"
+export const WORKSPACE_COOKIE = "agency_workspace"
 
 const YEAR = 60 * 60 * 24 * 365
 
@@ -24,12 +24,12 @@ export async function setSession(userId: string) {
 export async function clearSession() {
   const jar = await cookies()
   jar.delete(SESSION_COOKIE)
-  jar.delete(COMPANY_COOKIE)
+  jar.delete(WORKSPACE_COOKIE)
 }
 
-export async function setCurrentCompany(companyId: string) {
+export async function setCurrentWorkspace(workspaceId: string) {
   const jar = await cookies()
-  jar.set(COMPANY_COOKIE, companyId, { sameSite: "lax", path: "/", maxAge: YEAR })
+  jar.set(WORKSPACE_COOKIE, workspaceId, { sameSite: "lax", path: "/", maxAge: YEAR })
 }
 
 export async function getUser(): Promise<Profile | null> {
@@ -42,13 +42,13 @@ export async function getUser(): Promise<Profile | null> {
 
 export type Context = {
   user: Profile
-  company: Company
+  workspace: Workspace
   role: Role
-  companies: (Company & { role: Role; people: number })[]
+  workspaces: (Workspace & { role: Role; people: number })[]
 }
 
 /**
- * Everything a signed-in screen needs: who you are, which company you are in,
+ * Everything a signed-in screen needs: who you are, which workspace you are in,
  * what you may do there. Sends you to sign-in or onboarding when either is missing.
  */
 export async function requireContext(): Promise<Context> {
@@ -57,22 +57,22 @@ export async function requireContext(): Promise<Context> {
 
   const db = await readDb()
   const mine = db.memberships.filter((m) => m.user_id === user.id)
-  if (mine.length === 0) redirect("/new-company")
+  if (mine.length === 0) redirect("/new-workspace")
 
-  const companies = mine
+  const workspaces = mine
     .map((m: Membership) => {
-      const company = db.companies.find((c) => c.id === m.company_id)!
+      const workspace = db.workspaces.find((w) => w.id === m.workspace_id)!
       return {
-        ...company,
+        ...workspace,
         role: m.role,
-        people: db.memberships.filter((x) => x.company_id === company.id).length,
+        people: db.memberships.filter((x) => x.workspace_id === workspace.id).length,
       }
     })
     .sort((a, b) => a.name.localeCompare(b.name))
 
   const jar = await cookies()
-  const wanted = jar.get(COMPANY_COOKIE)?.value
-  const company = companies.find((c) => c.id === wanted) ?? companies[0]
+  const wanted = jar.get(WORKSPACE_COOKIE)?.value
+  const workspace = workspaces.find((w) => w.id === wanted) ?? workspaces[0]
 
-  return { user, company, role: company.role, companies }
+  return { user, workspace, role: workspace.role, workspaces }
 }

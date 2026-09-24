@@ -9,10 +9,10 @@ import { acceptInvite } from "@/lib/data/actions"
 
 export function AcceptButton({
   token,
-  companyName,
+  workspaceName,
 }: {
   token: string
-  companyName: string
+  workspaceName: string
 }) {
   const [pending, start] = useTransition()
 
@@ -34,7 +34,7 @@ export function AcceptButton({
           <Loader2 className="animate-spin" /> Joining…
         </>
       ) : (
-        `Join ${companyName}`
+        `Join ${workspaceName}`
       )}
     </Button>
   )

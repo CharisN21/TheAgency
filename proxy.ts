@@ -8,7 +8,7 @@ const PROTECTED = [
   "/network",
   "/meetings",
   "/notebook",
-  "/new-company",
+  "/new-workspace",
 ]
 
 /**

@@ -7,11 +7,18 @@ import {
   clearSession,
   getUser,
   requireContext,
-  setCurrentCompany,
+  setCurrentWorkspace,
   setSession,
 } from "./session"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
-import { can, type Role } from "./types"
+import {
+  can,
+  stageOf,
+  type ActivityType,
+  type OrgCategory,
+  type Role,
+  type StageId,
+} from "./types"
 
 export type Result = { ok: boolean; message: string }
 
@@ -24,11 +31,18 @@ const titleCase = (email: string) =>
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join(" ")
 
+const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim()
+const tags = (f: FormData, k: string) =>
+  str(f, k)
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+
 /* ------------------------------------------------------------------ sign in */
 
 /** Local sign-in: an email is enough. Real auth arrives with Supabase. */
 export async function signIn(formData: FormData): Promise<Result> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase()
+  const email = str(formData, "email").toLowerCase()
   if (!email.includes("@") || email.endsWith("@") || email.startsWith("@")) {
     return { ok: false, message: "Enter a full email address" }
   }
@@ -36,12 +50,7 @@ export async function signIn(formData: FormData): Promise<Result> {
   const userId = await mutate((db) => {
     const existing = db.profiles.find((p) => p.email.toLowerCase() === email)
     if (existing) return existing.id
-    const profile = {
-      id: newId(),
-      email,
-      full_name: titleCase(email),
-      created_at: now(),
-    }
+    const profile = { id: newId(), email, full_name: titleCase(email), created_at: now() }
     db.profiles.push(profile)
     return profile.id
   })
@@ -49,8 +58,8 @@ export async function signIn(formData: FormData): Promise<Result> {
   await setSession(userId)
 
   const db = await readDb()
-  const hasCompany = db.memberships.some((m) => m.user_id === userId)
-  redirect(hasCompany ? "/today" : "/new-company")
+  const hasWorkspace = db.memberships.some((m) => m.user_id === userId)
+  redirect(hasWorkspace ? "/today" : "/new-workspace")
 }
 
 export async function signOut(): Promise<void> {
@@ -58,31 +67,31 @@ export async function signOut(): Promise<void> {
   redirect("/sign-in")
 }
 
-export async function switchCompany(companyId: string): Promise<void> {
+export async function switchWorkspace(workspaceId: string): Promise<void> {
   const user = await getUser()
   if (!user) redirect("/sign-in")
   const db = await readDb()
   const allowed = db.memberships.some(
-    (m) => m.user_id === user.id && m.company_id === companyId
+    (m) => m.user_id === user.id && m.workspace_id === workspaceId
   )
-  if (allowed) await setCurrentCompany(companyId)
+  if (allowed) await setCurrentWorkspace(workspaceId)
   revalidatePath("/", "layout")
 }
 
-/* --------------------------------------------------------------- companies */
+/* -------------------------------------------------------------- workspaces */
 
-export async function createCompany(formData: FormData): Promise<Result> {
+export async function createWorkspace(formData: FormData): Promise<Result> {
   const user = await getUser()
   if (!user) redirect("/sign-in")
 
-  const name = String(formData.get("name") ?? "").trim()
-  const title = String(formData.get("title") ?? "").trim()
-  const accent = String(formData.get("accent") ?? "#7c1f35")
-  if (name.length < 2) return { ok: false, message: "Give the company a name" }
+  const name = str(formData, "name")
+  const title = str(formData, "title")
+  const accent = str(formData, "accent") || "#7c1f35"
+  if (name.length < 2) return { ok: false, message: "Give the workspace a name" }
 
-  const companyId = await mutate((db) => {
+  const workspaceId = await mutate((db) => {
     const id = newId()
-    db.companies.push({
+    db.workspaces.push({
       id,
       name,
       accent_color: accent,
@@ -90,7 +99,7 @@ export async function createCompany(formData: FormData): Promise<Result> {
       created_at: now(),
     })
     db.memberships.push({
-      company_id: id,
+      workspace_id: id,
       user_id: user.id,
       role: "owner",
       title: title || undefined,
@@ -100,39 +109,39 @@ export async function createCompany(formData: FormData): Promise<Result> {
     return id
   })
 
-  await setCurrentCompany(companyId)
+  await setCurrentWorkspace(workspaceId)
   revalidatePath("/", "layout")
   redirect("/today?created=1")
 }
 
-export async function updateCompany(formData: FormData): Promise<Result> {
-  const { user, company, role } = await requireContext()
-  if (!can.editCompany(role)) {
-    return { ok: false, message: "Only owners and admins can change the company" }
+export async function updateWorkspace(formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.editWorkspace(role)) {
+    return { ok: false, message: "Only owners and admins can change the workspace" }
   }
-  const name = String(formData.get("name") ?? "").trim()
-  if (name.length < 2) return { ok: false, message: "Give the company a name" }
+  const name = str(formData, "name")
+  if (name.length < 2) return { ok: false, message: "Give the workspace a name" }
 
   await mutate((db) => {
-    const c = db.companies.find((x) => x.id === company.id)
-    if (c) c.name = name
-    log(db, company.id, user.id, `renamed the company to ${name}`)
+    const w = db.workspaces.find((x) => x.id === workspace.id)
+    if (w) w.name = name
+    log(db, workspace.id, user.id, `renamed the workspace to ${name}`)
   })
 
   revalidatePath("/", "layout")
-  return { ok: true, message: "Company updated" }
+  return { ok: true, message: "Workspace updated" }
 }
 
 /* ----------------------------------------------------------------- invites */
 
 export async function createInvite(formData: FormData): Promise<Result> {
-  const { user, company, role } = await requireContext()
+  const { user, workspace, role } = await requireContext()
   if (!can.invite(role)) {
     return { ok: false, message: "Only owners and admins can invite people" }
   }
 
-  const email = String(formData.get("email") ?? "").trim().toLowerCase()
-  const inviteRole = String(formData.get("role") ?? "member") as Role
+  const email = str(formData, "email").toLowerCase()
+  const inviteRole = (str(formData, "role") || "member") as Role
   if (!email.includes("@") || email.endsWith("@")) {
     return { ok: false, message: "Enter a full email address" }
   }
@@ -140,19 +149,19 @@ export async function createInvite(formData: FormData): Promise<Result> {
   const db = await readDb()
   const already = db.memberships.some((m) => {
     const p = db.profiles.find((x) => x.id === m.user_id)
-    return m.company_id === company.id && p?.email.toLowerCase() === email
+    return m.workspace_id === workspace.id && p?.email.toLowerCase() === email
   })
-  if (already) return { ok: false, message: `${email} is already in ${company.name}` }
+  if (already) return { ok: false, message: `${email} is already in ${workspace.name}` }
 
   const pending = db.invites.find(
-    (i) => i.company_id === company.id && i.email === email && !i.accepted_at
+    (i) => i.workspace_id === workspace.id && i.email === email && !i.accepted_at
   )
   if (pending) return { ok: false, message: `${email} already has an invite waiting` }
 
   await mutate((d) => {
     d.invites.push({
       id: newId(),
-      company_id: company.id,
+      workspace_id: workspace.id,
       email,
       role: inviteRole,
       token: newToken(),
@@ -160,7 +169,7 @@ export async function createInvite(formData: FormData): Promise<Result> {
       expires_at: new Date(Date.now() + 7 * 864e5).toISOString(),
       created_at: now(),
     })
-    log(d, company.id, user.id, `invited ${email} as ${inviteRole}`)
+    log(d, workspace.id, user.id, `invited ${email} as ${inviteRole}`)
   })
 
   revalidatePath("/team")
@@ -169,14 +178,14 @@ export async function createInvite(formData: FormData): Promise<Result> {
 }
 
 export async function revokeInvite(inviteId: string): Promise<Result> {
-  const { user, company, role } = await requireContext()
+  const { user, workspace, role } = await requireContext()
   if (!can.invite(role)) return { ok: false, message: "You cannot manage invites" }
 
   await mutate((db) => {
-    const i = db.invites.find((x) => x.id === inviteId && x.company_id === company.id)
+    const i = db.invites.find((x) => x.id === inviteId && x.workspace_id === workspace.id)
     if (i) {
       db.invites = db.invites.filter((x) => x.id !== inviteId)
-      log(db, company.id, user.id, `cancelled the invite for ${i.email}`)
+      log(db, workspace.id, user.id, `cancelled the invite for ${i.email}`)
     }
   })
 
@@ -200,20 +209,20 @@ export async function acceptInvite(token: string): Promise<Result> {
     const i = d.invites.find((x) => x.token === token)!
     i.accepted_at = now()
     const already = d.memberships.some(
-      (m) => m.company_id === i.company_id && m.user_id === user.id
+      (m) => m.workspace_id === i.workspace_id && m.user_id === user.id
     )
     if (!already) {
       d.memberships.push({
-        company_id: i.company_id,
+        workspace_id: i.workspace_id,
         user_id: user.id,
         role: i.role,
         created_at: now(),
       })
     }
-    log(d, i.company_id, user.id, `joined as ${i.role}`)
+    log(d, i.workspace_id, user.id, `joined as ${i.role}`)
   })
 
-  await setCurrentCompany(invite.company_id)
+  await setCurrentWorkspace(invite.workspace_id)
   revalidatePath("/", "layout")
   redirect("/today?joined=1")
 }
@@ -228,31 +237,30 @@ export async function changeRole(userId: string, role: Role): Promise<Result> {
 
   const db = await readDb()
   const owners = db.memberships.filter(
-    (m) => m.company_id === ctx.company.id && m.role === "owner"
+    (m) => m.workspace_id === ctx.workspace.id && m.role === "owner"
   )
   const target = db.memberships.find(
-    (m) => m.company_id === ctx.company.id && m.user_id === userId
+    (m) => m.workspace_id === ctx.workspace.id && m.user_id === userId
   )
-  if (!target) return { ok: false, message: "That person is not in this company" }
+  if (!target) return { ok: false, message: "That person is not in this workspace" }
   if (target.role === "owner" && owners.length === 1 && role !== "owner") {
     return {
       ok: false,
-      message: "Make someone else an owner first — a company always needs one.",
+      message: "Make someone else an owner first — a workspace always needs one.",
     }
   }
   if (role === "owner" && ctx.role !== "owner") {
     return { ok: false, message: "Only an owner can make someone else an owner" }
   }
 
-  const name =
-    db.profiles.find((p) => p.id === userId)?.full_name ?? "That person"
+  const name = db.profiles.find((p) => p.id === userId)?.full_name ?? "That person"
 
   await mutate((d) => {
     const m = d.memberships.find(
-      (x) => x.company_id === ctx.company.id && x.user_id === userId
+      (x) => x.workspace_id === ctx.workspace.id && x.user_id === userId
     )
     if (m) m.role = role
-    log(d, ctx.company.id, ctx.user.id, `changed ${name}'s role to ${role}`)
+    log(d, ctx.workspace.id, ctx.user.id, `changed ${name}'s role to ${role}`)
   })
 
   revalidatePath("/team")
@@ -267,28 +275,297 @@ export async function removeMember(userId: string): Promise<Result> {
 
   const db = await readDb()
   const target = db.memberships.find(
-    (m) => m.company_id === ctx.company.id && m.user_id === userId
+    (m) => m.workspace_id === ctx.workspace.id && m.user_id === userId
   )
-  if (!target) return { ok: false, message: "That person is not in this company" }
+  if (!target) return { ok: false, message: "That person is not in this workspace" }
 
   const owners = db.memberships.filter(
-    (m) => m.company_id === ctx.company.id && m.role === "owner"
+    (m) => m.workspace_id === ctx.workspace.id && m.role === "owner"
   )
   if (target.role === "owner" && owners.length === 1) {
-    return { ok: false, message: "A company always needs one owner" }
+    return { ok: false, message: "A workspace always needs one owner" }
   }
 
   const name = db.profiles.find((p) => p.id === userId)?.full_name ?? "That person"
 
   await mutate((d) => {
     d.memberships = d.memberships.filter(
-      (m) => !(m.company_id === ctx.company.id && m.user_id === userId)
+      (m) => !(m.workspace_id === ctx.workspace.id && m.user_id === userId)
     )
-    log(d, ctx.company.id, ctx.user.id, `removed ${name}`)
+    log(d, ctx.workspace.id, ctx.user.id, `removed ${name}`)
   })
 
   revalidatePath("/team")
-  return { ok: true, message: `${name} no longer has access to ${ctx.company.name}` }
+  return { ok: true, message: `${name} no longer has access to ${ctx.workspace.name}` }
+}
+
+/* ----------------------------------------------------------- organisations */
+
+export async function createOrganisation(formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot add organisations" }
+
+  const name = str(formData, "name")
+  if (name.length < 2) return { ok: false, message: "Give the organisation a name" }
+
+  const db = await readDb()
+  const clash = db.organisations.find(
+    (o) => o.workspace_id === workspace.id && o.name.toLowerCase() === name.toLowerCase()
+  )
+  if (clash) return { ok: false, message: `${name} is already in ${workspace.name}` }
+
+  await mutate((d) => {
+    const id = newId()
+    d.organisations.push({
+      id,
+      workspace_id: workspace.id,
+      name,
+      category: (str(formData, "category") || "prospect") as OrgCategory,
+      what_they_do: str(formData, "what_they_do") || undefined,
+      location: str(formData, "location") || undefined,
+      phone: str(formData, "phone") || undefined,
+      email: str(formData, "email") || undefined,
+      owner_id: user.id,
+      tags: tags(formData, "tags"),
+      created_at: now(),
+    })
+    log(d, workspace.id, user.id, `added ${name}`, { organisation_id: id })
+  })
+
+  revalidatePath("/organisations")
+  revalidatePath("/today")
+  return { ok: true, message: `${name} added` }
+}
+
+export async function updateOrganisation(id: string, formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change records" }
+
+  await mutate((db) => {
+    const o = db.organisations.find((x) => x.id === id && x.workspace_id === workspace.id)
+    if (!o) return
+    const name = str(formData, "name")
+    if (name) o.name = name
+    o.category = (str(formData, "category") || o.category) as OrgCategory
+    o.what_they_do = str(formData, "what_they_do") || undefined
+    o.location = str(formData, "location") || undefined
+    o.phone = str(formData, "phone") || undefined
+    o.email = str(formData, "email") || undefined
+    if (formData.get("tags") !== null) o.tags = tags(formData, "tags")
+    log(db, workspace.id, user.id, `updated ${o.name}`, { organisation_id: id })
+  })
+
+  revalidatePath(`/organisations/${id}`)
+  revalidatePath("/organisations")
+  return { ok: true, message: "Saved" }
+}
+
+export async function deleteOrganisation(id: string): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.editWorkspace(role)) {
+    return { ok: false, message: "Only owners and admins can delete an organisation" }
+  }
+
+  const db = await readDb()
+  const org = db.organisations.find((o) => o.id === id && o.workspace_id === workspace.id)
+  if (!org) return { ok: false, message: "That organisation is not here" }
+  const openDeals = db.deals.filter(
+    (d) => d.organisation_id === id && !["won", "lost"].includes(d.stage)
+  ).length
+  if (openDeals > 0) {
+    return {
+      ok: false,
+      message: `${org.name} still has ${openDeals} open ${openDeals === 1 ? "deal" : "deals"}. Close or move them first.`,
+    }
+  }
+
+  await mutate((d) => {
+    d.organisations = d.organisations.filter((o) => o.id !== id)
+    d.contacts = d.contacts.map((c) =>
+      c.organisation_id === id ? { ...c, organisation_id: undefined } : c
+    )
+    log(d, workspace.id, user.id, `deleted ${org.name}`)
+  })
+
+  revalidatePath("/organisations")
+  redirect("/organisations")
+}
+
+/* --------------------------------------------------------------- contacts */
+
+export async function createContact(formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot add people" }
+
+  const full_name = str(formData, "full_name")
+  if (full_name.length < 2) return { ok: false, message: "Give the person a name" }
+
+  const organisation_id = str(formData, "organisation_id") || undefined
+
+  await mutate((db) => {
+    const id = newId()
+    db.contacts.push({
+      id,
+      workspace_id: workspace.id,
+      organisation_id,
+      full_name,
+      title: str(formData, "title") || undefined,
+      email: str(formData, "email") || undefined,
+      phone: str(formData, "phone") || undefined,
+      tags: tags(formData, "tags"),
+      owner_id: user.id,
+      next_touch_at: str(formData, "next_touch_at") || undefined,
+      created_at: now(),
+    })
+    log(db, workspace.id, user.id, `added ${full_name}`, {
+      organisation_id,
+      contact_id: id,
+    })
+  })
+
+  if (organisation_id) revalidatePath(`/organisations/${organisation_id}`)
+  revalidatePath("/people")
+  return { ok: true, message: `${full_name} added` }
+}
+
+/* ------------------------------------------------------------------ deals */
+
+export async function createDeal(formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot add deals" }
+
+  const title = str(formData, "title")
+  const value = Number(str(formData, "value").replace(/[^0-9.]/g, ""))
+  if (title.length < 2) return { ok: false, message: "Give the deal a name" }
+  if (!Number.isFinite(value) || value <= 0) {
+    return { ok: false, message: "Put in what it is worth, in shillings" }
+  }
+
+  const organisation_id = str(formData, "organisation_id") || undefined
+  const stage = (str(formData, "stage") || "new") as StageId
+
+  await mutate((db) => {
+    const id = newId()
+    db.deals.push({
+      id,
+      workspace_id: workspace.id,
+      title,
+      organisation_id,
+      contact_id: str(formData, "contact_id") || undefined,
+      value,
+      stage,
+      expected_close: str(formData, "expected_close") || undefined,
+      owner_id: user.id,
+      created_at: now(),
+      stage_changed_at: now(),
+    })
+    log(db, workspace.id, user.id, `opened ${title}`, { organisation_id, deal_id: id })
+  })
+
+  revalidatePath("/deals")
+  revalidatePath("/organisations")
+  if (organisation_id) revalidatePath(`/organisations/${organisation_id}`)
+  return { ok: true, message: `${title} added to ${stageOf(stage).label}` }
+}
+
+export async function moveDeal(
+  dealId: string,
+  stage: StageId,
+  lostReason?: string
+): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot move deals" }
+
+  const db = await readDb()
+  const deal = db.deals.find((d) => d.id === dealId && d.workspace_id === workspace.id)
+  if (!deal) return { ok: false, message: "That deal is not here" }
+  if (deal.stage === stage) return { ok: true, message: "" }
+
+  const from = stageOf(deal.stage).label
+  const to = stageOf(stage).label
+
+  await mutate((d) => {
+    const target = d.deals.find((x) => x.id === dealId)!
+    target.stage = stage
+    target.stage_changed_at = now()
+    target.closed_at = stage === "won" || stage === "lost" ? now() : undefined
+    target.lost_reason = stage === "lost" ? lostReason || target.lost_reason : undefined
+    log(
+      d,
+      workspace.id,
+      user.id,
+      `moved ${target.title} from ${from} to ${to}${stage === "lost" && lostReason ? ` — ${lostReason}` : ""}`,
+      { organisation_id: target.organisation_id, deal_id: dealId }
+    )
+  })
+
+  revalidatePath("/deals")
+  revalidatePath("/today")
+  if (deal.organisation_id) revalidatePath(`/organisations/${deal.organisation_id}`)
+  return {
+    ok: true,
+    message:
+      stage === "won"
+        ? `${deal.title} won. Nice.`
+        : stage === "lost"
+          ? `${deal.title} marked lost`
+          : `${deal.title} moved to ${to}`,
+  }
+}
+
+export async function updateDeal(dealId: string, formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change deals" }
+
+  await mutate((db) => {
+    const d = db.deals.find((x) => x.id === dealId && x.workspace_id === workspace.id)
+    if (!d) return
+    const title = str(formData, "title")
+    if (title) d.title = title
+    const value = Number(str(formData, "value").replace(/[^0-9.]/g, ""))
+    if (Number.isFinite(value) && value > 0) d.value = value
+    d.expected_close = str(formData, "expected_close") || undefined
+    log(db, workspace.id, user.id, `updated ${d.title}`, {
+      organisation_id: d.organisation_id,
+      deal_id: dealId,
+    })
+  })
+
+  revalidatePath("/deals")
+  return { ok: true, message: "Saved" }
+}
+
+/* ------------------------------------------------------------- activities */
+
+export async function logActivity(formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot log activity" }
+
+  const summary = str(formData, "summary")
+  if (summary.length < 2) return { ok: false, message: "Say what happened, in one line" }
+
+  const organisation_id = str(formData, "organisation_id") || undefined
+  const contact_id = str(formData, "contact_id") || undefined
+  const deal_id = str(formData, "deal_id") || undefined
+  const type = (str(formData, "type") || "note") as ActivityType
+
+  await mutate((db) => {
+    db.activities.unshift({
+      id: newId(),
+      workspace_id: workspace.id,
+      type,
+      summary,
+      occurred_at: now(),
+      actor_id: user.id,
+      organisation_id,
+      contact_id,
+      deal_id,
+    })
+  })
+
+  if (organisation_id) revalidatePath(`/organisations/${organisation_id}`)
+  revalidatePath("/today")
+  return { ok: true, message: "Logged" }
 }
 
 /* ------------------------------------------------------------------- demo */

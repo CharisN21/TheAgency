@@ -17,27 +17,27 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { signOut, switchCompany } from "@/lib/data/actions"
+import { signOut, switchWorkspace } from "@/lib/data/actions"
 import { ROLE_LABEL, can, type Role } from "@/lib/data/types"
 
-export type SwitcherCompany = {
+export type SwitcherWorkspace = {
   id: string
   name: string
   role: Role
   people: number
+  accent_color: string
 }
 
-/** Top-left switcher. Switching reloads every pane for that company only. */
-export function CompanySwitcher({
-  companies,
+/** Top-left switcher between your ventures. Each keeps its own people and records. */
+export function WorkspaceSwitcher({
+  workspaces,
   currentId,
 }: {
-  companies: SwitcherCompany[]
+  workspaces: SwitcherWorkspace[]
   currentId: string
 }) {
   const [pending, start] = useTransition()
-  const current = companies.find((c) => c.id === currentId) ?? companies[0]
-  const initial = current.name.trim()[0]?.toUpperCase() ?? "?"
+  const current = workspaces.find((w) => w.id === currentId) ?? workspaces[0]
 
   return (
     <SidebarMenu>
@@ -45,8 +45,11 @@ export function CompanySwitcher({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton size="lg" className="gap-3" disabled={pending}>
-              <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-bold">
-                {initial}
+              <span
+                className="flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white"
+                style={{ backgroundColor: current.accent_color }}
+              >
+                {current.name.trim()[0]?.toUpperCase()}
               </span>
               <span className="grid flex-1 text-left leading-tight">
                 <span className="truncate font-medium">{current.name}</span>
@@ -61,32 +64,35 @@ export function CompanySwitcher({
 
           <DropdownMenuContent align="start" className="min-w-64">
             <DropdownMenuLabel className="text-muted-foreground text-xs">
-              Your companies
+              Your workspaces
             </DropdownMenuLabel>
-            {companies.map((c) => (
+            {workspaces.map((w) => (
               <DropdownMenuItem
-                key={c.id}
+                key={w.id}
                 className="gap-3"
-                onSelect={() => start(() => switchCompany(c.id).then(() => {}))}
+                onSelect={() => start(() => switchWorkspace(w.id).then(() => {}))}
               >
-                <span className="bg-primary text-primary-foreground flex size-6 shrink-0 items-center justify-center rounded text-[11px] font-bold">
-                  {c.name.trim()[0]?.toUpperCase()}
+                <span
+                  className="flex size-6 shrink-0 items-center justify-center rounded text-[11px] font-bold text-white"
+                  style={{ backgroundColor: w.accent_color }}
+                >
+                  {w.name.trim()[0]?.toUpperCase()}
                 </span>
                 <span className="grid flex-1 leading-tight">
-                  <span>{c.name}</span>
+                  <span>{w.name}</span>
                   <span className="text-muted-foreground text-xs">
-                    {ROLE_LABEL[c.role]} · {c.people}{" "}
-                    {c.people === 1 ? "person" : "people"}
+                    {ROLE_LABEL[w.role]} · {w.people}{" "}
+                    {w.people === 1 ? "person" : "people"}
                   </span>
                 </span>
-                {c.id === current.id && <Check className="size-4" />}
+                {w.id === current.id && <Check className="size-4" />}
               </DropdownMenuItem>
             ))}
 
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/new-company">
-                <Plus /> Create company
+              <Link href="/new-workspace">
+                <Plus /> Create workspace
               </Link>
             </DropdownMenuItem>
             {can.invite(current.role) && (

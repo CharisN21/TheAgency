@@ -1,13 +1,13 @@
 import Link from "next/link"
-import { Check, Search, Sun, UserPlus } from "lucide-react"
+import { ArrowRight, Check, Clock, Search, TrendingUp, UserPlus } from "lucide-react"
 
+import { PageHeader } from "@/components/app/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { SidebarTrigger } from "@/components/ui/sidebar"
-import { getSetupState, listMembers, pendingInviteCount } from "@/lib/data/queries"
+import { getSetupState, getTodayNumbers, pendingInviteCount } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
-import { can } from "@/lib/data/types"
+import { can, money, moneyShort, stageOf } from "@/lib/data/types"
 import { WelcomeToast } from "./welcome-toast"
 
 function Ring({ value, label }: { value: number; label: string }) {
@@ -16,14 +16,7 @@ function Ring({ value, label }: { value: number; label: string }) {
   return (
     <div className="relative size-16 shrink-0">
       <svg viewBox="0 0 64 64" className="size-full -rotate-90">
-        <circle
-          cx="32"
-          cy="32"
-          r={r}
-          fill="none"
-          strokeWidth="6"
-          className="stroke-fill-strong"
-        />
+        <circle cx="32" cy="32" r={r} fill="none" strokeWidth="6" className="stroke-fill-strong" />
         <circle
           cx="32"
           cy="32"
@@ -43,11 +36,11 @@ function Ring({ value, label }: { value: number; label: string }) {
 }
 
 export default async function TodayPage() {
-  const { user, company, role } = await requireContext()
-  const [setup, members, pending] = await Promise.all([
-    getSetupState(company.id, user.id),
-    listMembers(company.id),
-    pendingInviteCount(company.id),
+  const { user, workspace, role } = await requireContext()
+  const [setup, numbers, pending] = await Promise.all([
+    getSetupState(workspace.id, user.id),
+    getTodayNumbers(workspace.id),
+    pendingInviteCount(workspace.id),
   ])
 
   const today = new Date().toLocaleDateString("en-GB", {
@@ -58,32 +51,24 @@ export default async function TodayPage() {
   const hour = new Date().getHours()
   const greeting = hour < 12 ? "Morning" : hour < 18 ? "Afternoon" : "Evening"
   const firstName = user.full_name.split(" ")[0]
+  const { pipeline, touchesDue, stale } = numbers
 
   const steps = [
-    {
-      done: setup.hasCompany,
-      title: "Create your company",
-      meta: `${company.name} is ready.`,
-    },
-    { done: setup.signedIn, title: "Sign in on your laptop", meta: "You are signed in." },
+    { done: setup.hasWorkspace, title: "Create your workspace", meta: `${workspace.name} is ready.` },
+    { done: setup.signedIn, title: "Sign in", meta: "You are signed in." },
     {
       done: setup.invitedSomeone,
       title: "Invite your office team",
-      meta:
-        members.length > 1
-          ? `${members.length - 1} ${members.length === 2 ? "person has" : "people have"} joined.`
-          : pending > 0
-            ? `${pending} ${pending === 1 ? "invite" : "invites"} waiting to be opened.`
-            : "Nobody else is in here yet.",
+      meta: pending > 0 ? `${pending} invite${pending === 1 ? "" : "s"} waiting.` : "Nobody else is here yet.",
       href: "/team",
       action: can.invite(role) ? "Invite" : "See team",
     },
     {
-      done: setup.teamJoined,
-      title: "Install The Agency on your iPhone",
-      meta: "Open this site in Safari, tap Share, then Add to Home Screen.",
-      href: "/settings",
-      action: "Show me",
+      done: setup.addedOrganisation,
+      title: "Add your first organisation",
+      meta: "A supplier, a client or a partner you deal with.",
+      href: "/organisations",
+      action: "Add",
     },
   ]
 
@@ -91,15 +76,13 @@ export default async function TodayPage() {
     <div className="flex min-h-svh flex-col">
       <WelcomeToast />
 
-      <header className="bg-bar border-border sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-4 backdrop-blur-xl">
-        <SidebarTrigger className="md:hidden" />
+      <PageHeader title="Today">
         <span className="text-muted-foreground hidden items-center gap-2 text-sm md:flex">
           <Search className="size-4" /> Search
           <kbd className="border-border text-muted-foreground ml-1 rounded border px-1.5 text-[11px]">
             Ctrl K
           </kbd>
         </span>
-        <div className="flex-1" />
         {can.invite(role) && (
           <Button asChild variant="secondary" size="sm">
             <Link href="/team?invite=1">
@@ -107,13 +90,130 @@ export default async function TodayPage() {
             </Link>
           </Button>
         )}
-      </header>
+      </PageHeader>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-8">
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 md:px-8">
         <p className="text-muted-foreground text-sm">{today}</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">
           {greeting}, {firstName}
         </h1>
+
+        {/* The three numbers that matter before anything else. */}
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <Link href="/deals">
+            <Card className="hover:border-primary/40 h-full py-0 transition-colors">
+              <CardContent className="p-4">
+                <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  Open pipeline
+                </p>
+                <p className="mt-1 text-xl font-bold tabular-nums">
+                  {money(pipeline.openValue)}
+                </p>
+                <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+                  <TrendingUp className="size-3" />
+                  {moneyShort(Math.round(pipeline.forecast))} weighted
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/people">
+            <Card className="hover:border-primary/40 h-full py-0 transition-colors">
+              <CardContent className="p-4">
+                <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  People to speak to
+                </p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{touchesDue.length}</p>
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  {touchesDue.length === 0 ? "Nobody is waiting on you" : "Due today or overdue"}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/organisations?stale=1">
+            <Card className="hover:border-primary/40 h-full py-0 transition-colors">
+              <CardContent className="p-4">
+                <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  Going quiet
+                </p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{stale.length}</p>
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  No contact in 30 days
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+
+        {/* Who is waiting on you. */}
+        {touchesDue.length > 0 && (
+          <section className="mt-6">
+            <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
+              Speak to these people
+            </h2>
+            <Card className="py-0">
+              <CardContent className="divide-border divide-y p-0">
+                {touchesDue.slice(0, 5).map((c) => (
+                  <Link
+                    key={c.id}
+                    href={c.organisation ? `/organisations/${c.organisation.id}` : "/people"}
+                    className="hover:bg-muted/50 flex items-center gap-3 px-4 py-3"
+                  >
+                    <span className="bg-accent text-accent-foreground grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold">
+                      {c.full_name
+                        .split(" ")
+                        .map((p) => p[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{c.full_name}</span>
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {c.title ? `${c.title} · ` : ""}
+                        {c.organisation?.name ?? "No organisation"}
+                      </span>
+                    </span>
+                    <span className="text-warn flex items-center gap-1 text-xs font-medium">
+                      <Clock className="size-3" />
+                      {(c.touchDueInDays ?? 0) < 0
+                        ? `${Math.abs(c.touchDueInDays ?? 0)}d overdue`
+                        : "today"}
+                    </span>
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+          </section>
+        )}
+
+        {/* Deals about to land. */}
+        {pipeline.closingSoon.length > 0 && (
+          <section className="mt-6">
+            <h2 className="text-muted-foreground mb-2 flex items-center justify-between text-xs font-semibold tracking-wide uppercase">
+              Closing soon
+              <Link href="/deals" className="text-primary flex items-center gap-1 normal-case">
+                All deals <ArrowRight className="size-3" />
+              </Link>
+            </h2>
+            <Card className="py-0">
+              <CardContent className="divide-border divide-y p-0">
+                {pipeline.closingSoon.map((d) => (
+                  <div key={d.id} className="flex items-center gap-3 px-4 py-3">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{d.title}</span>
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {d.organisation?.name ?? "—"} · {stageOf(d.stage).label}
+                      </span>
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums">
+                      {money(d.value)}
+                    </span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
         {setup.done < setup.total && (
           <Card className="mt-6 gap-0 py-0">
@@ -123,7 +223,7 @@ export default async function TodayPage() {
                 label={`${setup.done}/${setup.total}`}
               />
               <div>
-                <h2 className="font-semibold">Get {company.name} set up</h2>
+                <h2 className="font-semibold">Get {workspace.name} set up</h2>
                 <p className="text-muted-foreground text-sm">
                   {setup.total - setup.done} step
                   {setup.total - setup.done === 1 ? "" : "s"} left. About 5 minutes.
@@ -154,9 +254,7 @@ export default async function TodayPage() {
                       >
                         {s.title}
                       </span>
-                      <span className="text-muted-foreground block text-xs">
-                        {s.meta}
-                      </span>
+                      <span className="text-muted-foreground block text-xs">{s.meta}</span>
                     </span>
                     {!s.done && s.href && (
                       <Button asChild variant="outline" size="sm">
@@ -169,15 +267,6 @@ export default async function TodayPage() {
             </CardContent>
           </Card>
         )}
-
-        <div className="mt-6 flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
-          <Sun className="text-ink-3 size-9" />
-          <h3 className="font-semibold">Nothing due today</h3>
-          <p className="text-muted-foreground max-w-xs text-sm">
-            When you create projects, tasks due today, overdue work and check-ins show up
-            here.
-          </p>
-        </div>
       </main>
     </div>
   )

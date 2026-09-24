@@ -3,10 +3,12 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  Building2,
   CalendarDays,
+  Contact,
   FolderKanban,
+  HandCoins,
   NotebookPen,
-  Share2,
   SlidersHorizontal,
   Sparkles,
   Sun,
@@ -21,37 +23,33 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { ROLE_LABEL, type Role } from "@/lib/data/types"
-import { CompanySwitcher, type SwitcherCompany } from "./company-switcher"
+import { WorkspaceSwitcher, type SwitcherWorkspace } from "./workspace-switcher"
 
-// Order follows the build plan. `soon` modules arrive in later phases.
-const WORK = [
-  { href: "/today", label: "Today", icon: Sun, soon: false },
-  { href: "/projects", label: "Projects", icon: FolderKanban, soon: true },
-  { href: "/network", label: "Network", icon: Share2, soon: true },
-  { href: "/meetings", label: "Meetings", icon: CalendarDays, soon: true },
-  { href: "/notebook", label: "Notebook", icon: NotebookPen, soon: true },
-]
-
-const COMPANY = [
-  { href: "/team", label: "Team", icon: Users, soon: false },
-  { href: "/mentor", label: "Mentor", icon: Sparkles, soon: true },
-  { href: "/settings", label: "Settings", icon: SlidersHorizontal, soon: false },
-]
+type Item = {
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  soon?: boolean
+  count?: number
+}
 
 export function AppSidebar({
-  companies,
+  workspaces,
   currentId,
   user,
   role,
+  counts,
 }: {
-  companies: SwitcherCompany[]
+  workspaces: SwitcherWorkspace[]
   currentId: string
   user: { full_name: string; email: string }
   role: Role
+  counts: { organisations: number; people: number; openDeals: number }
 }) {
   const pathname = usePathname()
   const initials = user.full_name
@@ -61,11 +59,30 @@ export function AppSidebar({
     .join("")
     .toUpperCase()
 
-  const item = (n: (typeof WORK)[number]) => (
+  const RELATIONSHIPS: Item[] = [
+    { href: "/organisations", label: "Organisations", icon: Building2, count: counts.organisations },
+    { href: "/people", label: "People", icon: Contact, count: counts.people },
+    { href: "/deals", label: "Deals", icon: HandCoins, count: counts.openDeals },
+  ]
+
+  const WORK: Item[] = [
+    { href: "/today", label: "Today", icon: Sun },
+    { href: "/projects", label: "Projects", icon: FolderKanban, soon: true },
+    { href: "/meetings", label: "Meetings", icon: CalendarDays, soon: true },
+    { href: "/notebook", label: "Notebook", icon: NotebookPen, soon: true },
+  ]
+
+  const WORKSPACE: Item[] = [
+    { href: "/team", label: "Team", icon: Users },
+    { href: "/mentor", label: "Mentor", icon: Sparkles, soon: true },
+    { href: "/settings", label: "Settings", icon: SlidersHorizontal },
+  ]
+
+  const item = (n: Item) => (
     <SidebarMenuItem key={n.href}>
       <SidebarMenuButton
         asChild={!n.soon}
-        isActive={pathname.startsWith(n.href)}
+        isActive={pathname === n.href || pathname.startsWith(n.href + "/")}
         disabled={n.soon}
         className={n.soon ? "text-muted-foreground cursor-default" : undefined}
         tooltip={n.soon ? `${n.label} — a later phase` : n.label}
@@ -74,7 +91,6 @@ export function AppSidebar({
           <>
             <n.icon />
             <span>{n.label}</span>
-            <span className="text-muted-foreground ml-auto text-xs">Soon</span>
           </>
         ) : (
           <Link href={n.href}>
@@ -83,23 +99,32 @@ export function AppSidebar({
           </Link>
         )}
       </SidebarMenuButton>
+      {n.soon ? (
+        <SidebarMenuBadge className="text-muted-foreground">Soon</SidebarMenuBadge>
+      ) : n.count ? (
+        <SidebarMenuBadge>{n.count}</SidebarMenuBadge>
+      ) : null}
     </SidebarMenuItem>
   )
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <CompanySwitcher companies={companies} currentId={currentId} />
+        <WorkspaceSwitcher workspaces={workspaces} currentId={currentId} />
       </SidebarHeader>
 
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Relationships</SidebarGroupLabel>
+          <SidebarMenu>{RELATIONSHIPS.map(item)}</SidebarMenu>
+        </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Work</SidebarGroupLabel>
           <SidebarMenu>{WORK.map(item)}</SidebarMenu>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Company</SidebarGroupLabel>
-          <SidebarMenu>{COMPANY.map(item)}</SidebarMenu>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          <SidebarMenu>{WORKSPACE.map(item)}</SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
 

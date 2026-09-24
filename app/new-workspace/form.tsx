@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { createCompany } from "@/lib/data/actions"
+import { createWorkspace } from "@/lib/data/actions"
 
 const COLOURS = [
   { value: "#7c1f35", name: "Maroon" },
@@ -26,7 +26,7 @@ export function NewCompanyForm() {
   function submit(formData: FormData) {
     formData.set("accent", accent)
     start(async () => {
-      const result = await createCompany(formData)
+      const result = await createWorkspace(formData)
       if (result && !result.ok) toast.error(result.message)
     })
   }
@@ -36,7 +36,7 @@ export function NewCompanyForm() {
   return (
     <form action={submit} className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <Label htmlFor="name">Company name</Label>
+        <Label htmlFor="name">Workspace name</Label>
         <Input
           id="name"
           name="name"
@@ -87,7 +87,7 @@ export function NewCompanyForm() {
           </span>
         </div>
         <p className="text-muted-foreground text-sm">
-          Used for the company tile in the switcher.
+          Used for the workspace tile in the switcher.
         </p>
       </div>
 
@@ -97,7 +97,7 @@ export function NewCompanyForm() {
             <Loader2 className="animate-spin" /> Creating…
           </>
         ) : (
-          "Create company"
+          "Create workspace"
         )}
       </Button>
     </form>

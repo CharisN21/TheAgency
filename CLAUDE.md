@@ -1,6 +1,6 @@
 # The Agency — working rules
 
-A personal company operating system: projects, people, meetings and leadership coaching for every venture Charis runs. PWA, iPhone/Mac feel, works fully on Windows.
+A personal company operating system and CRM: workspaces, organisations, people, deals and the work around them, for every venture Charis runs. PWA, iPhone/Mac feel, works fully on Windows.
 
 **Charis does not write code by hand.** Explain every step in plain language, keep changes small, and after each step say exactly what to click to test it.
 
@@ -21,9 +21,16 @@ The look is fixed and lives in a published design system (maroon `#7c1f35` on wa
 - `brass` is decorative only: the logo ring, the hairline on the landing page. Never text, never a control.
 - The brand mark lives in `components/brand/logo.tsx`. The landing-page logo sequence is in `components/brand/logo-intro.tsx` plus the `brand-*` rules at the end of `globals.css`.
 
+## Naming (settled 24 Sep 2026)
+
+- A **workspace** is one of Charis's own ventures (Kilima Labs). It holds the people, the records and the work.
+- An **organisation** is a business he deals with: supplier, client, partner, prospect, service provider.
+- **People** (contacts) belong to organisations. **Deals** belong to an organisation and usually a person.
+- Never use "company" in the interface. It is ambiguous now.
+
 ## Rules that do not bend
 
-1. **Row-Level Security on every table**, and every business table carries `company_id`. A person only ever sees companies they belong to. Write a test proving a member of one company cannot read another's rows.
+1. **Row-Level Security on every table**, and every business table carries `workspace_id`. A person only ever sees workspaces they belong to. Write a test proving a member of one workspace cannot read another's rows.
 2. **Private flags stay private**: visible only to the person who raised them and to owners and admins.
 3. **Secrets in `.env.local` only**, which is git-ignored. Only `NEXT_PUBLIC_`-prefixed variables reach the browser. The Claude API key and the Supabase service key are server-side only.
 4. **Validate and authorise inside every Server Action and route handler.** Never trust the client.
@@ -42,13 +49,18 @@ The look is fixed and lives in a published design system (maroon `#7c1f35` on wa
 
 ## Phases
 
-0. **Foundation** (current): auth, companies, invites, roles, app shell, PWA, deploy.
-1. Projects & Tasks — scope, AI team structure, assign, track, check-ins, flags, close + retrospective.
+0. **Foundation** (done, on local data): auth, workspaces, invites, roles, app shell, PWA.
+0b. **CRM core** (current): organisations, people, deals and the pipeline board, activity timeline.
+1. Projects & Tasks, linked to organisations and deals — scope, AI team structure, assign, track, check-ins, flags, close + retrospective.
 2. Today dashboard, Quick Capture, Notebook, Ctrl K palette.
-3. My Network (relationship CRM).
+3. Network depth: import, merge duplicates, saved views, segments.
 4. Meetings (Google Calendar + Meet, notes to tasks).
 5. Team comms & alerts (announcements, email, WhatsApp).
 6. AI Mentor & Insights (weekly recap, decision log, coaching).
 7. Harden & productize (offline, backups, data protection, M-Pesa pricing test).
 
 One phase at a time. Phase 1 must be used on a real project before Phase 2 starts.
+
+## Data while we build
+
+There is no database yet, on purpose: the flows and the feel come first. `lib/data/store.ts` keeps everything in one JSON file under `.data/`, behind the same shapes as `supabase/migrations/0001_foundation.sql`. Screens and actions never touch the file directly — they go through `lib/data/queries.ts` and `lib/data/actions.ts`. When Supabase goes in, those two files change and nothing else should.

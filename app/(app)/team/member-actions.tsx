@@ -32,13 +32,13 @@ export function MemberActions({
   userId,
   name,
   role,
-  companyName,
+  workspaceName,
   isSelf,
 }: {
   userId: string
   name: string
   role: Role
-  companyName: string
+  workspaceName: string
   isSelf: boolean
 }) {
   const [pending, start] = useTransition()
@@ -75,7 +75,7 @@ export function MemberActions({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel className="text-muted-foreground flex items-center gap-2 text-xs">
-            <UserCog className="size-3.5" /> Role in {companyName}
+            <UserCog className="size-3.5" /> Role in {workspaceName}
           </DropdownMenuLabel>
           <DropdownMenuRadioGroup value={role} onValueChange={setRole}>
             {ROLES.map((r) => (
@@ -86,7 +86,7 @@ export function MemberActions({
           </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => setConfirm(true)}>
-            <Trash2 /> {isSelf ? "Leave company" : "Remove from company"}
+            <Trash2 /> {isSelf ? "Leave workspace" : "Remove from workspace"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -95,7 +95,7 @@ export function MemberActions({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {isSelf ? `Leave ${companyName}?` : `Remove ${name} from ${companyName}?`}
+              {isSelf ? `Leave ${workspaceName}?` : `Remove ${name} from ${workspaceName}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {isSelf

@@ -14,10 +14,10 @@ export function WelcomeToast() {
     const joined = params.get("joined")
     if (!created && !joined) return
 
-    toast.success(created ? "Company created" : "You're in", {
+    toast.success(created ? "Workspace created" : "You're in", {
       description: created
-        ? "Invite your team next — they only ever see this company."
-        : "This company is now in your switcher, top left.",
+        ? "Invite your team next — they only ever see this workspace."
+        : "This workspace is now in your switcher, top left.",
     })
     router.replace("/today")
   }, [params, router])

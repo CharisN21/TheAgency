@@ -39,10 +39,10 @@ export default async function NewCompanyPage() {
         <div className="flex flex-1 items-center">
           <div className="w-full max-w-md">
             <h1 className="text-3xl font-bold tracking-tight">
-              {isFirst ? "Create your company" : "Add another company"}
+              {isFirst ? "Create your workspace" : "Add another workspace"}
             </h1>
             <p className="text-muted-foreground mt-2 mb-8">
-              A company is a separate space with its own projects, people and data.
+              A workspace is a separate space with its own projects, people and data.
               Nothing crosses between them.
             </p>
             <NewCompanyForm />
@@ -56,7 +56,7 @@ export default async function NewCompanyPage() {
         </p>
         <ul className="flex flex-col gap-4 text-sm">
           {[
-            ["Your own space", "Projects, people and files that only this company sees."],
+            ["Your own space", "Projects, people and files that only this workspace sees."],
             ["Invite by link", "Give each person a role: admin, member or viewer."],
             ["Switch in one click", "The switcher at the top left moves between ventures."],
           ].map(([title, body]) => (

@@ -23,7 +23,7 @@ import { ROLE_HELP, ROLE_LABEL, type Role } from "@/lib/data/types"
 
 const CHOICES: Role[] = ["admin", "member", "viewer"]
 
-export function InviteDialog({ companyName }: { companyName: string }) {
+export function InviteDialog({ workspaceName }: { workspaceName: string }) {
   const params = useSearchParams()
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -64,9 +64,9 @@ export function InviteDialog({ companyName }: { companyName: string }) {
       <DialogContent className="sm:max-w-lg">
         <form action={submit}>
           <DialogHeader>
-            <DialogTitle>Invite to {companyName}</DialogTitle>
+            <DialogTitle>Invite to {workspaceName}</DialogTitle>
             <DialogDescription>
-              They get a link that only works for this company. Nothing else you run is
+              They get a link that only works for this workspace. Nothing else you run is
               visible to them.
             </DialogDescription>
           </DialogHeader>

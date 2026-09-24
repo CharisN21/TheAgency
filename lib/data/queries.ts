@@ -1,15 +1,26 @@
 import "server-only"
 
 import { readDb } from "./store"
-import type { Invite, Profile, Role } from "./types"
+import {
+  OPEN_STAGES,
+  STAGES,
+  type Activity,
+  type Contact,
+  type Deal,
+  type Invite,
+  type Organisation,
+  type Profile,
+  type Role,
+  type StageId,
+} from "./types"
 
 export type Member = Profile & { role: Role; title?: string; joined: string }
 
-export async function listMembers(companyId: string): Promise<Member[]> {
+export async function listMembers(workspaceId: string): Promise<Member[]> {
   const db = await readDb()
   const order: Record<Role, number> = { owner: 0, admin: 1, member: 2, viewer: 3 }
   return db.memberships
-    .filter((m) => m.company_id === companyId)
+    .filter((m) => m.workspace_id === workspaceId)
     .map((m) => {
       const p = db.profiles.find((x) => x.id === m.user_id)!
       return { ...p, role: m.role, title: m.title, joined: m.created_at }
@@ -17,10 +28,10 @@ export async function listMembers(companyId: string): Promise<Member[]> {
     .sort((a, b) => order[a.role] - order[b.role] || a.full_name.localeCompare(b.full_name))
 }
 
-export async function listInvites(companyId: string): Promise<Invite[]> {
+export async function listInvites(workspaceId: string): Promise<Invite[]> {
   const db = await readDb()
   return db.invites
-    .filter((i) => i.company_id === companyId && !i.accepted_at)
+    .filter((i) => i.workspace_id === workspaceId && !i.accepted_at)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
@@ -28,41 +39,241 @@ export async function getInviteByToken(token: string) {
   const db = await readDb()
   const invite = db.invites.find((i) => i.token === token)
   if (!invite) return null
-  const company = db.companies.find((c) => c.id === invite.company_id) ?? null
+  const workspace = db.workspaces.find((w) => w.id === invite.workspace_id) ?? null
   const inviter = db.profiles.find((p) => p.id === invite.invited_by) ?? null
-  return { invite, company, inviter }
+  return { invite, workspace, inviter }
 }
 
+/* ------------------------------------------------------------ organisations */
+
+export type OrganisationRow = Organisation & {
+  owner: Profile | undefined
+  people: number
+  openDeals: number
+  openValue: number
+  wonValue: number
+  lastActivity?: Activity
+  daysSinceContact: number | null
+}
+
+const daysSince = (iso?: string) =>
+  iso === undefined ? null : Math.floor((Date.now() - new Date(iso).getTime()) / 864e5)
+
+export async function listOrganisations(
+  workspaceId: string,
+  opts: { q?: string; category?: string; owner?: string; stale?: boolean } = {}
+): Promise<OrganisationRow[]> {
+  const db = await readDb()
+  const q = opts.q?.trim().toLowerCase()
+
+  return db.organisations
+    .filter((o) => o.workspace_id === workspaceId)
+    .map((o) => {
+      const deals = db.deals.filter((d) => d.organisation_id === o.id)
+      const open = deals.filter((d) => OPEN_STAGES.includes(d.stage))
+      const lastActivity = db.activities
+        .filter((a) => a.organisation_id === o.id && a.type !== "system")
+        .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))[0]
+      return {
+        ...o,
+        owner: db.profiles.find((p) => p.id === o.owner_id),
+        people: db.contacts.filter((c) => c.organisation_id === o.id).length,
+        openDeals: open.length,
+        openValue: open.reduce((sum, d) => sum + d.value, 0),
+        wonValue: deals.filter((d) => d.stage === "won").reduce((s, d) => s + d.value, 0),
+        lastActivity,
+        daysSinceContact: daysSince(lastActivity?.occurred_at),
+      }
+    })
+    .filter((o) => {
+      if (q && !`${o.name} ${o.what_they_do ?? ""} ${o.location ?? ""} ${o.tags.join(" ")}`.toLowerCase().includes(q))
+        return false
+      if (opts.category && o.category !== opts.category) return false
+      if (opts.owner && o.owner_id !== opts.owner) return false
+      if (opts.stale && (o.daysSinceContact ?? 999) < 30) return false
+      return true
+    })
+    .sort((a, b) => b.openValue - a.openValue || a.name.localeCompare(b.name))
+}
+
+export async function getOrganisation(workspaceId: string, id: string) {
+  const db = await readDb()
+  const organisation = db.organisations.find((o) => o.id === id && o.workspace_id === workspaceId)
+  if (!organisation) return null
+
+  const contacts = db.contacts
+    .filter((c) => c.organisation_id === id)
+    .sort((a, b) => a.full_name.localeCompare(b.full_name))
+  const deals = db.deals
+    .filter((d) => d.organisation_id === id)
+    .sort((a, b) => b.value - a.value)
+  const activities = db.activities
+    .filter((a) => a.organisation_id === id)
+    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+    .slice(0, 40)
+
+  return {
+    organisation,
+    owner: db.profiles.find((p) => p.id === organisation.owner_id),
+    contacts,
+    deals,
+    activities,
+    people: db.profiles,
+    openValue: deals.filter((d) => OPEN_STAGES.includes(d.stage)).reduce((s, d) => s + d.value, 0),
+    wonValue: deals.filter((d) => d.stage === "won").reduce((s, d) => s + d.value, 0),
+  }
+}
+
+/* ------------------------------------------------------------------ deals */
+
+export type DealCard = Deal & {
+  organisation?: Organisation
+  contact?: Contact
+  owner?: Profile
+  daysInStage: number
+}
+
+export async function listDeals(
+  workspaceId: string,
+  opts: { owner?: string; organisation?: string } = {}
+): Promise<DealCard[]> {
+  const db = await readDb()
+  return db.deals
+    .filter((d) => d.workspace_id === workspaceId)
+    .filter((d) => (opts.owner ? d.owner_id === opts.owner : true))
+    .filter((d) => (opts.organisation ? d.organisation_id === opts.organisation : true))
+    .map((d) => ({
+      ...d,
+      organisation: db.organisations.find((o) => o.id === d.organisation_id),
+      contact: db.contacts.find((c) => c.id === d.contact_id),
+      owner: db.profiles.find((p) => p.id === d.owner_id),
+      daysInStage: daysSince(d.stage_changed_at) ?? 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+}
+
+export type Pipeline = {
+  columns: { stage: (typeof STAGES)[number]; deals: DealCard[]; total: number }[]
+  openValue: number
+  forecast: number
+  wonThisMonth: number
+  closingSoon: DealCard[]
+}
+
+export async function getPipeline(
+  workspaceId: string,
+  opts: { owner?: string } = {}
+): Promise<Pipeline> {
+  const deals = await listDeals(workspaceId, opts)
+  const columns = STAGES.map((stage) => {
+    const inStage = deals.filter((d) => d.stage === stage.id)
+    return { stage, deals: inStage, total: inStage.reduce((s, d) => s + d.value, 0) }
+  })
+
+  const open = deals.filter((d) => OPEN_STAGES.includes(d.stage))
+  const month = new Date().toISOString().slice(0, 7)
+
+  return {
+    columns,
+    openValue: open.reduce((s, d) => s + d.value, 0),
+    forecast: open.reduce(
+      (s, d) => s + d.value * (STAGES.find((x) => x.id === d.stage)?.probability ?? 0),
+      0
+    ),
+    wonThisMonth: deals
+      .filter((d) => d.stage === "won" && (d.closed_at ?? "").startsWith(month))
+      .reduce((s, d) => s + d.value, 0),
+    closingSoon: open
+      .filter((d) => d.expected_close && daysSince(d.expected_close)! > -14)
+      .sort((a, b) => (a.expected_close ?? "").localeCompare(b.expected_close ?? ""))
+      .slice(0, 5),
+  }
+}
+
+export async function getDeal(workspaceId: string, id: string) {
+  const db = await readDb()
+  const deal = db.deals.find((d) => d.id === id && d.workspace_id === workspaceId)
+  if (!deal) return null
+  return {
+    deal,
+    organisation: db.organisations.find((o) => o.id === deal.organisation_id),
+    contact: db.contacts.find((c) => c.id === deal.contact_id),
+    owner: db.profiles.find((p) => p.id === deal.owner_id),
+    activities: db.activities
+      .filter((a) => a.deal_id === id)
+      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
+  }
+}
+
+/* --------------------------------------------------------------- contacts */
+
+export type ContactRow = Contact & {
+  organisation?: Organisation
+  owner?: Profile
+  touchDueInDays: number | null
+}
+
+export async function listContacts(workspaceId: string): Promise<ContactRow[]> {
+  const db = await readDb()
+  return db.contacts
+    .filter((c) => c.workspace_id === workspaceId)
+    .map((c) => ({
+      ...c,
+      organisation: db.organisations.find((o) => o.id === c.organisation_id),
+      owner: db.profiles.find((p) => p.id === c.owner_id),
+      touchDueInDays: c.next_touch_at
+        ? Math.ceil((new Date(c.next_touch_at).getTime() - Date.now()) / 864e5)
+        : null,
+    }))
+    .sort((a, b) => (a.touchDueInDays ?? 999) - (b.touchDueInDays ?? 999))
+}
+
+/* ------------------------------------------------------------------ today */
+
 export type SetupState = {
-  hasCompany: boolean
+  hasWorkspace: boolean
   signedIn: boolean
   invitedSomeone: boolean
-  teamJoined: boolean
+  addedOrganisation: boolean
   done: number
   total: number
 }
 
-/** Drives the "Get set up" checklist on Today — real state, not decoration. */
-export async function getSetupState(companyId: string, userId: string): Promise<SetupState> {
+export async function getSetupState(workspaceId: string, userId: string): Promise<SetupState> {
   const db = await readDb()
-  const members = db.memberships.filter((m) => m.company_id === companyId)
-  const invites = db.invites.filter((i) => i.company_id === companyId)
-
   const steps = {
-    hasCompany: true,
+    hasWorkspace: true,
     signedIn: Boolean(userId),
-    invitedSomeone: invites.length > 0 || members.length > 1,
-    teamJoined: members.length > 1,
+    invitedSomeone:
+      db.invites.some((i) => i.workspace_id === workspaceId) ||
+      db.memberships.filter((m) => m.workspace_id === workspaceId).length > 1,
+    addedOrganisation: db.organisations.some((o) => o.workspace_id === workspaceId),
   }
+  return { ...steps, done: Object.values(steps).filter(Boolean).length, total: 4 }
+}
+
+export async function pendingInviteCount(workspaceId: string) {
+  const db = await readDb()
+  return db.invites.filter((i) => i.workspace_id === workspaceId && !i.accepted_at).length
+}
+
+/** The numbers Today leads with. */
+export async function getTodayNumbers(workspaceId: string) {
+  const [pipeline, contacts] = await Promise.all([
+    getPipeline(workspaceId),
+    listContacts(workspaceId),
+  ])
+  const organisations = await listOrganisations(workspaceId)
 
   return {
-    ...steps,
-    done: Object.values(steps).filter(Boolean).length,
-    total: 4,
+    pipeline,
+    touchesDue: contacts.filter((c) => (c.touchDueInDays ?? 99) <= 0),
+    stale: organisations.filter((o) => (o.daysSinceContact ?? 0) >= 30),
+    organisations: organisations.length,
   }
 }
 
-export async function pendingInviteCount(companyId: string) {
-  const db = await readDb()
-  return db.invites.filter((i) => i.company_id === companyId && !i.accepted_at).length
+export async function stageTotals(workspaceId: string): Promise<Record<StageId, number>> {
+  const { columns } = await getPipeline(workspaceId)
+  return Object.fromEntries(columns.map((c) => [c.stage.id, c.total])) as Record<StageId, number>
 }

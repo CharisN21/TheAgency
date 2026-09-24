@@ -2,15 +2,15 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Ellipsis, FolderKanban, Plus, Share2, Sun } from "lucide-react"
+import { Building2, Ellipsis, HandCoins, Plus, Sun } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 const TABS = [
   { href: "/today", label: "Today", icon: Sun, center: false },
-  { href: "/projects", label: "Projects", icon: FolderKanban, center: false },
+  { href: "/deals", label: "Deals", icon: HandCoins, center: false },
   { href: "/capture", label: "Capture", icon: Plus, center: true },
-  { href: "/network", label: "Network", icon: Share2, center: false },
+  { href: "/organisations", label: "Organisations", icon: Building2, center: false },
   { href: "/more", label: "More", icon: Ellipsis, center: false },
 ]
 
@@ -37,7 +37,7 @@ export function MobileTabBar() {
             )}
           >
             <t.icon className="size-6" />
-            {t.label}
+            {t.label === "Organisations" ? "Orgs" : t.label}
           </Link>
         )
       )}

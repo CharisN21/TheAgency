@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { requireContext } from "@/lib/data/session"
 import { can } from "@/lib/data/types"
-import { CompanyNameForm, ResetDemo } from "./forms"
+import { WorkspaceNameForm, ResetDemo } from "./forms"
 
 const INSTALL = [
   ["Open in Safari", "Add to Home Screen only works from Safari on iPhone.", null],
@@ -14,7 +14,7 @@ const INSTALL = [
 ] as const
 
 export default async function SettingsPage() {
-  const { company, role } = await requireContext()
+  const { workspace, role } = await requireContext()
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -26,14 +26,14 @@ export default async function SettingsPage() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6 md:px-8">
         <Card>
           <CardHeader>
-            <CardTitle>Company</CardTitle>
+            <CardTitle>Workspace</CardTitle>
           </CardHeader>
           <CardContent>
-            {can.editCompany(role) ? (
-              <CompanyNameForm name={company.name} />
+            {can.editWorkspace(role) ? (
+              <WorkspaceNameForm name={workspace.name} />
             ) : (
               <p className="text-muted-foreground text-sm">
-                {company.name} · only owners and admins can change this.
+                {workspace.name} · only owners and admins can change this.
               </p>
             )}
           </CardContent>

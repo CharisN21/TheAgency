@@ -23,10 +23,10 @@ const daysLeft = (iso: string) =>
   Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 864e5))
 
 export default async function TeamPage() {
-  const { user, company, role } = await requireContext()
+  const { user, workspace, role } = await requireContext()
   const [members, invites] = await Promise.all([
-    listMembers(company.id),
-    listInvites(company.id),
+    listMembers(workspace.id),
+    listInvites(workspace.id),
   ])
   const mayManage = can.manageRoles(role)
 
@@ -37,7 +37,7 @@ export default async function TeamPage() {
         <h1 className="flex-1 font-semibold">Team</h1>
         {can.invite(role) && (
           <Suspense fallback={null}>
-            <InviteDialog companyName={company.name} />
+            <InviteDialog workspaceName={workspace.name} />
           </Suspense>
         )}
       </header>
@@ -47,7 +47,7 @@ export default async function TeamPage() {
           <p className="bg-warn-soft mb-5 flex items-start gap-2 rounded-lg px-4 py-3 text-sm">
             <Eye className="mt-0.5 size-4 shrink-0" />
             <span>
-              <strong>You are a Viewer in {company.name}.</strong> You can see everything
+              <strong>You are a Viewer in {workspace.name}.</strong> You can see everything
               here but cannot change it.
             </span>
           </p>
@@ -97,7 +97,7 @@ export default async function TeamPage() {
                           userId={m.id}
                           name={m.full_name}
                           role={m.role}
-                          companyName={company.name}
+                          workspaceName={workspace.name}
                           isSelf={m.id === user.id}
                         />
                       )}
