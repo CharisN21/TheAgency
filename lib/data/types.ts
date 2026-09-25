@@ -248,6 +248,9 @@ export const can = {
   /** Viewers read everything they can see, and change nothing. */
   edit: (r: Role) => r !== "viewer",
   seeFlags: (r: Role) => r === "owner" || r === "admin",
+  /** A member's own page: owners and admins open anyone's; everyone else only their own. */
+  viewMember: (r: Role, viewerId: string, memberId: string) =>
+    r === "owner" || r === "admin" || viewerId === memberId,
   /** Merging removes a record, so it follows the same rule as deleting. */
   merge: (r: Role) => r === "owner" || r === "admin",
 }

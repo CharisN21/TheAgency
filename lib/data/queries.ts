@@ -507,3 +507,54 @@ export async function listDuplicateOrganisations(workspaceId: string): Promise<D
     }
   })
 }
+
+/* ------------------------------------------------------------ member page */
+
+/**
+ * Everything one person in the workspace looks after: their organisations, the
+ * people they are keeping in touch with, their deals and what they logged.
+ * Who may see it is decided by the page (`can.viewMember`), not here.
+ */
+export async function getMemberOverview(workspaceId: string, memberId: string) {
+  const db = await readDb()
+  const membership = db.memberships.find(
+    (m) => m.workspace_id === workspaceId && m.user_id === memberId
+  )
+  const profile = db.profiles.find((p) => p.id === memberId)
+  if (!membership || !profile) return null
+
+  const month = new Date().toISOString().slice(0, 7)
+  const organisations = (await listOrganisations(workspaceId, { owner: memberId, sort: "quiet" }))
+  const contacts = (await listContacts(workspaceId)).filter((c) => c.owner_id === memberId)
+  const deals = (await listDeals(workspaceId, { owner: memberId }))
+  const open = deals.filter((d) => OPEN_STAGES.includes(d.stage))
+  const since = Date.now() - 30 * 864e5
+
+  return {
+    member: { ...profile, role: membership.role, title: membership.title, joined: membership.created_at },
+    organisations,
+    contacts,
+    openDeals: open,
+    closedDeals: deals
+      .filter((d) => !OPEN_STAGES.includes(d.stage))
+      .sort((a, b) => (b.closed_at ?? "").localeCompare(a.closed_at ?? ""))
+      .slice(0, 5),
+    openValue: open.reduce((s, d) => s + d.value, 0),
+    wonThisMonth: deals
+      .filter((d) => d.stage === "won" && (d.closed_at ?? "").startsWith(month))
+      .reduce((s, d) => s + d.value, 0),
+    touchesDue: contacts.filter((c) => (c.touchDueInDays ?? 99) <= 0).length,
+    activities: db.activities
+      .filter((a) => a.workspace_id === workspaceId && a.actor_id === memberId)
+      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+      .slice(0, 20),
+    loggedLast30Days: db.activities.filter(
+      (a) =>
+        a.workspace_id === workspaceId &&
+        a.actor_id === memberId &&
+        a.type !== "system" &&
+        new Date(a.occurred_at).getTime() >= since
+    ).length,
+    people: db.profiles,
+  }
+}

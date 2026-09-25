@@ -1,8 +1,10 @@
 import { Suspense } from "react"
-import { Clock, Eye, Lock, Mail } from "lucide-react"
+import Link from "next/link"
+import { ChevronRight, Clock, Eye, Lock, Mail, UserRound } from "lucide-react"
 
 import { Band, BandStat, BandTitle } from "@/components/app/band"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -62,6 +64,18 @@ export default async function TeamPage() {
               help={invites.length === 0 ? "Nobody pending" : "Links last 7 days"}
             />
           </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button asChild>
+              <Link href={`/team/${user.id}`}>
+                <UserRound /> Your page
+              </Link>
+            </Button>
+            <p className="text-muted-foreground text-sm">
+              {can.manageRoles(role)
+                ? "Open anyone below to see their people, deals and organisations."
+                : "Your people, deals and organisations in one place."}
+            </p>
+          </div>
           {role === "viewer" && (
             <p className="bg-warn-soft mt-4 flex items-start gap-2 rounded-lg px-4 py-3 text-sm">
               <Eye className="mt-0.5 size-4 shrink-0" />
@@ -95,18 +109,37 @@ export default async function TeamPage() {
                         >
                           {initialsOf(m.full_name)}
                         </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
-                            {m.full_name}
-                            {m.id === user.id && (
-                              <span className="text-muted-foreground font-normal"> · you</span>
-                            )}
+                        {/* Owners and admins open anyone's page; everyone else only their own. */}
+                        {can.viewMember(role, user.id, m.id) ? (
+                          <Link
+                            href={`/team/${m.id}`}
+                            className="group focus-visible:ring-ring flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md focus-visible:ring-2 focus-visible:outline-none"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium group-hover:underline">
+                                {m.full_name}
+                                {m.id === user.id && (
+                                  <span className="text-muted-foreground font-normal"> · you</span>
+                                )}
+                              </span>
+                              <span className="text-muted-foreground block truncate text-xs">
+                                {m.title ? `${m.title} · ` : ""}
+                                {m.email}
+                              </span>
+                            </span>
+                            <ChevronRight className="text-ink-3 size-4 shrink-0" />
+                          </Link>
+                        ) : (
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">
+                              {m.full_name}
+                            </span>
+                            <span className="text-muted-foreground block truncate text-xs">
+                              {m.title ? `${m.title} · ` : ""}
+                              {m.email}
+                            </span>
                           </span>
-                          <span className="text-muted-foreground block truncate text-xs">
-                            {m.title ? `${m.title} · ` : ""}
-                            {m.email}
-                          </span>
-                        </span>
+                        )}
                         <Badge variant={m.role === "owner" ? "default" : "secondary"}>
                           {ROLE_LABEL[m.role]}
                         </Badge>
