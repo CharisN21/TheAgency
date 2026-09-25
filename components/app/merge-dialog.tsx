@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { GitMerge, Loader2 } from "lucide-react"
+import { GitMerge, Loader2, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -16,7 +16,12 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { mergeOrganisations, mergePeople } from "@/lib/data/actions"
+import {
+  markNotDuplicate,
+  mergeOrganisations,
+  mergePeople,
+  unmarkNotDuplicate,
+} from "@/lib/data/actions"
 import type { OrgField, PersonField } from "@/lib/data/match"
 import type { DuplicatePair } from "@/lib/data/queries"
 
@@ -180,5 +185,43 @@ export function MergeDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** They only look alike. Hide the pair for good, with a moment to undo. */
+export function NotDuplicateButton({
+  pair,
+  object,
+}: {
+  pair: DuplicatePair
+  object: "people" | "organisations"
+}) {
+  const [pending, start] = useTransition()
+
+  function mark() {
+    start(async () => {
+      const result = await markNotDuplicate(object, pair.a.id, pair.b.id)
+      if (!result.ok || !result.id) {
+        toast.error(result.message)
+        return
+      }
+      const id = result.id
+      toast.success(result.message, {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            const undo = await unmarkNotDuplicate(id)
+            if (undo.ok) toast.success(undo.message)
+            else toast.error(undo.message)
+          },
+        },
+      })
+    })
+  }
+
+  return (
+    <Button size="sm" variant="outline" onClick={mark} disabled={pending}>
+      {pending ? <Loader2 className="animate-spin" /> : <X />} Not a duplicate
+    </Button>
   )
 }

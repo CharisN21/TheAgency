@@ -1176,3 +1176,61 @@ export async function mergeOrganisations(
   revalidatePath("/today")
   return { ok: true, message: `Merged into ${summary}` }
 }
+
+/** "These two are different people." The pair is never suggested again. */
+export async function markNotDuplicate(
+  object: "people" | "organisations",
+  aId: string,
+  bId: string
+): Promise<Result & { id?: string }> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.merge(role)) return { ok: false, message: "Only owners and admins can review duplicates" }
+  if (aId === bId) return { ok: false, message: "Pick two different records" }
+
+  const db = await readDb()
+  const rows: { id: string; workspace_id: string }[] =
+    object === "people" ? db.contacts : db.organisations
+  const here = (id: string) => rows.some((r) => r.id === id && r.workspace_id === workspace.id)
+  if (!here(aId) || !here(bId)) {
+    return { ok: false, message: "One of these is no longer here. Refresh and look again." }
+  }
+
+  const id = await mutate((d) => {
+    const key = pairKey(aId, bId)
+    const existing = d.not_duplicates.find(
+      (n) => n.workspace_id === workspace.id && pairKey(n.a_id, n.b_id) === key
+    )
+    if (existing) return existing.id
+    const row = {
+      id: newId(),
+      workspace_id: workspace.id,
+      object,
+      a_id: aId,
+      b_id: bId,
+      marked_by: user.id,
+      created_at: now(),
+    }
+    d.not_duplicates.push(row)
+    return row.id
+  })
+
+  revalidatePath(`/${object}`, "layout")
+  return { ok: true, message: "Marked as different. It will not be suggested again.", id }
+}
+
+/** Undo for the toast. */
+export async function unmarkNotDuplicate(id: string): Promise<Result> {
+  const { workspace, role } = await requireContext()
+  if (!can.merge(role)) return { ok: false, message: "Only owners and admins can review duplicates" }
+
+  const db = await readDb()
+  const row = db.not_duplicates.find((n) => n.id === id && n.workspace_id === workspace.id)
+  if (!row) return { ok: false, message: "That is already undone" }
+
+  await mutate((d) => {
+    d.not_duplicates = d.not_duplicates.filter((n) => n.id !== id)
+  })
+
+  revalidatePath(`/${row.object}`, "layout")
+  return { ok: true, message: "Back in the list" }
+}

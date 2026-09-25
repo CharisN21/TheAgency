@@ -2,7 +2,7 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { NoDuplicates, PairCard } from "@/components/app/duplicates"
-import { MergeDialog } from "@/components/app/merge-dialog"
+import { MergeDialog, NotDuplicateButton } from "@/components/app/merge-dialog"
 import { PageHeader } from "@/components/app/page-header"
 import type { DuplicatePair } from "@/lib/data/queries"
 import { can, type Role } from "@/lib/data/types"
@@ -34,7 +34,8 @@ export function DuplicateReview({
         </Link>
         <p className="text-muted-foreground mb-6 text-sm">
           Pairs that share a phone number, an email or a name. Nothing is changed until you
-          choose.
+          choose. Two different people can share a name — mark those as not a duplicate and they
+          will not come back.
         </p>
 
         {pairs.length === 0 ? (
@@ -45,6 +46,7 @@ export function DuplicateReview({
               <PairCard key={`${pair.a.id}|${pair.b.id}`} pair={pair}>
                 {can.merge(role) ? (
                   <div className="flex flex-wrap justify-end gap-2">
+                    <NotDuplicateButton pair={pair} object={object} />
                     <MergeDialog pair={pair} object={object} />
                   </div>
                 ) : (

@@ -92,6 +92,8 @@ export function seed(): Database {
   const grace = contact("Grace Atieno", "Procurement officer", county.id, charis.id, days(-2), ["Slow to reply"])
   const peter = contact("Peter Njoroge", "Workshop manager", ridge.id, otieno.id, days(11))
   const sam = contact("Samuel Kiptoo", "Account manager", lab.id, achieng.id, days(21))
+  // Same name, different man. The review should let you say so once and forget it.
+  const jamesMechanic = { ...contact("James Kiprono", "Mechanic", ridge.id, otieno.id), email: "kiprono.j@ridgemoto.co.ke" }
 
   const deal = (
     title: string,
@@ -165,7 +167,7 @@ export function seed(): Database {
       },
     ],
     organisations: [vision, safaricom, county, ridge, lab, visionAgain],
-    contacts: [mercy, james, grace, peter, sam, mercyAgain],
+    contacts: [mercy, james, grace, peter, sam, mercyAgain, jamesMechanic],
     deals,
     views: [],
     not_duplicates: [],
