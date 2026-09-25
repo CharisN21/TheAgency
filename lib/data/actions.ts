@@ -11,10 +11,15 @@ import {
   setSession,
 } from "./session"
 import {
+  emailKey,
   ORG_FIELDS,
+  orgNameKey,
   pairKey,
   PERSON_FIELDS,
+  personNameKey,
   phoneKey,
+  REASON_LABEL,
+  type MatchReason,
   type OrgField,
   type PersonField,
 } from "./match"
@@ -31,6 +36,41 @@ import {
 } from "./types"
 
 export type Result = { ok: boolean; message: string }
+
+/** Returned instead of saving when the new record looks like one already here. */
+export type Similar = { id: string; name: string; detail: string; href: string; reason: string }
+export type AddResult = Result & { similar?: Similar }
+
+const firstReason = (checks: [MatchReason, boolean][]) =>
+  checks.find(([, hit]) => hit)?.[0]
+
+/**
+ * After "they are different, add anyway", remember that, so the new record and
+ * the look-alike are not offered as duplicates straight after.
+ */
+function rememberDifferent(
+  db: Database,
+  formData: FormData,
+  object: "people" | "organisations",
+  workspaceId: string,
+  userId: string,
+  newRecordId: string
+) {
+  const other = str(formData, "not_duplicate_of")
+  if (str(formData, "confirm") !== "1" || !other) return
+  const rows: { id: string; workspace_id: string }[] =
+    object === "people" ? db.contacts : db.organisations
+  if (!rows.some((r) => r.id === other && r.workspace_id === workspaceId)) return
+  db.not_duplicates.push({
+    id: newId(),
+    workspace_id: workspaceId,
+    object,
+    a_id: newRecordId,
+    b_id: other,
+    marked_by: userId,
+    created_at: now(),
+  })
+}
 
 const now = () => new Date().toISOString()
 const titleCase = (email: string) =>
@@ -311,7 +351,7 @@ export async function removeMember(userId: string): Promise<Result> {
 
 /* ----------------------------------------------------------- organisations */
 
-export async function createOrganisation(formData: FormData): Promise<Result> {
+export async function createOrganisation(formData: FormData): Promise<AddResult> {
   const { user, workspace, role } = await requireContext()
   if (!can.edit(role)) return { ok: false, message: "Viewers cannot add organisations" }
 
@@ -323,6 +363,31 @@ export async function createOrganisation(formData: FormData): Promise<Result> {
     (o) => o.workspace_id === workspace.id && o.name.toLowerCase() === name.toLowerCase()
   )
   if (clash) return { ok: false, message: `${name} is already in ${workspace.name}` }
+
+  // Close enough to ask about. "Add anyway" sends confirm=1 and skips this.
+  if (str(formData, "confirm") !== "1") {
+    const key = { name: orgNameKey(name), phone: phoneKey(str(formData, "phone")), email: emailKey(str(formData, "email")) }
+    for (const o of db.organisations.filter((x) => x.workspace_id === workspace.id)) {
+      const reason = firstReason([
+        ["phone", Boolean(key.phone && key.phone === phoneKey(o.phone))],
+        ["email", Boolean(key.email && key.email === emailKey(o.email))],
+        ["name", Boolean(key.name && key.name === orgNameKey(o.name))],
+      ])
+      if (reason) {
+        return {
+          ok: false,
+          message: `This looks like ${o.name}`,
+          similar: {
+            id: o.id,
+            name: o.name,
+            detail: [ORG_CATEGORY_LABEL[o.category], o.location].filter(Boolean).join(" · "),
+            href: `/organisations/${o.id}`,
+            reason: REASON_LABEL[reason],
+          },
+        }
+      }
+    }
+  }
 
   await mutate((d) => {
     const id = newId()
@@ -339,6 +404,7 @@ export async function createOrganisation(formData: FormData): Promise<Result> {
       tags: tags(formData, "tags"),
       created_at: now(),
     })
+    rememberDifferent(d, formData, "organisations", workspace.id, user.id, id)
     log(d, workspace.id, user.id, `added ${name}`, { organisation_id: id })
   })
 
@@ -403,7 +469,7 @@ export async function deleteOrganisation(id: string): Promise<Result> {
 
 /* --------------------------------------------------------------- contacts */
 
-export async function createContact(formData: FormData): Promise<Result> {
+export async function createContact(formData: FormData): Promise<AddResult> {
   const { user, workspace, role } = await requireContext()
   if (!can.edit(role)) return { ok: false, message: "Viewers cannot add people" }
 
@@ -411,6 +477,41 @@ export async function createContact(formData: FormData): Promise<Result> {
   if (full_name.length < 2) return { ok: false, message: "Give the person a name" }
 
   const organisation_id = str(formData, "organisation_id") || undefined
+
+  // Close enough to ask about. "Add anyway" sends confirm=1 and skips this.
+  if (str(formData, "confirm") !== "1") {
+    const db = await readDb()
+    const org = db.organisations.find((o) => o.id === organisation_id)
+    // The office line and info@ address belong to everyone there; they prove nothing.
+    const phone = phoneKey(str(formData, "phone"))
+    const email = emailKey(str(formData, "email"))
+    const key = {
+      name: personNameKey(full_name),
+      phone: phone !== phoneKey(org?.phone) ? phone : null,
+      email: email !== emailKey(org?.email) ? email : null,
+    }
+    for (const c of db.contacts.filter((x) => x.workspace_id === workspace.id)) {
+      const reason = firstReason([
+        ["phone", Boolean(key.phone && key.phone === phoneKey(c.phone))],
+        ["email", Boolean(key.email && key.email === emailKey(c.email))],
+        ["name", Boolean(key.name && key.name === personNameKey(c.full_name))],
+      ])
+      if (reason) {
+        const theirOrg = db.organisations.find((o) => o.id === c.organisation_id)
+        return {
+          ok: false,
+          message: `This looks like ${c.full_name}`,
+          similar: {
+            id: c.id,
+            name: c.full_name,
+            detail: [c.title, theirOrg?.name].filter(Boolean).join(" · ") || "No organisation",
+            href: theirOrg ? `/organisations/${theirOrg.id}` : "/people",
+            reason: REASON_LABEL[reason],
+          },
+        }
+      }
+    }
+  }
 
   await mutate((db) => {
     const id = newId()
@@ -427,6 +528,7 @@ export async function createContact(formData: FormData): Promise<Result> {
       next_touch_at: str(formData, "next_touch_at") || undefined,
       created_at: now(),
     })
+    rememberDifferent(db, formData, "people", workspace.id, user.id, id)
     log(db, workspace.id, user.id, `added ${full_name}`, {
       organisation_id,
       contact_id: id,

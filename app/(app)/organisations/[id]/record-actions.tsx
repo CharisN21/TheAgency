@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { Loader2, Plus, Send } from "lucide-react"
 import { toast } from "sonner"
 
@@ -23,7 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createContact, logActivity } from "@/lib/data/actions"
+import { SimilarWarning } from "@/components/app/similar-warning"
+import { createContact, logActivity, type Similar } from "@/lib/data/actions"
 import { ACTIVITY_LABEL, type ActivityType } from "@/lib/data/types"
 
 const TYPES: ActivityType[] = ["call", "whatsapp", "meeting", "email", "visit", "note"]
@@ -86,29 +87,56 @@ export function AddContact({
 }) {
   const [open, setOpen] = useState(false)
   const [pending, start] = useTransition()
+  const [similar, setSimilar] = useState<Similar | null>(null)
+  const last = useRef<FormData | null>(null)
 
   function submit(formData: FormData) {
     formData.set("organisation_id", organisationId)
+    last.current = formData
     start(async () => {
       const result = await createContact(formData)
       if (result.ok) {
         setOpen(false)
         toast.success(result.message)
+      } else if (result.similar) {
+        setSimilar(result.similar)
       } else {
         toast.error(result.message)
       }
     })
   }
 
+  function addAnyway() {
+    if (!last.current || !similar) return
+    last.current.set("confirm", "1")
+    last.current.set("not_duplicate_of", similar.id)
+    setSimilar(null)
+    submit(last.current)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o)
+        setSimilar(null)
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Plus /> Person
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
-        <form action={submit}>
+        <form
+          // onSubmit, not action: an action empties the form, and after a warning
+          // the person should still see what they typed.
+          onSubmit={(e) => {
+            e.preventDefault()
+            submit(new FormData(e.currentTarget))
+          }}
+          onChange={() => setSimilar(null)}
+        >
           <DialogHeader>
             <DialogTitle>Add someone at {organisationName}</DialogTitle>
             <DialogDescription>
@@ -139,11 +167,14 @@ export function AddContact({
               <Input id="c-touch" name="next_touch_at" type="date" />
             </div>
           </div>
+          {similar && (
+            <SimilarWarning similar={similar} pending={pending} onAddAnyway={addAnyway} />
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || similar !== null}>
               {pending && <Loader2 className="animate-spin" />}
               Add person
             </Button>

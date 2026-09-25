@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { Building2, Loader2, Plus } from "lucide-react"
 import { toast } from "sonner"
 
@@ -23,29 +23,49 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createOrganisation } from "@/lib/data/actions"
+import { SimilarWarning } from "@/components/app/similar-warning"
+import { createOrganisation, type Similar } from "@/lib/data/actions"
 import { ORG_CATEGORIES, ORG_CATEGORY_LABEL, type OrgCategory } from "@/lib/data/types"
 
 export function NewOrganisation({ variant = "default" }: { variant?: "default" | "empty" }) {
   const [open, setOpen] = useState(false)
   const [category, setCategory] = useState<OrgCategory>("supplier")
   const [pending, start] = useTransition()
+  const [similar, setSimilar] = useState<Similar | null>(null)
+  const last = useRef<FormData | null>(null)
 
   function submit(formData: FormData) {
     formData.set("category", category)
+    last.current = formData
     start(async () => {
       const result = await createOrganisation(formData)
       if (result.ok) {
         setOpen(false)
         toast.success(result.message, { description: "Add the people you deal with there next." })
+      } else if (result.similar) {
+        setSimilar(result.similar)
       } else {
         toast.error(result.message)
       }
     })
   }
 
+  function addAnyway() {
+    if (!last.current || !similar) return
+    last.current.set("confirm", "1")
+    last.current.set("not_duplicate_of", similar.id)
+    setSimilar(null)
+    submit(last.current)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o)
+        setSimilar(null)
+      }}
+    >
       <DialogTrigger asChild>
         {variant === "empty" ? (
           <Button size="lg">
@@ -58,7 +78,15 @@ export function NewOrganisation({ variant = "default" }: { variant?: "default" |
         )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
-        <form action={submit}>
+        <form
+          // onSubmit, not action: an action empties the form, and after a warning
+          // the person should still see what they typed.
+          onSubmit={(e) => {
+            e.preventDefault()
+            submit(new FormData(e.currentTarget))
+          }}
+          onChange={() => setSimilar(null)}
+        >
           <DialogHeader>
             <DialogTitle>Add an organisation</DialogTitle>
             <DialogDescription>
@@ -115,11 +143,15 @@ export function NewOrganisation({ variant = "default" }: { variant?: "default" |
             </div>
           </div>
 
+          {similar && (
+            <SimilarWarning similar={similar} pending={pending} onAddAnyway={addAnyway} />
+          )}
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || similar !== null}>
               {pending ? (
                 <>
                   <Loader2 className="animate-spin" /> Adding…
