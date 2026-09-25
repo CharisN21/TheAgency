@@ -1,6 +1,6 @@
 # Handoff — where The Agency stands
 
-Last updated 24 Sep 2026. Read this first when starting a new session, then `CLAUDE.md` for the rules.
+Last updated 25 Sep 2026. Read this first when starting a new session, then `CLAUDE.md` for the rules.
 
 ## Run it
 
@@ -20,18 +20,19 @@ There is **no database on purpose**. Everything lives in `.data/agency.json`, wr
 
 **Import** — Organisations → Import: upload a CSV, map your own column names, see which names already exist, then skip them or fill in their blanks. People on the same row come in attached to their organisation.
 
+**Duplicates** — People and Organisations show "N possible duplicates · Review" when two records share a phone number (written any way), an email or a name (organisation names ignore Ltd, Limited, The, &). The review page (`/people/duplicates`, `/organisations/duplicates`) shows each pair side by side. **Merge** picks the record that stays and, field by field, which value wins; blanks fill from the other, tags combine, people, deals and history move across, and the timeline lists every value not kept. **Not a duplicate** hides a pair for good (with undo). Both are owners and admins only (`can.merge`). The add-person and add-organisation dialogs warn about a look-alike first; "add anyway" records the pair as different. Matching rules live in `lib/data/match.ts`.
+
 Every action returns a result and raises a toast. Lists have skeletons and empty states. `app/(app)/error.tsx` catches the rest.
 
 ## What is next, in order
 
-1. **Duplicate detection and merge** — two Mercy Wambuis is how a CRM dies. The import only catches exact name matches; this catches the rest.
-2. **Try the import on the real supplier and Safaricom sheets.**
-3. **Deal detail page** — deal cards currently link to their organisation.
-4. **Bulk actions and filters on people and deals** — the organisations pattern, copied across (`org-table.tsx` and `filter-bar.tsx` are the models).
-5. **Custom fields** — per workspace, per object, AI-suggested and approved.
-6. **Phase 5 — notifications, then encrypted messaging.** Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
-7. **Phase 1 — Projects and tasks**, linked to organisations and deals.
-8. **Supabase**, once the flows and the feel are settled. Rewrite `store.ts` as a Postgres adapter, run the migration, enable Google and magic-link auth, then delete the local store.
+1. **Try the import on the real supplier and Safaricom sheets**, then run the duplicates review on what came in.
+2. **Deal detail page** — deal cards currently link to their organisation.
+3. **Bulk actions and filters on people and deals** — the organisations pattern, copied across (`org-table.tsx` and `filter-bar.tsx` are the models).
+4. **Custom fields** — per workspace, per object, AI-suggested and approved.
+5. **Phase 5 — notifications, then encrypted messaging.** Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
+6. **Phase 1 — Projects and tasks**, linked to organisations and deals.
+7. **Supabase**, once the flows and the feel are settled. Rewrite `store.ts` as a Postgres adapter, run the migrations (`0001`, then `0002_not_duplicates`), enable Google and magic-link auth, then delete the local store. Merging must become one database function (one transaction) — see the note at the end of `0002`.
 
 ## Where things are
 
@@ -65,13 +66,14 @@ It holds the tokens (maroon `#7c1f35` on warm greige), the logo and its motion, 
 - Local JSON store until the flows are proven, then Postgres.
 - Money is whole shillings, written `KSh 480,000`.
 - Viewers read and never write, enforced in both the UI and the actions.
+- Merging and "not a duplicate" are owners and admins only, the same rule as deleting.
 - AI gives paths, not answers, and never assigns anyone automatically.
 
 ## Moving phases to another session
 
 This session has run long. A clean split:
 
-- **Session A (this one, or its successor):** CRM depth — import, merge, deal detail, custom fields. Everything in `lib/data/` and `app/(app)/`.
+- **Session A (this one, or its successor):** CRM depth — deal detail, bulk actions on people and deals, custom fields. Import and merge are done. Everything in `lib/data/` and `app/(app)/`.
 - **Session B:** Phase 5 — notification centre, then encrypted messaging. Start from `docs/phase-5-messaging-and-notifications.md`; it is self-contained.
 - **Session C:** Phase 1 — projects and tasks. Start from the design system's Phase 1 boards.
 
