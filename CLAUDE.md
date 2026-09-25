@@ -51,7 +51,7 @@ The look is fixed and lives in a published design system (maroon `#7c1f35` on wa
 
 0. **Foundation** (done, on local data): auth, workspaces, invites, roles, app shell, PWA.
 0b. **CRM core** (current): organisations, people, deals and the pipeline board, activity timeline.
-1. Projects & Tasks, linked to organisations and deals — scope, AI team structure, assign, track, check-ins, flags, close + retrospective.
+1. Projects & Tasks, linked to organisations and deals — scope, AI team structure, assign, track, check-ins, flags, close + retrospective. Tasks can stand without a project, and every member gets weekly, monthly and yearly objectives on their member page. Read `docs/phase-1-projects-and-tasks.md` first.
 2. Today dashboard, Quick Capture, Notebook, Ctrl K palette.
 3. Network depth: import, merge duplicates, saved views, segments.
 4. Meetings (Google Calendar + Meet, notes to tasks).

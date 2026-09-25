@@ -26,6 +26,8 @@ There is **no database on purpose**. Everything lives in `.data/agency.json`, wr
 
 **Bands** — pages are built from full-width sections (`components/app/band.tsx`): one `accent` lead band (the soft maroon tint), then `plain` and `soft` (greige, hairlines above and below) alternating via `toneAfterLead`. Each band rises in on load (240ms, 60ms apart) and again as it scrolls into view (CSS scroll timeline; browsers without it just show the section; off for reduced motion). Every signed-in page uses them: each leads with a tinted band holding its key numbers (`BandStat` tiles, compact and side by side on a phone) or a short explanation, then alternates. Boards and tables pass `wide`, reading pages pass `narrow`. The idea came from prolithica.com; only existing tokens are used.
 
+**Member pages** — Team → a name (or **Your page**) opens `/team/[id]`: their open deals, won this month, who they need to speak to, what they logged in 30 days, then bands for the people they are contacting, their deals, the organisations they look after and their recent activity. Owners and admins open anyone's; members and viewers only their own (`can.viewMember`; a page you may not see is a plain not-found). The last band holds the place for tasks and objectives, which Phase 1 fills in.
+
 Every action returns a result and raises a toast. Lists have skeletons and empty states. `app/(app)/error.tsx` catches the rest.
 
 ## What is next, in order
@@ -35,7 +37,7 @@ Every action returns a result and raises a toast. Lists have skeletons and empty
 3. **Bulk actions and filters on people and deals** — the organisations pattern, copied across (`org-table.tsx` and `filter-bar.tsx` are the models).
 4. **Custom fields** — per workspace, per object, AI-suggested and approved.
 5. **Phase 5 — notifications, then encrypted messaging.** Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
-6. **Phase 1 — Projects and tasks**, linked to organisations and deals.
+6. **Phase 1 — Projects, tasks and objectives**, linked to organisations and deals, and shown on each member page. Charis's additions (tasks without a project; week, month and year objectives) are in `docs/phase-1-projects-and-tasks.md`.
 7. **Supabase**, once the flows and the feel are settled. Rewrite `store.ts` as a Postgres adapter, run the migrations (`0001`, then `0002_not_duplicates`), enable Google and magic-link auth, then delete the local store. Merging must become one database function (one transaction) — see the note at the end of `0002`.
 
 ## Where things are
@@ -44,7 +46,8 @@ Every action returns a result and raises a toast. Lists have skeletons and empty
 app/(app)/            the signed-in shell
   organisations/      list + filter-bar.tsx + org-table.tsx + [id] record page
   deals/              pipeline-board.tsx (drag and drop) + new-deal.tsx + [id] deal page
-  people/ today/ team/ settings/
+  people/ today/ settings/
+  team/               members and invites + [id] member page
 app/(auth)/ app/join/ app/new-workspace/   sign in, accept invite, onboarding
 lib/data/             types · store (the JSON store) · session · queries · actions
 components/app/       sidebar, workspace switcher, tab bar, page header
@@ -79,6 +82,6 @@ This session has run long. A clean split:
 
 - **Session A (this one, or its successor):** CRM depth — bulk actions on people and deals, custom fields. Import, merge, the deal page and the bands are done. Everything in `lib/data/` and `app/(app)/`.
 - **Session B:** Phase 5 — notification centre, then encrypted messaging. Start from `docs/phase-5-messaging-and-notifications.md`; it is self-contained.
-- **Session C:** Phase 1 — projects and tasks. Start from the design system's Phase 1 boards.
+- **Session C:** Phase 1 — projects, tasks and objectives. Start from `docs/phase-1-projects-and-tasks.md`, then the design system's Phase 1 boards.
 
 Each new session should open this file, then `CLAUDE.md`, then run the app and click through Today, Organisations and Deals before writing anything.
