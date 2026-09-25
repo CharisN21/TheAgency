@@ -17,7 +17,7 @@ export function DuplicatesNotice({ count, href }: { count: number; href: string 
   return (
     <Link
       href={href}
-      className="bg-warn-soft hover:bg-warn-soft/80 focus-visible:ring-ring mb-4 flex min-h-11 items-center gap-3 rounded-lg px-4 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className="bg-warn-soft hover:bg-warn-soft/80 focus-visible:ring-ring flex min-h-11 items-center gap-3 rounded-lg px-4 py-2 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
       <CopyCheck className="text-warn size-4 shrink-0" />
       <span className="flex-1">

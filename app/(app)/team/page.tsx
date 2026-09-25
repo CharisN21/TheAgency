@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { Clock, Eye, Lock, Mail } from "lucide-react"
 
+import { Band, BandStat, BandTitle } from "@/components/app/band"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -42,146 +43,161 @@ export default async function TeamPage() {
         )}
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-8">
-        {role === "viewer" && (
-          <p className="bg-warn-soft mb-5 flex items-start gap-2 rounded-lg px-4 py-3 text-sm">
-            <Eye className="mt-0.5 size-4 shrink-0" />
-            <span>
-              <strong>You are a Viewer in {workspace.name}.</strong> You can see everything
-              here but cannot change it.
-            </span>
-          </p>
-        )}
+      <main className="flex-1">
+        <Band tone="accent" index={0} narrow label={`People in ${workspace.name}`}>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <BandStat
+              label="Members"
+              value={String(members.length)}
+              help={`In ${workspace.name}`}
+            />
+            <BandStat
+              label="Owners and admins"
+              value={String(members.filter((m) => m.role === "owner" || m.role === "admin").length)}
+              help="Can invite, merge and delete"
+            />
+            <BandStat
+              label="Invites waiting"
+              value={String(invites.length)}
+              help={invites.length === 0 ? "Nobody pending" : "Links last 7 days"}
+            />
+          </div>
+          {role === "viewer" && (
+            <p className="bg-warn-soft mt-4 flex items-start gap-2 rounded-lg px-4 py-3 text-sm">
+              <Eye className="mt-0.5 size-4 shrink-0" />
+              <span>
+                <strong>You are a Viewer in {workspace.name}.</strong> You can see everything here
+                but cannot change it.
+              </span>
+            </p>
+          )}
+        </Band>
 
-        <Tabs defaultValue="members">
-          <TabsList>
-            <TabsTrigger value="members">Members {members.length}</TabsTrigger>
-            <TabsTrigger value="invites">Invites {invites.length}</TabsTrigger>
-          </TabsList>
+        <Band index={1} narrow label="Members and invites">
+          <Tabs defaultValue="members">
+            <TabsList>
+              <TabsTrigger value="members">Members {members.length}</TabsTrigger>
+              <TabsTrigger value="invites">Invites {invites.length}</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="members">
-            <Card className="mt-4 py-0">
-              <CardContent className="p-0">
-                <ul className="divide-border divide-y">
-                  {members.map((m) => (
-                    <li
-                      key={m.id}
-                      className="flex min-h-16 items-center gap-3 px-4 py-2.5"
-                    >
-                      <span
-                        className={
-                          m.role === "owner" || m.role === "admin"
-                            ? "bg-accent text-accent-foreground grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold"
-                            : "bg-fill-strong grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold"
-                        }
-                      >
-                        {initialsOf(m.full_name)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
-                          {m.full_name}
-                          {m.id === user.id && (
-                            <span className="text-muted-foreground font-normal"> · you</span>
-                          )}
-                        </span>
-                        <span className="text-muted-foreground block truncate text-xs">
-                          {m.title ? `${m.title} · ` : ""}
-                          {m.email}
-                        </span>
-                      </span>
-                      <Badge variant={m.role === "owner" ? "default" : "secondary"}>
-                        {ROLE_LABEL[m.role]}
-                      </Badge>
-                      {(mayManage || m.id === user.id) && (
-                        <MemberActions
-                          userId={m.id}
-                          name={m.full_name}
-                          role={m.role}
-                          workspaceName={workspace.name}
-                          isSelf={m.id === user.id}
-                        />
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="invites">
-            {invites.length === 0 ? (
-              <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
-                <Mail className="text-ink-3 size-8" />
-                <h3 className="font-semibold">No invites waiting</h3>
-                <p className="text-muted-foreground max-w-xs text-sm">
-                  {can.invite(role)
-                    ? "Invite someone and their link shows up here until they join."
-                    : "Only owners and admins can invite people."}
-                </p>
-              </div>
-            ) : (
+            <TabsContent value="members">
               <Card className="mt-4 py-0">
                 <CardContent className="p-0">
                   <ul className="divide-border divide-y">
-                    {invites.map((i) => (
-                      <li
-                        key={i.id}
-                        className="flex min-h-16 flex-wrap items-center gap-3 px-4 py-2.5"
-                      >
-                        <span className="border-input text-muted-foreground grid size-9 shrink-0 place-items-center rounded-full border border-dashed">
-                          <Mail className="size-4" />
+                    {members.map((m) => (
+                      <li key={m.id} className="flex min-h-16 items-center gap-3 px-4 py-2.5">
+                        <span
+                          className={
+                            m.role === "owner" || m.role === "admin"
+                              ? "bg-accent text-accent-foreground grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold"
+                              : "bg-fill-strong grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold"
+                          }
+                        >
+                          {initialsOf(m.full_name)}
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">
-                            {i.email}
+                            {m.full_name}
+                            {m.id === user.id && (
+                              <span className="text-muted-foreground font-normal"> · you</span>
+                            )}
                           </span>
-                          <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                            <Clock className="size-3" />
-                            {daysLeft(i.expires_at)} days left · joins as{" "}
-                            {ROLE_LABEL[i.role]}
+                          <span className="text-muted-foreground block truncate text-xs">
+                            {m.title ? `${m.title} · ` : ""}
+                            {m.email}
                           </span>
                         </span>
-                        {can.invite(role) && (
-                          <>
-                            <CopyLink token={i.token} />
-                            <RevokeInvite inviteId={i.id} email={i.email} />
-                          </>
+                        <Badge variant={m.role === "owner" ? "default" : "secondary"}>
+                          {ROLE_LABEL[m.role]}
+                        </Badge>
+                        {(mayManage || m.id === user.id) && (
+                          <MemberActions
+                            userId={m.id}
+                            name={m.full_name}
+                            role={m.role}
+                            workspaceName={workspace.name}
+                            isSelf={m.id === user.id}
+                          />
                         )}
                       </li>
                     ))}
                   </ul>
                 </CardContent>
               </Card>
-            )}
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
 
-        <h2 className="text-muted-foreground mt-8 text-xs font-semibold tracking-wide uppercase">
-          What each role can do
-        </h2>
-        <Card className="mt-3 py-0">
-          <CardContent className="p-0">
-            <ul className="divide-border divide-y">
-              {ROLES.map((r: Role) => (
-                <li key={r} className="flex items-start gap-4 px-4 py-3">
-                  <Badge
-                    variant={r === "owner" ? "default" : "secondary"}
-                    className="mt-0.5 w-16 justify-center"
-                  >
-                    {ROLE_LABEL[r]}
-                  </Badge>
-                  <p className="text-muted-foreground text-sm">{ROLE_HELP[r]}</p>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+            <TabsContent value="invites">
+              {invites.length === 0 ? (
+                <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
+                  <Mail className="text-ink-3 size-8" />
+                  <h3 className="font-semibold">No invites waiting</h3>
+                  <p className="text-muted-foreground max-w-xs text-sm">
+                    {can.invite(role)
+                      ? "Invite someone and their link shows up here until they join."
+                      : "Only owners and admins can invite people."}
+                  </p>
+                </div>
+              ) : (
+                <Card className="mt-4 py-0">
+                  <CardContent className="p-0">
+                    <ul className="divide-border divide-y">
+                      {invites.map((i) => (
+                        <li
+                          key={i.id}
+                          className="flex min-h-16 flex-wrap items-center gap-3 px-4 py-2.5"
+                        >
+                          <span className="border-input text-muted-foreground grid size-9 shrink-0 place-items-center rounded-full border border-dashed">
+                            <Mail className="size-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{i.email}</span>
+                            <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                              <Clock className="size-3" />
+                              {daysLeft(i.expires_at)} days left · joins as {ROLE_LABEL[i.role]}
+                            </span>
+                          </span>
+                          {can.invite(role) && (
+                            <>
+                              <CopyLink token={i.token} />
+                              <RevokeInvite inviteId={i.id} email={i.email} />
+                            </>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+          </Tabs>
+        </Band>
 
-        <p className="text-muted-foreground mt-4 flex items-start gap-2 text-sm">
-          <Lock className="mt-0.5 size-4 shrink-0" />
-          Private flags are only ever visible to the person who raised them and to owners
-          and admins.
-        </p>
+        <Band tone="soft" index={2} narrow label="Roles" className="pb-10">
+          <BandTitle>What each role can do</BandTitle>
+          <Card className="py-0">
+            <CardContent className="p-0">
+              <ul className="divide-border divide-y">
+                {ROLES.map((r: Role) => (
+                  <li key={r} className="flex items-start gap-4 px-4 py-3">
+                    <Badge
+                      variant={r === "owner" ? "default" : "secondary"}
+                      className="mt-0.5 w-16 justify-center"
+                    >
+                      {ROLE_LABEL[r]}
+                    </Badge>
+                    <p className="text-muted-foreground text-sm">{ROLE_HELP[r]}</p>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <p className="text-muted-foreground mt-4 flex items-start gap-2 text-sm">
+            <Lock className="mt-0.5 size-4 shrink-0" />
+            Private flags are only ever visible to the person who raised them and to owners and
+            admins.
+          </p>
+        </Band>
       </main>
     </div>
   )

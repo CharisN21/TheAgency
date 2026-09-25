@@ -3,6 +3,7 @@ import { Building2, Upload } from "lucide-react"
 
 import Link from "next/link"
 
+import { Band, BandStat } from "@/components/app/band"
 import { DuplicatesNotice } from "@/components/app/duplicates"
 import { PageHeader } from "@/components/app/page-header"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,7 @@ import {
   listViews,
 } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
-import { can, money } from "@/lib/data/types"
+import { can, money, moneyShort } from "@/lib/data/types"
 import { FilterBar } from "./filter-bar"
 import { NewOrganisation } from "./new-organisation"
 import { OrgTable } from "./org-table"
@@ -35,7 +36,7 @@ export default async function OrganisationsPage({
   const { user, workspace, role } = await requireContext()
   const sp = await searchParams
 
-  const [rows, members, tags, views, duplicates] = await Promise.all([
+  const [rows, all, members, tags, views, duplicates] = await Promise.all([
     listOrganisations(workspace.id, {
       q: sp.q,
       category: sp.category,
@@ -45,6 +46,7 @@ export default async function OrganisationsPage({
       hasDeals: sp.hasDeals,
       sort: sp.sort,
     }),
+    listOrganisations(workspace.id),
     listMembers(workspace.id),
     listTags(workspace.id),
     listViews(workspace.id, user.id, "organisations"),
@@ -52,6 +54,13 @@ export default async function OrganisationsPage({
   ])
 
   const totalOpen = rows.reduce((s, r) => s + r.openValue, 0)
+  // The lead numbers are for the whole workspace, whatever the filter.
+  const openAll = all.reduce((s, r) => s + r.openValue, 0)
+  const quiet = all.filter((o) => (o.daysSinceContact ?? 999) >= 30).length
+  const count = (c: string, one: string, many: string) => {
+    const n = all.filter((o) => o.category === c).length
+    return `${n} ${n === 1 ? one : many}`
+  }
   const filtered = Object.keys(sp).some((k) => sp[k])
 
   return (
@@ -69,64 +78,93 @@ export default async function OrganisationsPage({
         )}
       </PageHeader>
 
-      <main className="flex-1 px-4 py-6 md:px-8">
-        <DuplicatesNotice count={duplicates.length} href="/organisations/duplicates" />
-        <Suspense fallback={<div className="h-20" />}>
-          <FilterBar
-            people={members.map((m) => ({ value: m.id, label: m.full_name }))}
-            tags={tags}
-            views={views.map((v) => ({
-              id: v.id,
-              name: v.name,
-              query: v.query,
-              shared: v.shared,
-              mine: v.user_id === user.id,
-            }))}
-            canShare={can.edit(role)}
-          />
-        </Suspense>
-
-        {rows.length === 0 ? (
-          <div className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
-            <Building2 className="text-ink-3 size-9" />
-            <h3 className="font-semibold">
-              {filtered ? "Nothing matches that" : "No organisations yet"}
-            </h3>
-            <p className="text-muted-foreground max-w-sm text-sm">
-              {filtered
-                ? "Clear a filter, or try another saved view."
-                : "Every supplier, client and partner you deal with lives here, with their people and their deals."}
-            </p>
-            {!filtered && can.edit(role) && (
-              <div className="flex flex-wrap justify-center gap-2">
-                <NewOrganisation variant="empty" />
-                <Button asChild variant="outline" size="lg">
-                  <Link href="/organisations/import">
-                    <Upload /> Import a spreadsheet
-                  </Link>
-                </Button>
+      <main className="flex-1">
+        {all.length > 0 && (
+          <Band tone="accent" index={0} wide label="Your organisations">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <BandStat
+                label="Organisations"
+                value={String(all.length)}
+                help={`${count("supplier", "supplier", "suppliers")} · ${count("client", "client", "clients")} · ${count("partner", "partner", "partners")}`}
+              />
+              <BandStat
+                label="Open with them"
+                value={moneyShort(openAll)}
+                help={`${all.filter((o) => o.openDeals > 0).length} with deals on the table`}
+              />
+              <BandStat
+                label="Going quiet"
+                value={String(quiet)}
+                help="No contact in 30 days, or never"
+                tone={quiet > 0 ? "warn" : undefined}
+              />
+            </div>
+            {duplicates.length > 0 && (
+              <div className="mt-4">
+                <DuplicatesNotice count={duplicates.length} href="/organisations/duplicates" />
               </div>
             )}
-          </div>
-        ) : (
-          <OrgTable
-            rows={rows.map((o) => ({
-              id: o.id,
-              name: o.name,
-              subtitle: o.what_they_do ?? o.location ?? "—",
-              category: o.category,
-              people: o.people,
-              openDeals: o.openDeals,
-              openValue: o.openValue,
-              daysSinceContact: o.daysSinceContact,
-              ownerInitials: initials(o.owner?.full_name),
-              ownerName: o.owner?.full_name ?? "Unassigned",
-            }))}
-            people={members.map((m) => ({ value: m.id, label: m.full_name }))}
-            canEdit={can.edit(role)}
-            canDelete={can.editWorkspace(role)}
-          />
+          </Band>
         )}
+
+        <Band index={1} wide label="All organisations">
+          <Suspense fallback={<div className="h-20" />}>
+            <FilterBar
+              people={members.map((m) => ({ value: m.id, label: m.full_name }))}
+              tags={tags}
+              views={views.map((v) => ({
+                id: v.id,
+                name: v.name,
+                query: v.query,
+                shared: v.shared,
+                mine: v.user_id === user.id,
+              }))}
+              canShare={can.edit(role)}
+            />
+          </Suspense>
+
+          {rows.length === 0 ? (
+            <div className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
+              <Building2 className="text-ink-3 size-9" />
+              <h3 className="font-semibold">
+                {filtered ? "Nothing matches that" : "No organisations yet"}
+              </h3>
+              <p className="text-muted-foreground max-w-sm text-sm">
+                {filtered
+                  ? "Clear a filter, or try another saved view."
+                  : "Every supplier, client and partner you deal with lives here, with their people and their deals."}
+              </p>
+              {!filtered && can.edit(role) && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <NewOrganisation variant="empty" />
+                  <Button asChild variant="outline" size="lg">
+                    <Link href="/organisations/import">
+                      <Upload /> Import a spreadsheet
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <OrgTable
+              rows={rows.map((o) => ({
+                id: o.id,
+                name: o.name,
+                subtitle: o.what_they_do ?? o.location ?? "—",
+                category: o.category,
+                people: o.people,
+                openDeals: o.openDeals,
+                openValue: o.openValue,
+                daysSinceContact: o.daysSinceContact,
+                ownerInitials: initials(o.owner?.full_name),
+                ownerName: o.owner?.full_name ?? "Unassigned",
+              }))}
+              people={members.map((m) => ({ value: m.id, label: m.full_name }))}
+              canEdit={can.edit(role)}
+              canDelete={can.editWorkspace(role)}
+            />
+          )}
+        </Band>
       </main>
     </div>
   )
