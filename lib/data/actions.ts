@@ -25,6 +25,7 @@ import {
 } from "./match"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
+  ACTIVITY_LABEL,
   can,
   ORG_CATEGORY_LABEL,
   stageOf,
@@ -611,7 +612,7 @@ export async function moveDeal(
     )
   })
 
-  revalidatePath("/deals")
+  revalidatePath("/deals", "layout")
   revalidatePath("/today")
   if (deal.organisation_id) revalidatePath(`/organisations/${deal.organisation_id}`)
   return {
@@ -629,21 +630,49 @@ export async function updateDeal(dealId: string, formData: FormData): Promise<Re
   const { user, workspace, role } = await requireContext()
   if (!can.edit(role)) return { ok: false, message: "Viewers cannot change deals" }
 
-  await mutate((db) => {
-    const d = db.deals.find((x) => x.id === dealId && x.workspace_id === workspace.id)
-    if (!d) return
-    const title = str(formData, "title")
-    if (title) d.title = title
-    const value = Number(str(formData, "value").replace(/[^0-9.]/g, ""))
-    if (Number.isFinite(value) && value > 0) d.value = value
-    d.expected_close = str(formData, "expected_close") || undefined
-    log(db, workspace.id, user.id, `updated ${d.title}`, {
-      organisation_id: d.organisation_id,
+  const db = await readDb()
+  const deal = db.deals.find((x) => x.id === dealId && x.workspace_id === workspace.id)
+  if (!deal) return { ok: false, message: "That deal is not here" }
+
+  const title = str(formData, "title")
+  if (formData.has("title") && title.length < 2) return { ok: false, message: "Give the deal a name" }
+  const rawValue = str(formData, "value")
+  const value = Number(rawValue.replace(/[^0-9.]/g, ""))
+  if (rawValue && (!Number.isFinite(value) || value <= 0)) {
+    return { ok: false, message: "Put in what it is worth, in shillings" }
+  }
+
+  // The person must work at the deal's organisation; the owner must be in this workspace.
+  const contactId = str(formData, "contact_id")
+  if (
+    contactId &&
+    !db.contacts.some(
+      (c) => c.id === contactId && c.workspace_id === workspace.id && c.organisation_id === deal.organisation_id
+    )
+  ) {
+    return { ok: false, message: "That person is not at this organisation" }
+  }
+  const ownerId = str(formData, "owner_id")
+  if (ownerId && !db.memberships.some((m) => m.user_id === ownerId && m.workspace_id === workspace.id)) {
+    return { ok: false, message: "The owner has to be someone in this workspace" }
+  }
+
+  await mutate((d) => {
+    const x = d.deals.find((y) => y.id === dealId)!
+    if (title) x.title = title
+    if (rawValue) x.value = Math.round(value)
+    if (formData.has("expected_close")) x.expected_close = str(formData, "expected_close") || undefined
+    if (formData.has("contact_id")) x.contact_id = contactId || undefined
+    if (ownerId) x.owner_id = ownerId
+    log(d, workspace.id, user.id, `updated ${x.title}`, {
+      organisation_id: x.organisation_id,
       deal_id: dealId,
     })
   })
 
-  revalidatePath("/deals")
+  revalidatePath("/deals", "layout")
+  revalidatePath("/today")
+  if (deal.organisation_id) revalidatePath(`/organisations/${deal.organisation_id}`)
   return { ok: true, message: "Saved" }
 }
 
@@ -660,6 +689,15 @@ export async function logActivity(formData: FormData): Promise<Result> {
   const contact_id = str(formData, "contact_id") || undefined
   const deal_id = str(formData, "deal_id") || undefined
   const type = (str(formData, "type") || "note") as ActivityType
+  if (!(type in ACTIVITY_LABEL) || type === "system") return { ok: false, message: "Pick what kind of contact it was" }
+
+  // Everything it points at must be in this workspace.
+  const db = await readDb()
+  const inHere = (rows: { id: string; workspace_id: string }[], id?: string) =>
+    !id || rows.some((r) => r.id === id && r.workspace_id === workspace.id)
+  if (!inHere(db.organisations, organisation_id) || !inHere(db.contacts, contact_id) || !inHere(db.deals, deal_id)) {
+    return { ok: false, message: "That record is not in this workspace" }
+  }
 
   await mutate((db) => {
     db.activities.unshift({
@@ -676,6 +714,7 @@ export async function logActivity(formData: FormData): Promise<Result> {
   })
 
   if (organisation_id) revalidatePath(`/organisations/${organisation_id}`)
+  if (deal_id) revalidatePath(`/deals/${deal_id}`)
   revalidatePath("/today")
   return { ok: true, message: "Logged" }
 }

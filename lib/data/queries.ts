@@ -234,14 +234,25 @@ export async function getDeal(workspaceId: string, id: string) {
   const db = await readDb()
   const deal = db.deals.find((d) => d.id === id && d.workspace_id === workspaceId)
   if (!deal) return null
+  const organisation = db.organisations.find((o) => o.id === deal.organisation_id)
   return {
     deal,
-    organisation: db.organisations.find((o) => o.id === deal.organisation_id),
+    organisation,
     contact: db.contacts.find((c) => c.id === deal.contact_id),
     owner: db.profiles.find((p) => p.id === deal.owner_id),
+    daysInStage: daysSince(deal.stage_changed_at) ?? 0,
+    /** Who else works there, for choosing the person on the deal. */
+    orgContacts: db.contacts
+      .filter((c) => c.workspace_id === workspaceId && c.organisation_id === deal.organisation_id)
+      .sort((a, b) => a.full_name.localeCompare(b.full_name)),
+    /** Everything else on the table with the same organisation. */
+    otherDeals: db.deals
+      .filter((d) => d.organisation_id && d.organisation_id === deal.organisation_id && d.id !== id)
+      .sort((a, b) => b.value - a.value),
     activities: db.activities
       .filter((a) => a.deal_id === id)
       .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
+    people: db.profiles,
   }
 }
 

@@ -29,14 +29,24 @@ import { ACTIVITY_LABEL, type ActivityType } from "@/lib/data/types"
 
 const TYPES: ActivityType[] = ["call", "whatsapp", "meeting", "email", "visit", "note"]
 
-/** One line, one tap: what just happened with this organisation. */
-export function LogActivity({ organisationId }: { organisationId: string }) {
+/** One line, one tap: what just happened with this organisation, or this deal. */
+export function LogActivity({
+  organisationId,
+  dealId,
+  contactId,
+}: {
+  organisationId?: string
+  dealId?: string
+  contactId?: string
+}) {
   const [type, setType] = useState<ActivityType>("call")
   const [summary, setSummary] = useState("")
   const [pending, start] = useTransition()
 
   function submit(formData: FormData) {
-    formData.set("organisation_id", organisationId)
+    if (organisationId) formData.set("organisation_id", organisationId)
+    if (dealId) formData.set("deal_id", dealId)
+    if (contactId) formData.set("contact_id", contactId)
     formData.set("type", type)
     start(async () => {
       const result = await logActivity(formData)

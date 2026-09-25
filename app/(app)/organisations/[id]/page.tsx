@@ -247,7 +247,7 @@ export default async function OrganisationPage({
                       return (
                         <Link
                           key={d.id}
-                          href="/deals"
+                          href={`/deals/${d.id}`}
                           className="hover:bg-muted/50 block px-3 py-2.5"
                         >
                           <p className="truncate text-sm font-medium">{d.title}</p>

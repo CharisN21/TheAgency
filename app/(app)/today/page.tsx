@@ -198,7 +198,11 @@ export default async function TodayPage() {
             <Card className="py-0">
               <CardContent className="divide-border divide-y p-0">
                 {pipeline.closingSoon.map((d) => (
-                  <div key={d.id} className="flex items-center gap-3 px-4 py-3">
+                  <Link
+                    key={d.id}
+                    href={`/deals/${d.id}`}
+                    className="hover:bg-muted/50 flex items-center gap-3 px-4 py-3 transition-colors"
+                  >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{d.title}</span>
                       <span className="text-muted-foreground block truncate text-xs">
@@ -208,7 +212,7 @@ export default async function TodayPage() {
                     <span className="text-sm font-semibold tabular-nums">
                       {money(d.value)}
                     </span>
-                  </div>
+                  </Link>
                 ))}
               </CardContent>
             </Card>

@@ -145,7 +145,13 @@ export function PipelineBoard({
                     )}
                   >
                     <div className="flex items-start gap-2">
-                      <p className="flex-1 text-sm leading-snug font-medium">{deal.title}</p>
+                      <Link
+                        href={`/deals/${deal.id}`}
+                        draggable={false}
+                        className="focus-visible:ring-ring flex-1 rounded-sm text-sm leading-snug font-medium hover:underline focus-visible:ring-2 focus-visible:outline-none"
+                      >
+                        {deal.title}
+                      </Link>
                       {canEdit && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
