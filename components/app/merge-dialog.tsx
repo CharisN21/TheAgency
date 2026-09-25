@@ -16,8 +16,8 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { mergePeople } from "@/lib/data/actions"
-import type { PersonField } from "@/lib/data/match"
+import { mergeOrganisations, mergePeople } from "@/lib/data/actions"
+import type { OrgField, PersonField } from "@/lib/data/match"
 import type { DuplicatePair } from "@/lib/data/queries"
 
 type Side = "a" | "b"
@@ -32,7 +32,13 @@ function defaultKeep(pair: DuplicatePair): Side {
   return pair.a.created_at <= pair.b.created_at ? "a" : "b"
 }
 
-export function MergeDialog({ pair, object }: { pair: DuplicatePair; object: "people" }) {
+export function MergeDialog({
+  pair,
+  object,
+}: {
+  pair: DuplicatePair
+  object: "people" | "organisations"
+}) {
   const [open, setOpen] = useState(false)
   const [keep, setKeep] = useState<Side>(() => defaultKeep(pair))
   // Only fields where both sides differ need a choice. Unset means "the kept record's value".
@@ -56,7 +62,7 @@ export function MergeDialog({ pair, object }: { pair: DuplicatePair; object: "pe
       const result =
         object === "people"
           ? await mergePeople(pair[keep].id, pair[drop].id, take as PersonField[])
-          : { ok: false, message: "Not ready yet" }
+          : await mergeOrganisations(pair[keep].id, pair[drop].id, take as OrgField[])
       if (result.ok) {
         setOpen(false)
         toast.success(result.message, { description: "The timeline notes anything that was not kept." })

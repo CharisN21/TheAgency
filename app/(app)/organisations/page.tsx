@@ -3,9 +3,16 @@ import { Building2, Upload } from "lucide-react"
 
 import Link from "next/link"
 
+import { DuplicatesNotice } from "@/components/app/duplicates"
 import { PageHeader } from "@/components/app/page-header"
 import { Button } from "@/components/ui/button"
-import { listMembers, listOrganisations, listTags, listViews } from "@/lib/data/queries"
+import {
+  listDuplicateOrganisations,
+  listMembers,
+  listOrganisations,
+  listTags,
+  listViews,
+} from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can, money } from "@/lib/data/types"
 import { FilterBar } from "./filter-bar"
@@ -28,7 +35,7 @@ export default async function OrganisationsPage({
   const { user, workspace, role } = await requireContext()
   const sp = await searchParams
 
-  const [rows, members, tags, views] = await Promise.all([
+  const [rows, members, tags, views, duplicates] = await Promise.all([
     listOrganisations(workspace.id, {
       q: sp.q,
       category: sp.category,
@@ -41,6 +48,7 @@ export default async function OrganisationsPage({
     listMembers(workspace.id),
     listTags(workspace.id),
     listViews(workspace.id, user.id, "organisations"),
+    listDuplicateOrganisations(workspace.id),
   ])
 
   const totalOpen = rows.reduce((s, r) => s + r.openValue, 0)
@@ -62,6 +70,7 @@ export default async function OrganisationsPage({
       </PageHeader>
 
       <main className="flex-1 px-4 py-6 md:px-8">
+        <DuplicatesNotice count={duplicates.length} href="/organisations/duplicates" />
         <Suspense fallback={<div className="h-20" />}>
           <FilterBar
             people={members.map((m) => ({ value: m.id, label: m.full_name }))}

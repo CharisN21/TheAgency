@@ -10,7 +10,14 @@ import {
   setCurrentWorkspace,
   setSession,
 } from "./session"
-import { pairKey, PERSON_FIELDS, phoneKey, type PersonField } from "./match"
+import {
+  ORG_FIELDS,
+  pairKey,
+  PERSON_FIELDS,
+  phoneKey,
+  type OrgField,
+  type PersonField,
+} from "./match"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
   can,
@@ -1094,6 +1101,77 @@ export async function mergePeople(
   revalidatePath("/people")
   revalidatePath("/people/duplicates")
   revalidatePath("/organisations", "layout")
+  revalidatePath("/deals")
+  revalidatePath("/today")
+  return { ok: true, message: `Merged into ${summary}` }
+}
+
+/**
+ * Two organisations that are one. Their people, deals and history move to the
+ * one that stays, then the other is removed. Owners and admins only.
+ */
+export async function mergeOrganisations(
+  keepId: string,
+  dropId: string,
+  take: OrgField[]
+): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.merge(role)) return { ok: false, message: "Only owners and admins can merge records" }
+  if (keepId === dropId) return { ok: false, message: "Pick two different organisations" }
+
+  const allowed = ORG_FIELDS.map(([k]) => k as string)
+  if (!take.every((f) => allowed.includes(f))) return { ok: false, message: "That merge asked for an unknown field" }
+
+  const db = await readDb()
+  const mine = (id: string) => db.organisations.find((o) => o.id === id && o.workspace_id === workspace.id)
+  if (!mine(keepId) || !mine(dropId)) {
+    return { ok: false, message: "One of these organisations is no longer here. Refresh and look again." }
+  }
+
+  const summary = await mutate((d) => {
+    const keep = d.organisations.find((o) => o.id === keepId)!
+    const drop = d.organisations.find((o) => o.id === dropId)!
+
+    const dropped = foldFields(d, keep, drop, ORG_FIELDS, take)
+    keep.tags = joinTags(keep.tags, drop.tags)
+
+    const moved = { people: 0, deals: 0 }
+    for (const c of d.contacts) {
+      if (c.organisation_id === dropId) {
+        c.organisation_id = keepId
+        moved.people++
+      }
+    }
+    for (const deal of d.deals) {
+      if (deal.organisation_id === dropId) {
+        deal.organisation_id = keepId
+        moved.deals++
+      }
+    }
+    for (const a of d.activities) if (a.organisation_id === dropId) a.organisation_id = keepId
+
+    d.organisations = d.organisations.filter((o) => o.id !== dropId)
+    d.not_duplicates = d.not_duplicates.filter((n) => n.a_id !== dropId && n.b_id !== dropId)
+
+    const brought = [
+      moved.people ? `${moved.people} ${moved.people === 1 ? "person" : "people"}` : "",
+      moved.deals ? `${moved.deals} deal${moved.deals === 1 ? "" : "s"}` : "",
+    ].filter(Boolean)
+
+    log(
+      d,
+      workspace.id,
+      user.id,
+      `merged ${drop.name} into ${keep.name}` +
+        (brought.length ? `, with ${brought.join(" and ")}` : "") +
+        (dropped.length ? `. Not kept: ${dropped.join(", ")}` : ""),
+      { organisation_id: keepId }
+    )
+    return keep.name
+  })
+
+  revalidatePath("/organisations", "layout")
+  revalidatePath("/people", "layout")
   revalidatePath("/deals")
   revalidatePath("/today")
   return { ok: true, message: `Merged into ${summary}` }
