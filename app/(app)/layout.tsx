@@ -37,7 +37,8 @@ export default async function AppLayout({
             openDeals: deals.filter((d) => OPEN_STAGES.includes(d.stage)).length,
           }}
         />
-        <SidebarInset className="pb-24 md:pb-0">{children}</SidebarInset>
+        {/* min-w-0 lets wide content (the pipeline board) scroll inside the page instead of widening it. */}
+        <SidebarInset className="min-w-0 pb-24 md:pb-0">{children}</SidebarInset>
         <MobileTabBar />
       </SidebarProvider>
     </TooltipProvider>

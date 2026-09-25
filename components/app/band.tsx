@@ -14,11 +14,14 @@ export function Band({
   tone = "plain",
   index = 0,
   label,
+  narrow = false,
   className,
   children,
 }: {
   tone?: "plain" | "soft" | "accent"
   index?: number
+  /** A reading-width column, for pages like Today. */
+  narrow?: boolean
   /** Read out by screen readers as the name of the section. */
   label?: string
   className?: string
@@ -35,10 +38,16 @@ export function Band({
         className
       )}
     >
-      <div className="band-reveal mx-auto w-full max-w-5xl">{children}</div>
+      <div className={cn("band-reveal mx-auto w-full", narrow ? "max-w-4xl" : "max-w-5xl")}>
+        {children}
+      </div>
     </section>
   )
 }
+
+/** After the lead band, sections alternate plain and greige, whichever of them are shown. */
+export const toneAfterLead = (position: number): "plain" | "soft" =>
+  position % 2 === 0 ? "plain" : "soft"
 
 /** The small uppercase heading every band opens with. */
 export function BandTitle({
