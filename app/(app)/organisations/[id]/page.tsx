@@ -2,14 +2,15 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft, Phone, Plus, Users } from "lucide-react"
 
-import { Band } from "@/components/app/band"
+import { Band, BandTitle } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
+import { NewTask, TaskList } from "@/components/app/tasks"
 import { Timeline } from "@/components/app/timeline"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { NewDeal } from "@/app/(app)/deals/new-deal"
-import { getOrganisation, listOrganisations } from "@/lib/data/queries"
+import { getOrganisation, listAssignees, listOrganisations, listTasks } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { ORG_CATEGORY_LABEL, can, money, stageOf } from "@/lib/data/types"
 import { AddContact, LogActivity } from "./record-actions"
@@ -29,7 +30,11 @@ export default async function OrganisationPage({ params }: { params: Promise<{ i
   if (!found) notFound()
 
   const { organisation: o, owner, contacts, deals, activities, openValue, wonValue } = found
-  const organisations = await listOrganisations(workspace.id)
+  const [organisations, tasks, assignees] = await Promise.all([
+    listOrganisations(workspace.id),
+    listTasks(workspace.id, { organisation: id, withDone: true }),
+    listAssignees(workspace.id),
+  ])
   const editable = can.edit(role)
 
   return (
@@ -238,6 +243,31 @@ export default async function OrganisationPage({ params }: { params: Promise<{ i
               </div>
             </aside>
           </div>
+        </Band>
+
+        <Band tone="soft" index={2} label="Tasks" className="pb-10">
+          <BandTitle
+            action={
+              editable && (
+                <NewTask
+                  assignees={assignees}
+                  defaultAssignee={o.owner_id}
+                  links={{ organisation_id: o.id }}
+                  context={`For ${o.name}. It shows here and on their page.`}
+                />
+              )
+            }
+          >
+            Tasks
+          </BandTitle>
+          <TaskList
+            tasks={tasks}
+            canEdit={editable}
+            assignees={assignees}
+            userId={user.id}
+            isAdmin={can.editWorkspace(role)}
+            empty={`No tasks for ${o.name}.`}
+          />
         </Band>
       </main>
     </div>

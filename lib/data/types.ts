@@ -225,6 +225,124 @@ export const FILTER_LABEL: Record<FilterField, string> = {
   hasDeals: "Open deals",
 }
 
+/* ------------------------------------------------------ projects and tasks */
+
+export type TaskStatus = "todo" | "doing" | "review" | "done" | "blocked"
+
+export const TASK_STATUSES: TaskStatus[] = ["todo", "doing", "review", "done", "blocked"]
+
+/** Every status carries its word; the colour only backs it up. */
+export const TASK_STATUS: Record<TaskStatus, { label: string; tone: string }> = {
+  todo: { label: "To do", tone: "bg-muted text-muted-foreground" },
+  doing: { label: "In progress", tone: "bg-warn-soft text-warn" },
+  review: { label: "In review", tone: "bg-info-soft text-info" },
+  done: { label: "Done", tone: "bg-ok-soft text-ok" },
+  blocked: { label: "Blocked", tone: "bg-danger-soft text-destructive" },
+}
+
+export type Priority = "low" | "medium" | "high"
+
+export const PRIORITY_LABEL: Record<Priority, string> = { low: "Low", medium: "Medium", high: "High" }
+
+/**
+ * A task can stand alone or hang off a project, an organisation, a deal or a
+ * person. Whoever it is for sees it on their member page.
+ */
+export type Task = {
+  id: string
+  workspace_id: string
+  title: string
+  notes?: string
+  status: TaskStatus
+  priority: Priority
+  due_at?: string
+  assignee_id: string
+  created_by: string
+  project_id?: string
+  organisation_id?: string
+  deal_id?: string
+  contact_id?: string
+  created_at: string
+  completed_at?: string
+}
+
+export type ProjectHealth = "on_track" | "at_risk" | "blocked"
+
+export const HEALTH: Record<ProjectHealth, { label: string; tone: string }> = {
+  on_track: { label: "On track", tone: "bg-ok-soft text-ok" },
+  at_risk: { label: "At risk", tone: "bg-warn-soft text-warn" },
+  blocked: { label: "Blocked", tone: "bg-danger-soft text-destructive" },
+}
+
+export type Cadence = "weekly" | "fortnightly" | "monthly"
+
+export const CADENCE_DAYS: Record<Cadence, number> = { weekly: 7, fortnightly: 14, monthly: 30 }
+
+export type Project = {
+  id: string
+  workspace_id: string
+  name: string
+  /** What done looks like, in a few lines. */
+  scope?: string
+  organisation_id?: string
+  deal_id?: string
+  lead_id: string
+  member_ids: string[]
+  status: "active" | "closed"
+  health: ProjectHealth
+  due_at?: string
+  cadence: Cadence
+  created_at: string
+  closed_at?: string
+}
+
+export type ObjectivePeriod = "week" | "month" | "year"
+
+export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
+  week: "This week",
+  month: "This month",
+  year: "This year",
+}
+
+/**
+ * A goal for one person for a week, a month or a year. Progress is either a
+ * number against a target, or simply done. "won" objectives count themselves
+ * from the person's won deals in the period.
+ */
+export type Objective = {
+  id: string
+  workspace_id: string
+  owner_id: string
+  set_by: string
+  title: string
+  period: ObjectivePeriod
+  /** First day of the period, YYYY-MM-DD. */
+  period_start: string
+  measure: "number" | "money" | "done" | "won"
+  target?: number
+  progress: number
+  done: boolean
+  created_at: string
+}
+
+/** The first day of the week (Monday), month or year that `at` falls in, as YYYY-MM-DD. */
+export function periodStart(period: ObjectivePeriod, at = new Date()): string {
+  const d = new Date(Date.UTC(at.getFullYear(), at.getMonth(), at.getDate()))
+  if (period === "week") d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
+  if (period === "month") d.setUTCDate(1)
+  if (period === "year") d.setUTCMonth(0, 1)
+  return d.toISOString().slice(0, 10)
+}
+
+/** The day after the period ends, as YYYY-MM-DD. */
+export function periodEnd(period: ObjectivePeriod, start: string): string {
+  const d = new Date(`${start}T00:00:00Z`)
+  if (period === "week") d.setUTCDate(d.getUTCDate() + 7)
+  if (period === "month") d.setUTCMonth(d.getUTCMonth() + 1)
+  if (period === "year") d.setUTCFullYear(d.getUTCFullYear() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
 export type Database = {
   profiles: Profile[]
   workspaces: Workspace[]
@@ -236,6 +354,9 @@ export type Database = {
   activities: Activity[]
   views: SavedView[]
   not_duplicates: NotDuplicate[]
+  projects: Project[]
+  tasks: Task[]
+  objectives: Objective[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */

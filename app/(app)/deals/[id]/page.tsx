@@ -5,11 +5,12 @@ import { ArrowLeft, Building2, CalendarClock, Mail, MessageCircle, Phone } from 
 import { LogActivity } from "@/app/(app)/organisations/[id]/record-actions"
 import { Band, BandTitle } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
+import { NewTask, TaskList } from "@/components/app/tasks"
 import { Timeline } from "@/components/app/timeline"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { getDeal, listMembers } from "@/lib/data/queries"
+import { getDeal, listAssignees, listMembers, listTasks } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can, money, moneyShort, stageOf } from "@/lib/data/types"
 import { EditDeal, StageSteps } from "./deal-actions"
@@ -30,11 +31,17 @@ function closing(iso?: string) {
 
 export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { workspace, role } = await requireContext()
-  const [found, members] = await Promise.all([getDeal(workspace.id, id), listMembers(workspace.id)])
+  const { user, workspace, role } = await requireContext()
+  const [found, members, tasks, assignees] = await Promise.all([
+    getDeal(workspace.id, id),
+    listMembers(workspace.id),
+    listTasks(workspace.id, { deal: id, withDone: true }),
+    listAssignees(workspace.id),
+  ])
   if (!found) notFound()
 
-  const { deal, organisation, contact, owner, daysInStage, orgContacts, otherDeals, activities } = found
+  const { deal, organisation, contact, owner, daysInStage, orgContacts, otherDeals, activities } =
+    found
   const stage = stageOf(deal.stage)
   const open = deal.stage !== "won" && deal.stage !== "lost"
   const due = open ? closing(deal.expected_close) : null
@@ -55,7 +62,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               value: c.id,
               label: c.title ? `${c.full_name} · ${c.title}` : c.full_name,
             }))}
-            owners={members.filter((m) => m.role !== "viewer").map((m) => ({ value: m.id, label: m.full_name }))}
+            owners={members
+              .filter((m) => m.role !== "viewer")
+              .map((m) => ({ value: m.id, label: m.full_name }))}
           />
         )}
       </PageHeader>
@@ -125,12 +134,20 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             )}
             {open && (
               <span>
-                {daysInStage === 0 ? "Moved here today" : `${daysInStage} day${daysInStage === 1 ? "" : "s"} in ${stage.label.toLowerCase()}`}
+                {daysInStage === 0
+                  ? "Moved here today"
+                  : `${daysInStage} day${daysInStage === 1 ? "" : "s"} in ${stage.label.toLowerCase()}`}
                 {daysInStage > 14 && <span className="text-warn font-medium"> · going slow</span>}
               </span>
             )}
             {due && (
-              <span className={due.late ? "text-warn flex items-center gap-1 font-medium" : "flex items-center gap-1"}>
+              <span
+                className={
+                  due.late
+                    ? "text-warn flex items-center gap-1 font-medium"
+                    : "flex items-center gap-1"
+                }
+              >
                 <CalendarClock className="size-4" /> Closes {due.text}
               </span>
             )}
@@ -163,12 +180,22 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                       <span className="flex gap-1">
                         {contact.phone && (
                           <>
-                            <Button variant="ghost" size="icon" asChild aria-label={`Call ${contact.full_name}`}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              asChild
+                              aria-label={`Call ${contact.full_name}`}
+                            >
                               <a href={`tel:${contact.phone.replace(/\s/g, "")}`}>
                                 <Phone />
                               </a>
                             </Button>
-                            <Button variant="ghost" size="icon" asChild aria-label={`WhatsApp ${contact.full_name}`}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              asChild
+                              aria-label={`WhatsApp ${contact.full_name}`}
+                            >
                               <a
                                 href={`https://wa.me/?text=${encodeURIComponent(`Hi ${contact.full_name.split(" ")[0]}, about ${deal.title}:`)}`}
                                 target="_blank"
@@ -180,8 +207,15 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                           </>
                         )}
                         {contact.email && (
-                          <Button variant="ghost" size="icon" asChild aria-label={`Email ${contact.full_name}`}>
-                            <a href={`mailto:${contact.email}?subject=${encodeURIComponent(deal.title)}`}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            asChild
+                            aria-label={`Email ${contact.full_name}`}
+                          >
+                            <a
+                              href={`mailto:${contact.email}?subject=${encodeURIComponent(deal.title)}`}
+                            >
                               <Mail />
                             </a>
                           </Button>
@@ -190,7 +224,8 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                     </div>
                   ) : (
                     <p className="text-muted-foreground text-sm">
-                      Nobody named yet.{editable ? " Use Edit to choose someone at the organisation." : ""}
+                      Nobody named yet.
+                      {editable ? " Use Edit to choose someone at the organisation." : ""}
                     </p>
                   )}
                 </CardContent>
@@ -207,7 +242,10 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                     ["Opened", longDate(deal.created_at)],
                     ["Last moved", longDate(deal.stage_changed_at)],
                   ].map(([label, value], i) => (
-                    <div key={label} className={i % 2 === 0 ? "border-border border-r px-4 py-2.5" : "px-4 py-2.5"}>
+                    <div
+                      key={label}
+                      className={i % 2 === 0 ? "border-border border-r px-4 py-2.5" : "px-4 py-2.5"}
+                    >
                       <p className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
                         {label}
                       </p>
@@ -231,7 +269,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                       className="hover:bg-muted/50 flex min-h-12 items-center gap-3 px-4 py-2.5 transition-colors"
                     >
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">{d.title}</span>
-                      <Badge variant={d.stage === "won" ? "default" : "secondary"}>{stageOf(d.stage).label}</Badge>
+                      <Badge variant={d.stage === "won" ? "default" : "secondary"}>
+                        {stageOf(d.stage).label}
+                      </Badge>
                       <span className="text-sm tabular-nums">{money(d.value)}</span>
                     </Link>
                   ))}
@@ -241,8 +281,38 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           )}
         </Band>
 
+        {/* What has to happen next. */}
+        <Band tone="soft" index={2} label="Tasks">
+          <BandTitle
+            action={
+              editable && (
+                <NewTask
+                  assignees={assignees}
+                  defaultAssignee={deal.owner_id}
+                  links={{
+                    deal_id: deal.id,
+                    organisation_id: deal.organisation_id,
+                    contact_id: deal.contact_id,
+                  }}
+                  context={`On ${deal.title}. It shows on the deal and on their page.`}
+                />
+              )
+            }
+          >
+            Tasks
+          </BandTitle>
+          <TaskList
+            tasks={tasks}
+            canEdit={editable}
+            assignees={assignees}
+            userId={user.id}
+            isAdmin={can.editWorkspace(role)}
+            empty="No tasks on this deal. Add the next thing someone has to do to move it."
+          />
+        </Band>
+
         {/* What happened. */}
-        <Band tone="soft" index={2} label="History" className="pb-10">
+        <Band index={3} label="History" className="pb-10">
           <BandTitle>Everything that happened</BandTitle>
           {editable && (
             <Card className="mb-5 py-0">

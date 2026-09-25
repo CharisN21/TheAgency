@@ -34,6 +34,10 @@ import {
   type OrgCategory,
   type Role,
   type StageId,
+  PRIORITY_LABEL,
+  TASK_STATUS,
+  type Priority,
+  type TaskStatus,
 } from "./types"
 
 export type Result = { ok: boolean; message: string }
@@ -1374,4 +1378,169 @@ export async function unmarkNotDuplicate(id: string): Promise<Result> {
 
   revalidatePath(`/${row.object}`, "layout")
   return { ok: true, message: "Back in the list" }
+}
+
+/* ------------------------------------------------------------------ tasks */
+
+function revalidateWork() {
+  revalidatePath("/team", "layout")
+  revalidatePath("/projects", "layout")
+  revalidatePath("/deals", "layout")
+  revalidatePath("/organisations", "layout")
+  revalidatePath("/today")
+}
+
+/**
+ * Checks the parts of a task that point elsewhere: the person it is for must
+ * be able to work in this workspace, and every linked record must be here.
+ */
+function checkTaskLinks(
+  db: Database,
+  workspaceId: string,
+  f: { assignee_id?: string; project_id?: string; organisation_id?: string; deal_id?: string; contact_id?: string }
+): string | null {
+  if (f.assignee_id) {
+    const m = db.memberships.find((x) => x.workspace_id === workspaceId && x.user_id === f.assignee_id)
+    if (!m) return "The task has to be for someone in this workspace"
+    if (m.role === "viewer") return "Viewers cannot take tasks. Change their role first."
+  }
+  const here = (rows: { id: string; workspace_id: string }[], id?: string) =>
+    !id || rows.some((r) => r.id === id && r.workspace_id === workspaceId)
+  if (!here(db.projects, f.project_id)) return "That project is not in this workspace"
+  if (f.project_id && db.projects.find((p) => p.id === f.project_id)?.status === "closed") {
+    return "That project is closed"
+  }
+  if (!here(db.organisations, f.organisation_id) || !here(db.deals, f.deal_id) || !here(db.contacts, f.contact_id)) {
+    return "That record is not in this workspace"
+  }
+  return null
+}
+
+export async function createTask(formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot add tasks" }
+
+  const title = str(formData, "title")
+  if (title.length < 2) return { ok: false, message: "Say what needs doing" }
+  const priority = (str(formData, "priority") || "medium") as Priority
+  if (!(priority in PRIORITY_LABEL)) return { ok: false, message: "Pick a priority" }
+  const due = str(formData, "due_at")
+  if (due && Number.isNaN(Date.parse(due))) return { ok: false, message: "That due date is not a date" }
+
+  const db = await readDb()
+  // A deal brings its organisation along, so the task shows on both.
+  const deal_id = str(formData, "deal_id") || undefined
+  const deal = db.deals.find((d) => d.id === deal_id && d.workspace_id === workspace.id)
+  const links = {
+    assignee_id: str(formData, "assignee_id") || user.id,
+    project_id: str(formData, "project_id") || undefined,
+    deal_id,
+    organisation_id: str(formData, "organisation_id") || deal?.organisation_id || undefined,
+    contact_id: str(formData, "contact_id") || undefined,
+  }
+  const problem = checkTaskLinks(db, workspace.id, links)
+  if (problem) return { ok: false, message: problem }
+
+  const forName = db.profiles.find((p) => p.id === links.assignee_id)?.full_name ?? "someone"
+
+  await mutate((d) => {
+    d.tasks.push({
+      id: newId(),
+      workspace_id: workspace.id,
+      title,
+      notes: str(formData, "notes") || undefined,
+      status: "todo",
+      priority,
+      due_at: due || undefined,
+      created_by: user.id,
+      created_at: now(),
+      ...links,
+    })
+    if (links.deal_id || links.organisation_id) {
+      log(d, workspace.id, user.id, `added a task for ${forName}: ${title}`, {
+        organisation_id: links.organisation_id,
+        deal_id: links.deal_id,
+      })
+    }
+  })
+
+  revalidateWork()
+  return {
+    ok: true,
+    message: links.assignee_id === user.id ? "Task added" : `Task added for ${forName.split(" ")[0]}`,
+  }
+}
+
+export async function setTaskStatus(taskId: string, status: TaskStatus): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change tasks" }
+  if (!(status in TASK_STATUS)) return { ok: false, message: "That is not a status" }
+
+  const db = await readDb()
+  const task = db.tasks.find((t) => t.id === taskId && t.workspace_id === workspace.id)
+  if (!task) return { ok: false, message: "That task is not here" }
+  if (task.status === status) return { ok: true, message: "" }
+
+  await mutate((d) => {
+    const t = d.tasks.find((x) => x.id === taskId)!
+    t.status = status
+    t.completed_at = status === "done" ? now() : undefined
+    if (status === "done" && (t.deal_id || t.organisation_id)) {
+      log(d, workspace.id, user.id, `finished: ${t.title}`, {
+        organisation_id: t.organisation_id,
+        deal_id: t.deal_id,
+      })
+    }
+  })
+
+  revalidateWork()
+  return { ok: true, message: status === "done" ? "Done" : `Moved to ${TASK_STATUS[status].label.toLowerCase()}` }
+}
+
+export async function updateTask(taskId: string, formData: FormData): Promise<Result> {
+  const { workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change tasks" }
+
+  const db = await readDb()
+  const task = db.tasks.find((t) => t.id === taskId && t.workspace_id === workspace.id)
+  if (!task) return { ok: false, message: "That task is not here" }
+
+  const title = str(formData, "title")
+  if (title.length < 2) return { ok: false, message: "Say what needs doing" }
+  const priority = (str(formData, "priority") || task.priority) as Priority
+  if (!(priority in PRIORITY_LABEL)) return { ok: false, message: "Pick a priority" }
+  const due = str(formData, "due_at")
+  if (due && Number.isNaN(Date.parse(due))) return { ok: false, message: "That due date is not a date" }
+  const assignee_id = str(formData, "assignee_id") || task.assignee_id
+  const problem = checkTaskLinks(db, workspace.id, { assignee_id })
+  if (problem) return { ok: false, message: problem }
+
+  await mutate((d) => {
+    const t = d.tasks.find((x) => x.id === taskId)!
+    t.title = title
+    t.priority = priority
+    t.due_at = due || undefined
+    t.assignee_id = assignee_id
+    t.notes = str(formData, "notes") || undefined
+  })
+
+  revalidateWork()
+  return { ok: true, message: "Saved" }
+}
+
+export async function deleteTask(taskId: string): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  const db = await readDb()
+  const task = db.tasks.find((t) => t.id === taskId && t.workspace_id === workspace.id)
+  if (!task) return { ok: false, message: "That task is gone already" }
+  if (task.created_by !== user.id && !can.editWorkspace(role)) {
+    return { ok: false, message: "Only the person who added it, or an admin, can remove it" }
+  }
+
+  await mutate((d) => {
+    d.tasks = d.tasks.filter((t) => t.id !== taskId)
+  })
+
+  revalidateWork()
+  return { ok: true, message: "Task removed" }
 }

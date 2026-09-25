@@ -3,10 +3,17 @@ import { ArrowRight, Check, Clock, Search, TrendingUp, UserPlus } from "lucide-r
 
 import { Band, BandTitle, toneAfterLead } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
+import { TaskList } from "@/components/app/tasks"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { getSetupState, getTodayNumbers, pendingInviteCount } from "@/lib/data/queries"
+import {
+  getSetupState,
+  getTodayNumbers,
+  listAssignees,
+  listTasks,
+  pendingInviteCount,
+} from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can, money, moneyShort, stageOf } from "@/lib/data/types"
 import { WelcomeToast } from "./welcome-toast"
@@ -38,11 +45,15 @@ function Ring({ value, label }: { value: number; label: string }) {
 
 export default async function TodayPage() {
   const { user, workspace, role } = await requireContext()
-  const [setup, numbers, pending] = await Promise.all([
+  const [setup, numbers, pending, myTasks, assignees] = await Promise.all([
     getSetupState(workspace.id, user.id),
     getTodayNumbers(workspace.id),
     pendingInviteCount(workspace.id),
+    listTasks(workspace.id, { assignee: user.id }),
+    listAssignees(workspace.id),
   ])
+  // Today shows what is late, due now or due soon; the rest waits on your page.
+  const tasksNow = myTasks.filter((t) => t.dueInDays !== null && t.dueInDays <= 2).slice(0, 6)
 
   const today = new Date().toLocaleDateString("en-GB", {
     weekday: "long",
@@ -56,11 +67,13 @@ export default async function TodayPage() {
 
   // Which bands are showing decides their tone, so neighbours always differ.
   const shown = [
+    tasksNow.length > 0 && "tasks",
     touchesDue.length > 0 && "speak",
     pipeline.closingSoon.length > 0 && "closing",
     setup.done < setup.total && "setup",
   ].filter(Boolean)
   const band = {
+    tasks: shown.indexOf("tasks"),
     speak: shown.indexOf("speak"),
     closing: shown.indexOf("closing"),
     setup: shown.indexOf("setup"),
@@ -162,9 +175,36 @@ export default async function TodayPage() {
           </div>
         </Band>
 
+        {/* What you said you would do. */}
+        {tasksNow.length > 0 && (
+          <Band tone={toneAfterLead(band.tasks)} index={1} narrow label="Your tasks">
+            <BandTitle
+              action={
+                <Link
+                  href={`/team/${user.id}`}
+                  className="text-primary flex min-h-8 items-center gap-1 normal-case"
+                >
+                  All your tasks <ArrowRight className="size-3" />
+                </Link>
+              }
+            >
+              Your tasks · due soon
+            </BandTitle>
+            <TaskList
+              tasks={tasksNow}
+              canEdit={can.edit(role)}
+              assignees={assignees}
+              userId={user.id}
+              isAdmin={can.editWorkspace(role)}
+              showAssignee={false}
+              empty=""
+            />
+          </Band>
+        )}
+
         {/* Who is waiting on you. */}
         {touchesDue.length > 0 && (
-          <Band tone={toneAfterLead(band.speak)} index={1} narrow label="Speak to these people">
+          <Band tone={toneAfterLead(band.speak)} index={2} narrow label="Speak to these people">
             <BandTitle>Speak to these people</BandTitle>
             <Card className="py-0">
               <CardContent className="divide-border divide-y p-0">
@@ -204,7 +244,7 @@ export default async function TodayPage() {
 
         {/* Deals about to land. */}
         {pipeline.closingSoon.length > 0 && (
-          <Band tone={toneAfterLead(band.closing)} index={2} narrow label="Closing soon">
+          <Band tone={toneAfterLead(band.closing)} index={3} narrow label="Closing soon">
             <BandTitle
               action={
                 <Link
@@ -240,7 +280,7 @@ export default async function TodayPage() {
         )}
 
         {setup.done < setup.total && (
-          <Band tone={toneAfterLead(band.setup)} index={3} narrow label="Setting up">
+          <Band tone={toneAfterLead(band.setup)} index={4} narrow label="Setting up">
             <Card className="gap-0 py-0">
               <CardContent className="flex items-center gap-4 p-6">
                 <Ring

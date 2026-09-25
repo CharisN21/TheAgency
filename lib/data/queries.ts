@@ -25,6 +25,7 @@ import {
   type Role,
   type SavedView,
   type StageId,
+  type Task,
 } from "./types"
 
 export type Member = Profile & { role: Role; title?: string; joined: string }
@@ -557,4 +558,77 @@ export async function getMemberOverview(workspaceId: string, memberId: string) {
     ).length,
     people: db.profiles,
   }
+}
+
+/* ------------------------------------------------------------------ tasks */
+
+export type TaskRow = Task & {
+  assignee?: Profile
+  project?: { id: string; name: string }
+  /** The record it hangs off, for the small line under the title. */
+  link?: { label: string; href: string }
+  /** Negative when late, null when there is no due date. */
+  dueInDays: number | null
+}
+
+export type TaskFilter = {
+  assignee?: string
+  project?: string
+  deal?: string
+  organisation?: string
+  /** Done tasks are hidden unless asked for; the most recent few come back. */
+  withDone?: boolean
+}
+
+export async function listTasks(workspaceId: string, f: TaskFilter = {}): Promise<TaskRow[]> {
+  const db = await readDb()
+  const rows = db.tasks
+    .filter((t) => t.workspace_id === workspaceId)
+    .filter((t) => (f.assignee ? t.assignee_id === f.assignee : true))
+    .filter((t) => (f.project ? t.project_id === f.project : true))
+    .filter((t) => (f.deal ? t.deal_id === f.deal : true))
+    .filter((t) => (f.organisation ? t.organisation_id === f.organisation : true))
+    .map((t): TaskRow => {
+      const project = db.projects.find((p) => p.id === t.project_id)
+      const deal = db.deals.find((d) => d.id === t.deal_id)
+      const org = db.organisations.find((o) => o.id === t.organisation_id)
+      const contact = db.contacts.find((c) => c.id === t.contact_id)
+      // Name the most specific record, and skip the one the page is already about.
+      const link =
+        deal && !f.deal
+          ? { label: deal.title, href: `/deals/${deal.id}` }
+          : org && !f.organisation
+            ? { label: org.name, href: `/organisations/${org.id}` }
+            : contact && org
+              ? { label: contact.full_name, href: `/organisations/${org.id}` }
+              : undefined
+      return {
+        ...t,
+        assignee: db.profiles.find((p) => p.id === t.assignee_id),
+        project: project && !f.project ? { id: project.id, name: project.name } : undefined,
+        link,
+        dueInDays: t.due_at ? Math.ceil((new Date(t.due_at).getTime() - Date.now()) / 864e5) : null,
+      }
+    })
+
+  const open = rows
+    .filter((t) => t.status !== "done")
+    .sort(
+      (a, b) =>
+        (a.dueInDays ?? 9999) - (b.dueInDays ?? 9999) ||
+        ["high", "medium", "low"].indexOf(a.priority) - ["high", "medium", "low"].indexOf(b.priority)
+    )
+  if (!f.withDone) return open
+  const done = rows
+    .filter((t) => t.status === "done")
+    .sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""))
+    .slice(0, 5)
+  return [...open, ...done]
+}
+
+/** People a task can be for: everyone in the workspace who can edit. */
+export async function listAssignees(workspaceId: string) {
+  return (await listMembers(workspaceId))
+    .filter((m) => m.role !== "viewer")
+    .map((m) => ({ value: m.id, label: m.full_name }))
 }

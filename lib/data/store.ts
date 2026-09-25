@@ -4,7 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 
-import type { Database } from "./types"
+import { periodStart, type Database } from "./types"
 
 /**
  * The local store: one JSON file under .data/, which is git-ignored.
@@ -143,6 +143,87 @@ export function seed(): Database {
     ...ids,
   })
 
+  // Phase 1: one live project, tasks in and out of it, and objectives for the period.
+  const ppeProject = {
+    id: newId(),
+    workspace_id: kilima.id,
+    name: "PPE Campaign",
+    scope: "Supply 2,000 PPE kits to Safaricom Partners by the end of October: masks, gloves and overalls, KEBS certified.",
+    organisation_id: safaricom.id,
+    deal_id: deals[1].id,
+    lead_id: wanjiru.id,
+    member_ids: [wanjiru.id, otieno.id, achieng.id],
+    status: "active" as const,
+    health: "on_track" as const,
+    due_at: days(35),
+    cadence: "weekly" as const,
+    created_at: days(-14),
+  }
+
+  const task = (
+    title: string,
+    assignee_id: string,
+    status: "todo" | "doing" | "review" | "done" | "blocked",
+    due_in: number | undefined,
+    priority: "low" | "medium" | "high",
+    links: { project_id?: string; organisation_id?: string; deal_id?: string; contact_id?: string } = {}
+  ) => ({
+    id: newId(),
+    workspace_id: kilima.id,
+    title,
+    status,
+    priority,
+    due_at: due_in === undefined ? undefined : days(due_in),
+    assignee_id,
+    created_by: charis.id,
+    created_at: days(-10),
+    completed_at: status === "done" ? days(-2) : undefined,
+    ...links,
+  })
+
+  const p = { project_id: ppeProject.id, organisation_id: safaricom.id }
+  const tasks = [
+    task("Confirm KEBS certificate", wanjiru.id, "doing", 0, "high", p),
+    task("Send quote to Safaricom", otieno.id, "todo", 2, "medium", { ...p, deal_id: deals[1].id, contact_id: james.id }),
+    task("Collect 3 supplier prices", achieng.id, "done", -3, "medium", p),
+    task("Book truck for first delivery", wanjiru.id, "todo", 12, "low", p),
+    task("Chase glove sample", otieno.id, "blocked", -1, "high", p),
+    // Not every task needs a project.
+    task("Call Mercy about the band 3 price", charis.id, "todo", 1, "high", { organisation_id: vision.id, deal_id: deals[0].id, contact_id: mercy.id }),
+    task("Renew the Kiambu supplier registration", charis.id, "todo", 9, "medium", { organisation_id: county.id }),
+    task("Read the new KEBS guidance", charis.id, "todo", undefined, "low"),
+  ]
+
+  const objective = (
+    owner_id: string,
+    title: string,
+    period: "week" | "month" | "year",
+    measure: "number" | "money" | "done" | "won",
+    target: number | undefined,
+    progress = 0
+  ) => ({
+    id: newId(),
+    workspace_id: kilima.id,
+    owner_id,
+    set_by: charis.id,
+    title,
+    period,
+    period_start: periodStart(period),
+    measure,
+    target,
+    progress,
+    done: false,
+    created_at: now(),
+  })
+
+  const objectives = [
+    objective(charis.id, "Visit 5 suppliers", "week", "number", 5, 2),
+    objective(charis.id, "Win KSh 1,000,000 in deals", "month", "won", 1_000_000),
+    objective(charis.id, "Sign the Safaricom supply agreement", "month", "done", undefined),
+    objective(charis.id, "Turnover of KSh 12M across Kilima Labs", "year", "money", 12_000_000, 3_400_000),
+    objective(wanjiru.id, "KEBS certificates for all PPE lines", "month", "number", 3, 1),
+  ]
+
   return {
     profiles: [charis, wanjiru, otieno, achieng, brian],
     workspaces: [kilima, ppe],
@@ -171,6 +252,9 @@ export function seed(): Database {
     deals,
     views: [],
     not_duplicates: [],
+    projects: [ppeProject],
+    tasks,
+    objectives,
     activities: [
       act("call", "Called about mask pricing — promised band 3 rates", 6, { organisation_id: vision.id, contact_id: mercy.id, deal_id: deals[0].id }),
       act("note", "Will discount at 500 units", 6, { organisation_id: vision.id, contact_id: mercy.id }),
@@ -193,6 +277,9 @@ export async function readDb(): Promise<Database> {
     if (!parsed.workspaces || !parsed.deals) throw new Error("stale shape")
     parsed.views ??= []
     parsed.not_duplicates ??= []
+    parsed.projects ??= []
+    parsed.tasks ??= []
+    parsed.objectives ??= []
     cache = parsed as Database
   } catch {
     cache = seed()

@@ -1,13 +1,14 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft, Building2, Clock, Contact, HandCoins, ListChecks } from "lucide-react"
+import { ArrowLeft, Building2, Clock, Contact, HandCoins, Target } from "lucide-react"
 
 import { Band, BandStat, BandTitle, toneAfterLead } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
+import { NewTask, TaskList } from "@/components/app/tasks"
 import { Timeline } from "@/components/app/timeline"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { getMemberOverview } from "@/lib/data/queries"
+import { getMemberOverview, listAssignees, listTasks } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { ORG_CATEGORY_LABEL, ROLE_LABEL, can, money, moneyShort, stageOf } from "@/lib/data/types"
 
@@ -47,8 +48,13 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   // Someone who may not see this page learns nothing about it, not even that it exists.
   if (!can.viewMember(role, user.id, id)) notFound()
 
-  const found = await getMemberOverview(workspace.id, id)
+  const [found, tasks, assignees] = await Promise.all([
+    getMemberOverview(workspace.id, id),
+    listTasks(workspace.id, { assignee: id, withDone: true }),
+    listAssignees(workspace.id),
+  ])
   if (!found) notFound()
+  const canEdit = can.edit(role)
 
   const { member, organisations, contacts, openDeals, closedDeals } = found
   const self = member.id === user.id
@@ -108,8 +114,46 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           </div>
         </Band>
 
-        {/* People first: they are what needs doing today. */}
-        <Band tone={toneAfterLead(0)} index={1} label="People">
+        <Band tone={toneAfterLead(0)} index={1} label="Objectives">
+          <BandTitle>{whose} objectives</BandTitle>
+          <Empty icon={Target}>Objectives for the week, month and year are next.</Empty>
+        </Band>
+
+        <Band tone={toneAfterLead(1)} index={2} label="Tasks">
+          <BandTitle
+            action={
+              canEdit && (
+                <NewTask
+                  assignees={assignees}
+                  defaultAssignee={member.id}
+                  context={
+                    self
+                      ? "For you, unless you choose someone else."
+                      : `For ${first}, unless you choose someone else.`
+                  }
+                />
+              )
+            }
+          >
+            {whose} tasks
+          </BandTitle>
+          <TaskList
+            tasks={tasks}
+            canEdit={canEdit}
+            assignees={assignees}
+            userId={user.id}
+            isAdmin={can.editWorkspace(role)}
+            showAssignee={false}
+            empty={
+              self
+                ? "Nothing on your list. Add a task, or finish one elsewhere."
+                : `Nothing on ${first}'s list.`
+            }
+          />
+        </Band>
+
+        {/* Then people: they are what needs doing today. */}
+        <Band tone={toneAfterLead(2)} index={3} label="People">
           <BandTitle>
             People {first} {self ? "are" : "is"} contacting
           </BandTitle>
@@ -150,7 +194,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           )}
         </Band>
 
-        <Band tone={toneAfterLead(1)} index={2} label="Deals">
+        <Band tone={toneAfterLead(3)} index={4} label="Deals">
           <BandTitle>{whose} deals</BandTitle>
           {openDeals.length === 0 && closedDeals.length === 0 ? (
             <Empty icon={HandCoins}>No deals yet.</Empty>
@@ -184,7 +228,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           )}
         </Band>
 
-        <Band tone={toneAfterLead(2)} index={3} label="Organisations">
+        <Band tone={toneAfterLead(4)} index={5} label="Organisations">
           <BandTitle>
             Organisations {first} look{self ? "" : "s"} after
           </BandTitle>
@@ -222,21 +266,13 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           )}
         </Band>
 
-        <Band tone={toneAfterLead(3)} index={4} label="Recent activity">
+        <Band tone={toneAfterLead(5)} index={6} label="Recent activity" className="pb-10">
           <BandTitle>What {first} logged lately</BandTitle>
           <Timeline
             activities={found.activities}
             people={found.people}
             empty={`Nothing logged yet. Calls, visits and messages ${first} record${self ? "" : "s"} show up here.`}
           />
-        </Band>
-
-        <Band tone={toneAfterLead(4)} index={5} label="Tasks and objectives" className="pb-10">
-          <BandTitle>Tasks and objectives</BandTitle>
-          <Empty icon={ListChecks}>
-            {whose} tasks, and objectives for the week, month and year, arrive here with Phase 1:
-            projects and tasks.
-          </Empty>
         </Band>
       </main>
     </div>
