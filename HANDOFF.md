@@ -24,14 +24,14 @@ There is **no database on purpose**. Everything lives in `.data/agency.json`, wr
 
 **Deal page** — `/deals/[id]`: worth and expected value, the stages as tappable steps (lost always asks why; a lost deal reopens by tapping a stage), who you deal with with one-tap call/WhatsApp/email, other deals with the same organisation, and the deal's own history with a log box. Edit changes name, value, close date, person (must work at the organisation) and owner (must be in the workspace). Pipeline cards, Today's "Closing soon" and organisation pages link to it.
 
-**Bands** — pages are built from full-width sections (`components/app/band.tsx`): one `accent` lead band (the soft maroon tint), then `plain` and `soft` (greige, hairlines above and below) alternating via `toneAfterLead`. Each band rises in on load (240ms, 60ms apart) and again as it scrolls into view (CSS scroll timeline; browsers without it just show the section; off for reduced motion). Used on Today, organisation pages and deal pages. The idea came from prolithica.com; only existing tokens are used.
+**Bands** — pages are built from full-width sections (`components/app/band.tsx`): one `accent` lead band (the soft maroon tint), then `plain` and `soft` (greige, hairlines above and below) alternating via `toneAfterLead`. Each band rises in on load (240ms, 60ms apart) and again as it scrolls into view (CSS scroll timeline; browsers without it just show the section; off for reduced motion). Every signed-in page uses them: each leads with a tinted band holding its key numbers (`BandStat` tiles, compact and side by side on a phone) or a short explanation, then alternates. Boards and tables pass `wide`, reading pages pass `narrow`. The idea came from prolithica.com; only existing tokens are used.
 
 Every action returns a result and raises a toast. Lists have skeletons and empty states. `app/(app)/error.tsx` catches the rest.
 
 ## What is next, in order
 
 1. **Try the import on the real supplier and Safaricom sheets**, then run the duplicates review on what came in.
-2. **Bands on the remaining pages** (People, Organisations list, Deals, Team, Settings), then record the band pattern in the design system source (`design-system/`).
+2. **Record the band pattern in the design system** source (`design-system/`), so the published system matches the app. Also fix the one lint error in `app/(app)/team/invite-dialog.tsx` (setState inside an effect).
 3. **Bulk actions and filters on people and deals** — the organisations pattern, copied across (`org-table.tsx` and `filter-bar.tsx` are the models).
 4. **Custom fields** — per workspace, per object, AI-suggested and approved.
 5. **Phase 5 — notifications, then encrypted messaging.** Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
@@ -77,7 +77,7 @@ It holds the tokens (maroon `#7c1f35` on warm greige), the logo and its motion, 
 
 This session has run long. A clean split:
 
-- **Session A (this one, or its successor):** CRM depth — bands on the remaining pages, bulk actions on people and deals, custom fields. Import, merge and the deal page are done. Everything in `lib/data/` and `app/(app)/`.
+- **Session A (this one, or its successor):** CRM depth — bulk actions on people and deals, custom fields. Import, merge, the deal page and the bands are done. Everything in `lib/data/` and `app/(app)/`.
 - **Session B:** Phase 5 — notification centre, then encrypted messaging. Start from `docs/phase-5-messaging-and-notifications.md`; it is self-contained.
 - **Session C:** Phase 1 — projects and tasks. Start from the design system's Phase 1 boards.
 
