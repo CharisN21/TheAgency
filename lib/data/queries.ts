@@ -34,6 +34,8 @@ import {
   type ObjectivePeriod,
   type CheckIn,
   TASK_STATUS,
+  can,
+  type Flag,
 } from "./types"
 
 export type Member = Profile & { role: Role; title?: string; joined: string }
@@ -823,4 +825,53 @@ export async function draftCheckIn(workspaceId: string, projectId: string) {
     health: project.health,
     since,
   }
+}
+
+/* ------------------------------------------------------------------ flags */
+
+export type FlagRow = Flag & {
+  raisedBy?: string
+  about?: { id: string; name: string }
+  project?: { id: string; name: string }
+  task?: { id: string; title: string }
+}
+
+type Viewer = { id: string; role: Role }
+
+function toFlagRow(db: Awaited<ReturnType<typeof readDb>>, f: Flag): FlagRow {
+  const about = db.profiles.find((p) => p.id === f.about_user_id)
+  const project = db.projects.find((p) => p.id === f.project_id)
+  const task = db.tasks.find((t) => t.id === f.task_id)
+  return {
+    ...f,
+    raisedBy: db.profiles.find((p) => p.id === f.raised_by)?.full_name,
+    about: about ? { id: about.id, name: about.full_name } : undefined,
+    project: project ? { id: project.id, name: project.name } : undefined,
+    task: task ? { id: task.id, title: task.title } : undefined,
+  }
+}
+
+/**
+ * The flags this viewer may see, and no others: ones they raised, and — for
+ * owners and admins — everyone's, except any about the viewer themselves.
+ */
+export async function listFlags(workspaceId: string, viewer: Viewer): Promise<FlagRow[]> {
+  const db = await readDb()
+  const weight = { serious: 0, warning: 1, note: 2 }
+  return db.flags
+    .filter((f) => f.workspace_id === workspaceId && can.seeFlag(viewer.role, viewer.id, f))
+    .map((f) => toFlagRow(db, f))
+    .sort(
+      (a, b) =>
+        (a.status === "open" ? 0 : 1) - (b.status === "open" ? 0 : 1) ||
+        weight[a.severity] - weight[b.severity] ||
+        b.created_at.localeCompare(a.created_at)
+    )
+}
+
+export async function getFlag(workspaceId: string, viewer: Viewer, id: string): Promise<FlagRow | null> {
+  const db = await readDb()
+  const f = db.flags.find((x) => x.id === id && x.workspace_id === workspaceId)
+  if (!f || !can.seeFlag(viewer.role, viewer.id, f)) return null
+  return toFlagRow(db, f)
 }

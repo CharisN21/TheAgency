@@ -8,6 +8,7 @@ import { ProgressRing } from "@/components/app/progress-ring"
 import { HealthPill, ProjectForm, ProjectTasks } from "@/components/app/projects"
 import { NewTask } from "@/components/app/tasks"
 import { CheckInList, WriteCheckIn } from "@/components/app/check-ins"
+import { RaiseFlag } from "@/components/app/flags"
 import { Timeline } from "@/components/app/timeline"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -215,7 +216,22 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               </Card>
             </div>
             <div>
-              <BandTitle>Who is on it</BandTitle>
+              <BandTitle
+                action={
+                  editable && (
+                    <RaiseFlag
+                      people={p.members
+                        .filter((m) => m.id !== user.id)
+                        .map((m) => ({ value: m.id, label: m.full_name }))}
+                      projects={[{ value: p.id, label: p.name }]}
+                      projectId={p.id}
+                      variant="ghost"
+                    />
+                  )
+                }
+              >
+                Who is on it
+              </BandTitle>
               <Card className="py-0">
                 <CardContent className="divide-border divide-y p-0">
                   {p.members.map((m) => (

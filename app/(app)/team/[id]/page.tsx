@@ -4,12 +4,20 @@ import { ArrowLeft, Building2, Clock, Contact, HandCoins } from "lucide-react"
 
 import { Band, BandStat, BandTitle, toneAfterLead } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
+import { RaiseFlag } from "@/components/app/flags"
 import { NewObjective, Objectives } from "@/components/app/objectives"
 import { NewTask, TaskList } from "@/components/app/tasks"
 import { Timeline } from "@/components/app/timeline"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { getMemberOverview, listAssignees, listObjectives, listTasks } from "@/lib/data/queries"
+import {
+  getMemberOverview,
+  listAssignees,
+  listFlags,
+  listObjectives,
+  listProjects,
+  listTasks,
+} from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { ORG_CATEGORY_LABEL, ROLE_LABEL, can, money, moneyShort, stageOf } from "@/lib/data/types"
 
@@ -66,6 +74,17 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   const first = self ? "you" : member.full_name.split(" ")[0]
   const whose = self ? "Your" : `${first}'s`
 
+  // Private flags about this person: shown to the viewer only if the viewer may
+  // see them, and never on a person's own page.
+  const [flagsAbout, projects] = self
+    ? [[], []]
+    : await Promise.all([
+        listFlags(workspace.id, { id: user.id, role }).then((all) =>
+          all.filter((f) => f.about_user_id === id && f.status === "open"),
+        ),
+        listProjects(workspace.id),
+      ])
+
   return (
     <div className="flex min-h-svh flex-col">
       <PageHeader title={self ? "Your page" : member.full_name} meta={ROLE_LABEL[member.role]} />
@@ -117,6 +136,25 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
               help="Calls, visits, messages, notes"
             />
           </div>
+
+          {!self && canEdit && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+              <RaiseFlag
+                people={[{ value: member.id, label: member.full_name }]}
+                projects={projects
+                  .filter((p) => p.status === "active")
+                  .map((p) => ({ value: p.id, label: p.name }))}
+                aboutUserId={member.id}
+                variant="ghost"
+              />
+              {flagsAbout.length > 0 && (
+                <Link href="/flags" className="text-muted-foreground hover:underline">
+                  {flagsAbout.length} open private flag{flagsAbout.length === 1 ? "" : "s"} about{" "}
+                  {first}
+                </Link>
+              )}
+            </div>
+          )}
         </Band>
 
         <Band tone={toneAfterLead(0)} index={1} label="Objectives">

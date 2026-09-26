@@ -315,6 +315,39 @@ export type CheckIn = {
   created_at: string
 }
 
+export type FlagSeverity = "note" | "warning" | "serious"
+
+export const SEVERITY: Record<FlagSeverity, { label: string; tone: string; help: string }> = {
+  note: { label: "Note", tone: "bg-info-soft text-info", help: "Worth keeping an eye on." },
+  warning: { label: "Warning", tone: "bg-warn-soft text-warn", help: "Needs a conversation soon." },
+  serious: { label: "Serious", tone: "bg-danger-soft text-destructive", help: "Needs a conversation now." },
+}
+
+/**
+ * A private concern. Only the person who raised it, and owners and admins
+ * who are not the person it is about, ever see it. It never appears on a
+ * timeline or any shared record.
+ */
+export type Flag = {
+  id: string
+  workspace_id: string
+  raised_by: string
+  /** The person it is about, if it is about a person. They never see it. */
+  about_user_id?: string
+  project_id?: string
+  task_id?: string
+  severity: FlagSeverity
+  situation: string
+  behaviour: string
+  impact: string
+  status: "open" | "closed"
+  /** Logged after the conversation, which closes the flag. */
+  talked_at?: string
+  conversation?: string
+  agreed_change?: string
+  created_at: string
+}
+
 export type ObjectivePeriod = "week" | "month" | "year"
 
 export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
@@ -377,6 +410,7 @@ export type Database = {
   tasks: Task[]
   objectives: Objective[]
   check_ins: CheckIn[]
+  flags: Flag[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */
@@ -389,6 +423,13 @@ export const can = {
   /** Viewers read everything they can see, and change nothing. */
   edit: (r: Role) => r !== "viewer",
   seeFlags: (r: Role) => r === "owner" || r === "admin",
+  /**
+   * A private flag: the person who raised it, and owners and admins — but never
+   * the person it is about, whatever their role.
+   */
+  seeFlag: (r: Role, viewerId: string, flag: { raised_by: string; about_user_id?: string }) =>
+    flag.raised_by === viewerId ||
+    ((r === "owner" || r === "admin") && flag.about_user_id !== viewerId),
   /** A member's own page: owners and admins open anyone's; everyone else only their own. */
   viewMember: (r: Role, viewerId: string, memberId: string) =>
     r === "owner" || r === "admin" || viewerId === memberId,

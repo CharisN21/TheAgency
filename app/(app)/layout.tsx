@@ -2,7 +2,7 @@ import { AppSidebar } from "@/components/app/app-sidebar"
 import { MobileTabBar } from "@/components/app/mobile-tabbar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { listContacts, listDeals, listOrganisations, listProjects } from "@/lib/data/queries"
+import { listContacts, listDeals, listFlags, listOrganisations, listProjects } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { OPEN_STAGES } from "@/lib/data/types"
 
@@ -11,11 +11,12 @@ export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const { user, workspace, role, workspaces } = await requireContext()
-  const [organisations, people, deals, projects] = await Promise.all([
+  const [organisations, people, deals, projects, flags] = await Promise.all([
     listOrganisations(workspace.id),
     listContacts(workspace.id),
     listDeals(workspace.id),
     listProjects(workspace.id),
+    listFlags(workspace.id, { id: user.id, role }),
   ])
 
   return (
@@ -37,6 +38,7 @@ export default async function AppLayout({
             people: people.length,
             openDeals: deals.filter((d) => OPEN_STAGES.includes(d.stage)).length,
             projects: projects.filter((p) => p.status === "active").length,
+            flags: flags.filter((f) => f.status === "open").length,
           }}
         />
         {/* min-w-0 lets wide content (the pipeline board) scroll inside the page instead of widening it. */}

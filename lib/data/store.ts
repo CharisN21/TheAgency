@@ -255,6 +255,21 @@ export function seed(): Database {
     projects: [ppeProject],
     tasks,
     objectives,
+    flags: [
+      {
+        id: newId(),
+        workspace_id: kilima.id,
+        raised_by: charis.id,
+        about_user_id: otieno.id,
+        project_id: ppeProject.id,
+        severity: "warning" as const,
+        situation: "The PPE Campaign over the last two weeks",
+        behaviour: "the glove sample has been blocked for days and nobody was told until the check-in",
+        impact: "the Safaricom quote cannot go out and the first delivery is at risk",
+        status: "open" as const,
+        created_at: days(-1),
+      },
+    ],
     check_ins: [
       {
         id: newId(),
@@ -296,6 +311,7 @@ export async function readDb(): Promise<Database> {
     parsed.tasks ??= []
     parsed.objectives ??= []
     parsed.check_ins ??= []
+    parsed.flags ??= []
     cache = parsed as Database
   } catch {
     cache = seed()

@@ -43,6 +43,8 @@ import {
   PERIOD_LABEL,
   periodStart,
   type ObjectivePeriod,
+  SEVERITY,
+  type FlagSeverity,
   type Priority,
   type TaskStatus,
 } from "./types"
@@ -1808,4 +1810,126 @@ export async function postCheckIn(projectId: string, formData: FormData): Promis
 
   revalidateWork()
   return { ok: true, message: "Check-in posted" }
+}
+
+/* ------------------------------------------------------------------ flags */
+// Flags are private. None of these write to the activity timeline, and every
+// one of them checks can.seeFlag before touching an existing flag.
+
+export async function raiseFlag(formData: FormData): Promise<Result & { id?: string }> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot raise flags" }
+
+  const severity = str(formData, "severity") as FlagSeverity
+  if (!(severity in SEVERITY)) return { ok: false, message: "Pick note, warning or serious" }
+  const situation = str(formData, "situation")
+  const behaviour = str(formData, "behaviour")
+  const impact = str(formData, "impact")
+  for (const [label, text] of [["situation", situation], ["what happened", behaviour], ["effect", impact]]) {
+    if (text.length < 3) return { ok: false, message: `Describe the ${label} in a few words` }
+    if (text.length > 1000) return { ok: false, message: `Keep the ${label} under 1,000 characters` }
+  }
+
+  const db = await readDb()
+  const about_user_id = str(formData, "about_user_id") || undefined
+  if (about_user_id) {
+    if (about_user_id === user.id) return { ok: false, message: "A flag is about someone else. Keep your own notes in a task." }
+    if (!db.memberships.some((m) => m.workspace_id === workspace.id && m.user_id === about_user_id)) {
+      return { ok: false, message: "That person is not in this workspace" }
+    }
+  }
+  const project_id = str(formData, "project_id") || undefined
+  const task_id = str(formData, "task_id") || undefined
+  const here = (rows: { id: string; workspace_id: string }[], id?: string) =>
+    !id || rows.some((r) => r.id === id && r.workspace_id === workspace.id)
+  if (!here(db.projects, project_id) || !here(db.tasks, task_id)) {
+    return { ok: false, message: "That record is not in this workspace" }
+  }
+  if (!about_user_id && !project_id && !task_id) {
+    return { ok: false, message: "Say who or what the flag is about" }
+  }
+
+  const id = newId()
+  await mutate((d) => {
+    d.flags.push({
+      id,
+      workspace_id: workspace.id,
+      raised_by: user.id,
+      about_user_id,
+      project_id,
+      task_id,
+      severity,
+      situation,
+      behaviour,
+      impact,
+      status: "open",
+      created_at: now(),
+    })
+  })
+
+  revalidatePath("/flags", "layout")
+  revalidatePath("/team", "layout")
+  return { ok: true, message: "Flag raised. Only you and owners and admins can see it.", id }
+}
+
+/** After the conversation: what was said and the one change agreed. Closes the flag. */
+export async function logFlagConversation(flagId: string, formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change flags" }
+  const db = await readDb()
+  const f = db.flags.find((x) => x.id === flagId && x.workspace_id === workspace.id)
+  if (!f || !can.seeFlag(role, user.id, f)) return { ok: false, message: "That flag is not here" }
+
+  const conversation = str(formData, "conversation")
+  const agreed_change = str(formData, "agreed_change")
+  if (agreed_change.length < 3) return { ok: false, message: "Write down the one change you agreed" }
+  if (conversation.length > 4000 || agreed_change.length > 1000) {
+    return { ok: false, message: "That is too long to keep" }
+  }
+
+  await mutate((d) => {
+    const x = d.flags.find((y) => y.id === flagId)!
+    x.conversation = conversation || undefined
+    x.agreed_change = agreed_change
+    x.talked_at = now()
+    x.status = "closed"
+  })
+
+  revalidatePath("/flags", "layout")
+  revalidatePath("/team", "layout")
+  return { ok: true, message: "Conversation logged. The flag is closed." }
+}
+
+export async function reopenFlag(flagId: string): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change flags" }
+  const db = await readDb()
+  const f = db.flags.find((x) => x.id === flagId && x.workspace_id === workspace.id)
+  if (!f || !can.seeFlag(role, user.id, f)) return { ok: false, message: "That flag is not here" }
+
+  await mutate((d) => {
+    d.flags.find((y) => y.id === flagId)!.status = "open"
+  })
+
+  revalidatePath("/flags", "layout")
+  revalidatePath("/team", "layout")
+  return { ok: true, message: "Flag reopened" }
+}
+
+export async function deleteFlag(flagId: string): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  const db = await readDb()
+  const f = db.flags.find((x) => x.id === flagId && x.workspace_id === workspace.id)
+  if (!f || !can.seeFlag(role, user.id, f)) return { ok: false, message: "That flag is not here" }
+  if (f.raised_by !== user.id && !can.editWorkspace(role)) {
+    return { ok: false, message: "Only the person who raised it, or an admin, can remove it" }
+  }
+
+  await mutate((d) => {
+    d.flags = d.flags.filter((y) => y.id !== flagId)
+  })
+
+  revalidatePath("/flags", "layout")
+  revalidatePath("/team", "layout")
+  redirect("/flags")
 }

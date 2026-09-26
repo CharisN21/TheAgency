@@ -6,6 +6,7 @@ import {
   Building2,
   CalendarDays,
   Contact,
+  Flag,
   FolderKanban,
   HandCoins,
   NotebookPen,
@@ -49,7 +50,7 @@ export function AppSidebar({
   currentId: string
   user: { full_name: string; email: string }
   role: Role
-  counts: { organisations: number; people: number; openDeals: number; projects: number }
+  counts: { organisations: number; people: number; openDeals: number; projects: number; flags: number }
 }) {
   const pathname = usePathname()
   const initials = user.full_name
@@ -74,6 +75,7 @@ export function AppSidebar({
 
   const WORKSPACE: Item[] = [
     { href: "/team", label: "Team", icon: Users },
+    { href: "/flags", label: "Flags", icon: Flag, count: counts.flags },
     { href: "/mentor", label: "Mentor", icon: Sparkles, soon: true },
     { href: "/settings", label: "Settings", icon: SlidersHorizontal },
   ]
