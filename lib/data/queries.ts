@@ -28,6 +28,10 @@ import {
   type Task,
   CADENCE_DAYS,
   type Project,
+  periodEnd,
+  periodStart,
+  type Objective,
+  type ObjectivePeriod,
 } from "./types"
 
 export type Member = Profile & { role: Role; title?: string; joined: string }
@@ -711,4 +715,59 @@ export async function getProject(workspaceId: string, id: string) {
       .slice(0, 20),
     people: db.profiles,
   }
+}
+
+/* ------------------------------------------------------------- objectives */
+
+export type ObjectiveRow = Objective & {
+  /** What counts as progress right now: typed in, or counted from won deals. */
+  current: number
+  /** 0–100 */
+  percent: number
+}
+
+/**
+ * One person's objectives for the week, month and year they are in now.
+ * Who may see them is decided by the page (`can.viewMember`).
+ */
+export async function listObjectives(
+  workspaceId: string,
+  ownerId: string
+): Promise<Record<ObjectivePeriod, ObjectiveRow[]>> {
+  const db = await readDb()
+  const out: Record<ObjectivePeriod, ObjectiveRow[]> = { week: [], month: [], year: [] }
+  for (const period of ["week", "month", "year"] as ObjectivePeriod[]) {
+    const start = periodStart(period)
+    const end = periodEnd(period, start)
+    out[period] = db.objectives
+      .filter(
+        (o) => o.workspace_id === workspaceId && o.owner_id === ownerId && o.period === period && o.period_start === start
+      )
+      .map((o) => {
+        const current =
+          o.measure === "won"
+            ? db.deals
+                .filter(
+                  (d) =>
+                    d.workspace_id === workspaceId &&
+                    d.owner_id === ownerId &&
+                    d.stage === "won" &&
+                    (d.closed_at ?? "").slice(0, 10) >= start &&
+                    (d.closed_at ?? "").slice(0, 10) < end
+                )
+                .reduce((sum, d) => sum + d.value, 0)
+            : o.progress
+        const percent =
+          o.measure === "done"
+            ? o.done
+              ? 100
+              : 0
+            : o.target
+              ? Math.min(100, Math.round((current / o.target) * 100))
+              : 0
+        return { ...o, current, percent }
+      })
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+  }
+  return out
 }

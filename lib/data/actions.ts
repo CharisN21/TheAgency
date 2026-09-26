@@ -40,6 +40,9 @@ import {
   HEALTH,
   type Cadence,
   type ProjectHealth,
+  PERIOD_LABEL,
+  periodStart,
+  type ObjectivePeriod,
   type Priority,
   type TaskStatus,
 } from "./types"
@@ -1657,4 +1660,96 @@ export async function setProjectHealth(projectId: string, health: ProjectHealth)
 
   revalidateWork()
   return { ok: true, message: `${project.name}: ${HEALTH[health].label.toLowerCase()}` }
+}
+
+/* ------------------------------------------------------------- objectives */
+
+/** Objectives are personal: you set your own, and owners and admins set anyone's. */
+function mayTouchObjectives(role: Role, userId: string, ownerId: string) {
+  return can.edit(role) && (userId === ownerId || can.editWorkspace(role))
+}
+
+const MEASURES = ["number", "money", "done", "won"] as const
+
+export async function createObjective(formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  const owner_id = str(formData, "owner_id") || user.id
+  if (!mayTouchObjectives(role, user.id, owner_id)) {
+    return { ok: false, message: "You can set your own objectives. Owners and admins can set anyone's." }
+  }
+
+  const db = await readDb()
+  const member = db.memberships.find((m) => m.workspace_id === workspace.id && m.user_id === owner_id)
+  if (!member || member.role === "viewer") return { ok: false, message: "Objectives are for people who can work in this workspace" }
+
+  const title = str(formData, "title")
+  if (title.length < 2) return { ok: false, message: "Say what the objective is" }
+  const period = str(formData, "period") as ObjectivePeriod
+  if (!(period in PERIOD_LABEL)) return { ok: false, message: "Pick the week, the month or the year" }
+  const measure = str(formData, "measure") as (typeof MEASURES)[number]
+  if (!MEASURES.includes(measure)) return { ok: false, message: "Pick how it is measured" }
+  const target = Number(str(formData, "target").replace(/[^0-9.]/g, ""))
+  if (measure !== "done" && (!Number.isFinite(target) || target <= 0)) {
+    return { ok: false, message: "Give it a target above zero" }
+  }
+
+  await mutate((d) => {
+    d.objectives.push({
+      id: newId(),
+      workspace_id: workspace.id,
+      owner_id,
+      set_by: user.id,
+      title,
+      period,
+      period_start: periodStart(period),
+      measure,
+      target: measure === "done" ? undefined : Math.round(target),
+      progress: 0,
+      done: false,
+      created_at: now(),
+    })
+  })
+
+  revalidatePath(`/team/${owner_id}`)
+  return { ok: true, message: `Added for ${PERIOD_LABEL[period].toLowerCase()}` }
+}
+
+/** Progress typed in by the person, or done / not done. Counted objectives cannot be set by hand. */
+export async function updateObjective(
+  objectiveId: string,
+  change: { progress?: number; done?: boolean }
+): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  const db = await readDb()
+  const o = db.objectives.find((x) => x.id === objectiveId && x.workspace_id === workspace.id)
+  if (!o) return { ok: false, message: "That objective is not here" }
+  if (!mayTouchObjectives(role, user.id, o.owner_id)) return { ok: false, message: "That is someone else's objective" }
+  if (o.measure === "won") return { ok: false, message: "This one counts itself from won deals" }
+  if (change.progress !== undefined && (!Number.isFinite(change.progress) || change.progress < 0)) {
+    return { ok: false, message: "Progress has to be zero or more" }
+  }
+
+  await mutate((d) => {
+    const x = d.objectives.find((y) => y.id === objectiveId)!
+    if (change.progress !== undefined) x.progress = Math.round(change.progress)
+    if (change.done !== undefined) x.done = change.done
+  })
+
+  revalidatePath(`/team/${o.owner_id}`)
+  return { ok: true, message: change.done ? "Marked done" : change.done === false ? "Marked not done" : "Progress saved" }
+}
+
+export async function deleteObjective(objectiveId: string): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  const db = await readDb()
+  const o = db.objectives.find((x) => x.id === objectiveId && x.workspace_id === workspace.id)
+  if (!o) return { ok: false, message: "That objective is gone already" }
+  if (!mayTouchObjectives(role, user.id, o.owner_id)) return { ok: false, message: "That is someone else's objective" }
+
+  await mutate((d) => {
+    d.objectives = d.objectives.filter((x) => x.id !== objectiveId)
+  })
+
+  revalidatePath(`/team/${o.owner_id}`)
+  return { ok: true, message: "Objective removed" }
 }

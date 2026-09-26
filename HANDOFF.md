@@ -28,6 +28,12 @@ There is **no database on purpose**. Everything lives in `.data/agency.json`, wr
 
 **Member pages** — Team → a name (or **Your page**) opens `/team/[id]`: their open deals, won this month, who they need to speak to, what they logged in 30 days, then bands for the people they are contacting, their deals, the organisations they look after and their recent activity. Owners and admins open anyone's; members and viewers only their own (`can.viewMember`; a page you may not see is a plain not-found). The last band holds the place for tasks and objectives, which Phase 1 fills in.
 
+**Phase 1 so far (26 Sep 2026)** — built from `docs/phase-1-projects-and-tasks.md`:
+- **Tasks** (`components/app/tasks.tsx`): title, who it is for, due date, priority, status (to do, in progress, in review, done, blocked; each shows its word). A task stands alone or links to a project, organisation, deal or person, and shows on the member page, its deal, its organisation, and on Today when late or due within two days. Tick to finish, tap the status to move, tap the title to edit or remove (creator or admin).
+- **Projects** (`/projects`, `components/app/projects.tsx`): cards with a progress ring, health in words, tasks done and overdue, people and next check-in; a project page with List and Board views, scope, team and history. Start, edit, and mark on track / at risk / blocked.
+- **Objectives** (`components/app/objectives.tsx`) on the member page: this week, this month, this year. Measured as a number, an amount in KSh, done or not, or KSh won in deals (counted from the person's won deals in the period). You set your own; owners and admins set anyone's; only the person and admins ever see them.
+- Data: `projects`, `tasks`, `objectives` in the store and in `supabase/migrations/0003_projects_tasks_objectives.sql`.
+
 Every action returns a result and raises a toast. Lists have skeletons and empty states. `app/(app)/error.tsx` catches the rest.
 
 ## What is next, in order
@@ -37,7 +43,7 @@ Every action returns a result and raises a toast. Lists have skeletons and empty
 3. **Bulk actions and filters on people and deals** — the organisations pattern, copied across (`org-table.tsx` and `filter-bar.tsx` are the models).
 4. **Custom fields** — per workspace, per object, AI-suggested and approved.
 5. **Phase 5 — notifications, then encrypted messaging.** Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
-6. **Phase 1 — Projects, tasks and objectives**, linked to organisations and deals, and shown on each member page. Charis's additions (tasks without a project; week, month and year objectives) are in `docs/phase-1-projects-and-tasks.md`.
+6. **Phase 1, the rest** — tasks, projects and objectives are done. Still to build, in order: check-ins (weekly/fortnightly/monthly, three headings: what moved, what is stuck, next week), private flags (note/warning/serious, with a situation–behaviour–impact conversation script; only the raiser and admins see them), close + retrospective, analytics for owners and admins (completion, on time, overdue by person; no leaderboard). Then the AI parts once a Claude API key is in `.env.local`: team structure suggestions, check-in drafts, retrospective lessons. Use Phase 1 on a real project before Phase 2.
 7. **Supabase**, once the flows and the feel are settled. Rewrite `store.ts` as a Postgres adapter, run the migrations (`0001`, then `0002_not_duplicates`), enable Google and magic-link auth, then delete the local store. Merging must become one database function (one transaction) — see the note at the end of `0002`.
 
 ## Where things are

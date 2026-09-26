@@ -1,14 +1,15 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft, Building2, Clock, Contact, HandCoins, Target } from "lucide-react"
+import { ArrowLeft, Building2, Clock, Contact, HandCoins } from "lucide-react"
 
 import { Band, BandStat, BandTitle, toneAfterLead } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
+import { NewObjective, Objectives } from "@/components/app/objectives"
 import { NewTask, TaskList } from "@/components/app/tasks"
 import { Timeline } from "@/components/app/timeline"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { getMemberOverview, listAssignees, listTasks } from "@/lib/data/queries"
+import { getMemberOverview, listAssignees, listObjectives, listTasks } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { ORG_CATEGORY_LABEL, ROLE_LABEL, can, money, moneyShort, stageOf } from "@/lib/data/types"
 
@@ -55,6 +56,10 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   ])
   if (!found) notFound()
   const canEdit = can.edit(role)
+  const objectives = await listObjectives(workspace.id, id)
+  // You set your own objectives; owners and admins set anyone's.
+  const canSetObjectives =
+    canEdit && (id === user.id || can.editWorkspace(role)) && found.member.role !== "viewer"
 
   const { member, organisations, contacts, openDeals, closedDeals } = found
   const self = member.id === user.id
@@ -115,8 +120,20 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </Band>
 
         <Band tone={toneAfterLead(0)} index={1} label="Objectives">
-          <BandTitle>{whose} objectives</BandTitle>
-          <Empty icon={Target}>Objectives for the week, month and year are next.</Empty>
+          <BandTitle
+            action={
+              canSetObjectives && (
+                <NewObjective ownerId={member.id} forName={self ? undefined : first} />
+              )
+            }
+          >
+            {whose} objectives
+          </BandTitle>
+          <Objectives
+            objectives={objectives}
+            canEdit={canSetObjectives}
+            empty={canSetObjectives ? "Nothing set. Add one worth reaching." : "Nothing set."}
+          />
         </Band>
 
         <Band tone={toneAfterLead(1)} index={2} label="Tasks">
