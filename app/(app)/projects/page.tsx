@@ -1,10 +1,11 @@
 import Link from "next/link"
-import { AlertTriangle, CalendarClock, FolderKanban } from "lucide-react"
+import { AlertTriangle, CalendarClock, ChartColumn, FolderKanban } from "lucide-react"
 
 import { Band, BandStat, BandTitle } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
 import { ProgressRing } from "@/components/app/progress-ring"
 import { ProjectForm } from "@/components/app/projects"
+import { Button } from "@/components/ui/button"
 import { cn } from "cn"
 import { listAssignees, listOrganisations, listProjects, type ProjectRow } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
@@ -48,7 +49,12 @@ function ProjectCard({ p }: { p: ProjectRow }) {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className={cn("inline-flex h-6 items-center rounded-full px-2 font-medium", HEALTH[p.health].tone)}>
+        <span
+          className={cn(
+            "inline-flex h-6 items-center rounded-full px-2 font-medium",
+            HEALTH[p.health].tone,
+          )}
+        >
           {HEALTH[p.health].label}
         </span>
         <span className="text-muted-foreground">
@@ -106,6 +112,13 @@ export default async function ProjectsPage() {
   return (
     <div className="flex min-h-svh flex-col">
       <PageHeader title="Projects" meta={`${active.length} ongoing`}>
+        {can.editWorkspace(role) && (
+          <Button asChild variant="outline" size="sm">
+            <Link href="/projects/analytics">
+              <ChartColumn /> Analytics
+            </Link>
+          </Button>
+        )}
         {form}
       </PageHeader>
 
@@ -113,7 +126,11 @@ export default async function ProjectsPage() {
         {projects.length > 0 && (
           <Band tone="accent" index={0} label="Projects at a glance">
             <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-              <BandStat label="Ongoing" value={String(active.length)} help="Started and not yet closed" />
+              <BandStat
+                label="Ongoing"
+                value={String(active.length)}
+                help="Started and not yet closed"
+              />
               <BandStat
                 label="At risk or blocked"
                 value={String(troubled)}
@@ -126,7 +143,11 @@ export default async function ProjectsPage() {
                 help="Across every ongoing project"
                 tone={overdue > 0 ? "warn" : undefined}
               />
-              <BandStat label="Check-ins due" value={String(checkIns)} help="Today, by each project's rhythm" />
+              <BandStat
+                label="Check-ins due"
+                value={String(checkIns)}
+                help="Today, by each project's rhythm"
+              />
             </div>
           </Band>
         )}
@@ -138,8 +159,8 @@ export default async function ProjectsPage() {
               <FolderKanban className="text-ink-3 size-9" />
               <h3 className="font-semibold">No projects yet</h3>
               <p className="text-muted-foreground max-w-sm text-sm">
-                A project is work with an end: a campaign, a delivery, a move. Start one, add the people
-                on it, and break it into tasks.
+                A project is work with an end: a campaign, a delivery, a move. Start one, add the
+                people on it, and break it into tasks.
               </p>
               {form}
             </div>

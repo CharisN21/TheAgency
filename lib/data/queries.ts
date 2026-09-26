@@ -948,3 +948,67 @@ export async function noticeForRetro(workspaceId: string, projectId: string) {
 
   return { wentWell, wentWrong, openTasks: open.length }
 }
+
+/* -------------------------------------------------------------- analytics */
+
+const dayOf = (iso: string) => iso.slice(0, 10)
+
+/**
+ * Completion, on-time and overdue across the workspace, by person and by
+ * project, with six weeks of trend. For owners and admins: the page checks.
+ * People are listed by name, never ranked.
+ */
+export async function getAnalytics(workspaceId: string) {
+  const db = await readDb()
+  const tasks = db.tasks.filter((t) => t.workspace_id === workspaceId)
+  const now = Date.now()
+  const late = (t: Task) =>
+    t.status !== "done" && t.due_at && Math.ceil((new Date(t.due_at).getTime() - now) / 864e5) < 0
+  const onTime = (t: Task) => t.due_at && t.completed_at && dayOf(t.completed_at) <= dayOf(t.due_at)
+
+  // Week buckets, oldest first: week 0 is six weeks ago, week 5 is this week.
+  const weeks = 6
+  const weekOf = (iso: string) => Math.floor((now - new Date(iso).getTime()) / (7 * 864e5))
+  const trend = (list: Task[]) => {
+    const counts = Array.from({ length: weeks }, () => 0)
+    for (const t of list) {
+      if (!t.completed_at) continue
+      const w = weekOf(t.completed_at)
+      if (w >= 0 && w < weeks) counts[weeks - 1 - w]++
+    }
+    return counts
+  }
+
+  const rate = (part: number, whole: number) => (whole === 0 ? null : Math.round((part / whole) * 100))
+  const summarise = (list: Task[]) => {
+    const done = list.filter((t) => t.status === "done")
+    const doneWithDue = done.filter((t) => t.due_at)
+    const recent = done.filter((t) => t.completed_at && now - new Date(t.completed_at).getTime() < 30 * 864e5)
+    return {
+      total: list.length,
+      open: list.length - done.length,
+      done: done.length,
+      doneLast30: recent.length,
+      overdue: list.filter(late).length,
+      completion: rate(done.length, list.length),
+      onTime: rate(doneWithDue.filter(onTime).length, doneWithDue.length),
+      trend: trend(done),
+    }
+  }
+
+  const members = (await listMembers(workspaceId)).filter((m) => m.role !== "viewer")
+  return {
+    overall: summarise(tasks),
+    people: members
+      .map((m) => ({ id: m.id, name: m.full_name, ...summarise(tasks.filter((t) => t.assignee_id === m.id)) }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    projects: db.projects
+      .filter((p) => p.workspace_id === workspaceId && p.status === "active")
+      .map((p) => ({ id: p.id, name: p.name, health: p.health, ...summarise(tasks.filter((t) => t.project_id === p.id)) }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    weekLabels: Array.from({ length: weeks }, (_, i) => {
+      const d = new Date(now - (weeks - 1 - i) * 7 * 864e5)
+      return i === weeks - 1 ? "This week" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+    }),
+  }
+}

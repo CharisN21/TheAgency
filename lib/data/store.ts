@@ -194,6 +194,27 @@ export function seed(): Database {
     task("Read the new KEBS guidance", charis.id, "todo", undefined, "low"),
   ]
 
+  // A few weeks of finished work, so the analytics trend has something to show.
+  const history: [string, string, number, number][] = [
+    // title, who, due (days from now), finished (days from now)
+    ["Price list for PPE batch 1", wanjiru.id, -38, -39],
+    ["Visit Thika depot", otieno.id, -33, -31],
+    ["Register with Kiambu county portal", charis.id, -27, -28],
+    ["Send PPE samples to Safaricom", otieno.id, -24, -24],
+    ["Mask supplier shortlist", achieng.id, -20, -21],
+    ["Book KEBS inspection", wanjiru.id, -17, -15],
+    ["Invoice first-aid kits", charis.id, -12, -12],
+    ["Reagent price check", achieng.id, -9, -10],
+    ["Safaricom delivery schedule draft", wanjiru.id, -6, -6],
+  ]
+  for (const [title, who, due, finished] of history) {
+    tasks.push({
+      ...task(title, who, "done", due, "medium", who === charis.id ? {} : { project_id: ppeProject.id }),
+      created_at: days(due - 10),
+      completed_at: days(finished),
+    })
+  }
+
   const objective = (
     owner_id: string,
     title: string,
