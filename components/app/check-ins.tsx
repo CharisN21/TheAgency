@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { ClipboardCheck, Loader2 } from "lucide-react"
+import { useRef, useState, useTransition } from "react"
+import { ClipboardCheck, Loader2, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "cn"
@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { postCheckIn } from "@/lib/data/actions"
+import { draftCheckInWithClaude, postCheckIn } from "@/lib/data/actions"
 import { HEALTH, type CheckIn, type ProjectHealth } from "@/lib/data/types"
 
 type Draft = { moved: string; stuck: string; next: string; progress: number; health: ProjectHealth }
@@ -45,15 +45,39 @@ export function WriteCheckIn({
   projectName,
   draft,
   due,
+  aiEnabled = false,
 }: {
   projectId: string
   projectName: string
   draft: Draft
   due: boolean
+  /** Shows "Draft with Claude" when an API key is set. */
+  aiEnabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [health, setHealth] = useState<ProjectHealth>(draft.health)
   const [pending, start] = useTransition()
+  const [drafting, startDraft] = useTransition()
+  const [byClaude, setByClaude] = useState(false)
+  const form = useRef<HTMLFormElement>(null)
+
+  // Claude's draft replaces the text in the boxes; the person still edits and posts.
+  function draftWithClaude() {
+    startDraft(async () => {
+      const result = await draftCheckInWithClaude(projectId)
+      if (!result.ok || !result.draft) {
+        toast.error(result.message)
+        return
+      }
+      const el = form.current?.elements
+      for (const key of ["moved", "stuck", "next", "risks"] as const) {
+        const field = el?.namedItem(key) as HTMLTextAreaElement | HTMLInputElement | null
+        if (field) field.value = result.draft[key]
+      }
+      setByClaude(true)
+      toast.success(result.message)
+    })
+  }
 
   function submit(formData: FormData) {
     formData.set("health", health)
@@ -73,7 +97,10 @@ export function WriteCheckIn({
       open={open}
       onOpenChange={(o) => {
         setOpen(o)
-        if (o) setHealth(draft.health)
+        if (o) {
+          setHealth(draft.health)
+          setByClaude(false)
+        }
       }}
     >
       <DialogTrigger asChild>
@@ -83,6 +110,7 @@ export function WriteCheckIn({
       </DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
         <form
+          ref={form}
           onSubmit={(e) => {
             e.preventDefault()
             submit(new FormData(e.currentTarget))
@@ -91,9 +119,26 @@ export function WriteCheckIn({
           <DialogHeader>
             <DialogTitle>Check in on {projectName}</DialogTitle>
             <DialogDescription>
-              Filled in from the tasks since the last check-in. Change anything before you post.
+              {byClaude
+                ? "Drafted by Claude from the tasks and the last check-ins. Change anything before you post."
+                : "Filled in from the tasks since the last check-in. Change anything before you post."}
             </DialogDescription>
           </DialogHeader>
+
+          {aiEnabled && (
+            <div className="pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={draftWithClaude}
+                disabled={drafting}
+              >
+                {drafting ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                {drafting ? "Claude is drafting…" : "Draft with Claude"}
+              </Button>
+            </div>
+          )}
 
           <div className="flex flex-col gap-4 py-6">
             {PARTS.map(([key, label, help]) => (

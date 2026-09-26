@@ -1,8 +1,9 @@
-import { Database, Share, SquarePlus, Smartphone } from "lucide-react"
+import { Database, Share, Sparkles, SquarePlus, Smartphone } from "lucide-react"
 
 import { Band } from "@/components/app/band"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { aiAvailable } from "@/lib/ai/claude"
 import { requireContext } from "@/lib/data/session"
 import { can, ROLE_HELP, ROLE_LABEL } from "@/lib/data/types"
 import { WorkspaceNameForm, ResetDemo } from "./forms"
@@ -78,6 +79,36 @@ export default async function SettingsPage() {
         </Band>
 
         <Band index={3} narrow label="Data" className="pb-10">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="size-4" /> Claude
+                <span
+                  className={
+                    aiAvailable()
+                      ? "bg-ok-soft text-ok ml-auto rounded-full px-2 py-0.5 text-xs font-medium"
+                      : "bg-muted text-muted-foreground ml-auto rounded-full px-2 py-0.5 text-xs font-medium"
+                  }
+                >
+                  {aiAvailable() ? "Switched on" : "Switched off"}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-muted-foreground flex flex-col gap-2 text-sm">
+              <p>
+                Claude suggests team structures, drafts check-ins and suggests lessons when a project
+                closes. It only ever suggests: you accept each line yourself. Project names, tasks,
+                dates and first names are sent; private flags never are.
+              </p>
+              {!aiAvailable() && (
+                <p>
+                  To switch it on, put your key from console.anthropic.com in the file{" "}
+                  <code>.env.local</code> on this laptop as <code>ANTHROPIC_API_KEY=</code>, then restart
+                  the app. Set a monthly spending limit in the console while you are there.
+                </p>
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

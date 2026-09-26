@@ -714,6 +714,9 @@ export async function getProject(workspaceId: string, id: string) {
   return {
     project: toProjectRow(db, project),
     retrospective: db.retrospectives.find((r) => r.project_id === id),
+    teamSuggestion: db.team_suggestions
+      .filter((t) => t.project_id === id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))[0],
     checkIns: db.check_ins
       .filter((c) => c.project_id === id)
       .sort((a, b) => b.created_at.localeCompare(a.created_at)),

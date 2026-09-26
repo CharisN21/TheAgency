@@ -363,6 +363,35 @@ export type Retrospective = {
   created_at: string
 }
 
+/** A role Claude proposed for a project, for a person or for an AI helper. */
+export type SuggestedRole = {
+  role: string
+  headcount: number
+  kind: "person" | "ai"
+  why: string
+  /** Someone already in the workspace who might fit. Never added without a click. */
+  suggested_member_id: string | null
+}
+
+export type SuggestedMilestone = { title: string; due_in_days: number }
+
+/**
+ * What Claude suggested, kept whole, with which lines a person accepted, so
+ * you can always see what was proposed and what you changed.
+ */
+export type TeamSuggestion = {
+  id: string
+  workspace_id: string
+  project_id: string
+  requested_by: string
+  roles: SuggestedRole[]
+  milestones: SuggestedMilestone[]
+  /** Keys like "role:2" or "milestone:0". */
+  accepted: string[]
+  dismissed: string[]
+  created_at: string
+}
+
 export type ObjectivePeriod = "week" | "month" | "year"
 
 export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
@@ -427,6 +456,7 @@ export type Database = {
   check_ins: CheckIn[]
   flags: Flag[]
   retrospectives: Retrospective[]
+  team_suggestions: TeamSuggestion[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */

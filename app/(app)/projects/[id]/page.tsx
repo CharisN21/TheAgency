@@ -9,6 +9,7 @@ import { HealthPill, ProjectForm, ProjectTasks } from "@/components/app/projects
 import { NewTask } from "@/components/app/tasks"
 import { CheckInList, WriteCheckIn } from "@/components/app/check-ins"
 import { RaiseFlag } from "@/components/app/flags"
+import { ClaudeOff, SuggestTeamButton, TeamSuggestionList } from "@/components/app/ai"
 import { CloseProject, ReopenProject } from "@/components/app/retro"
 import { Timeline } from "@/components/app/timeline"
 import { Card, CardContent } from "@/components/ui/card"
@@ -20,6 +21,7 @@ import {
   listTasks,
   noticeForRetro,
 } from "@/lib/data/queries"
+import { aiAvailable } from "@/lib/ai/claude"
 import { requireContext } from "@/lib/data/session"
 import { can } from "@/lib/data/types"
 
@@ -56,6 +58,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const mayClose = editable && (p.lead_id === user.id || can.editWorkspace(role))
   const noticed = mayClose ? await noticeForRetro(workspace.id, id) : null
   const retro = found.retrospective
+  const ai = aiAvailable()
   const names = Object.fromEntries(found.people.map((x) => [x.id, x.full_name]))
   const checkIn =
     p.checkInInDays <= 0
@@ -83,7 +86,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             organisations={organisations.map((o) => ({ value: o.id, label: o.name }))}
           />
         )}
-        {noticed && <CloseProject projectId={p.id} projectName={p.name} noticed={noticed} />}
+        {noticed && (
+          <CloseProject projectId={p.id} projectName={p.name} noticed={noticed} aiEnabled={ai} />
+        )}
         {p.status === "closed" && can.editWorkspace(role) && <ReopenProject projectId={p.id} />}
       </PageHeader>
 
@@ -224,6 +229,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 <WriteCheckIn
                   projectId={p.id}
                   projectName={p.name}
+                  aiEnabled={ai}
                   draft={draft}
                   due={p.checkInInDays <= 0}
                 />
@@ -302,6 +308,28 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               </Card>
             </div>
           </div>
+
+          {mayClose && (
+            <div className="mt-6">
+              <BandTitle
+                action={
+                  ai && <SuggestTeamButton projectId={p.id} again={Boolean(found.teamSuggestion)} />
+                }
+              >
+                Team and milestones · suggested by Claude
+              </BandTitle>
+              {!ai ? (
+                <ClaudeOff what="suggest roles, who might fit and milestones" />
+              ) : found.teamSuggestion ? (
+                <TeamSuggestionList suggestion={found.teamSuggestion} names={names} canDecide />
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  Ask Claude for roles, which work suits a person or an AI helper, who from the team
+                  might fit, and milestones. You accept each line yourself.
+                </p>
+              )}
+            </div>
+          )}
         </Band>
 
         <Band tone="soft" index={4} label="History" className="pb-10">

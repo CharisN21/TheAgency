@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Archive, Check, Loader2, Plus, RotateCcw, X } from "lucide-react"
+import { Archive, Check, Loader2, Plus, RotateCcw, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "cn"
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { closeProject, reopenProject } from "@/lib/data/actions"
+import { closeProject, reopenProject, suggestLessons } from "@/lib/data/actions"
 import type { Noticed } from "@/lib/data/queries"
 
 const STEPS = ["What went well", "What went wrong", "Lessons"] as const
@@ -121,11 +121,16 @@ export function CloseProject({
   projectId,
   projectName,
   noticed,
+  aiEnabled = false,
 }: {
   projectId: string
   projectName: string
   noticed: { wentWell: string[]; wentWrong: Noticed[]; openTasks: number }
+  /** Shows "Suggest lessons with Claude" when an API key is set. */
+  aiEnabled?: boolean
 }) {
+  const [claudeLessons, setClaudeLessons] = useState<string[]>([])
+  const [asking, startAsking] = useTransition()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
   const [well, setWell] = useState<string[]>([])
@@ -140,10 +145,23 @@ export function CloseProject({
   const toggle = (list: string[], set: (v: string[]) => void) => (t: string) =>
     set(list.includes(t) ? list.filter((x) => x !== t) : [...list, t])
 
-  // Lessons are only suggested for the problems you ticked.
-  const suggested = noticed.wentWrong
-    .filter((w) => wrong.includes(w.text) && w.lesson)
-    .map((w) => w.lesson!)
+  // Lessons are only suggested for the problems you ticked, plus any Claude offered.
+  const suggested = [
+    ...noticed.wentWrong.filter((w) => wrong.includes(w.text) && w.lesson).map((w) => w.lesson!),
+    ...claudeLessons,
+  ].filter((l, i, all) => all.indexOf(l) === i)
+
+  function askClaude() {
+    startAsking(async () => {
+      const result = await suggestLessons(projectId, [...well, ...wellOwn], [...wrong, ...wrongOwn])
+      if (result.ok && result.lessons) {
+        setClaudeLessons(result.lessons)
+        toast.success(result.message)
+      } else {
+        toast.error(result.message)
+      }
+    })
+  }
 
   function reset() {
     setStep(0)
@@ -154,6 +172,7 @@ export function CloseProject({
     setLessons([])
     setLessonsOwn([])
     setFinishOpen(false)
+    setClaudeLessons([])
   }
 
   function submit() {
@@ -240,6 +259,20 @@ export function CloseProject({
           )}
           {step === 2 && (
             <div className="flex flex-col gap-5">
+              {aiEnabled && (
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={askClaude}
+                    disabled={asking}
+                  >
+                    {asking ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                    {asking ? "Claude is thinking…" : "Suggest lessons with Claude"}
+                  </Button>
+                </div>
+              )}
               <PickList
                 options={suggested}
                 picked={lessons}

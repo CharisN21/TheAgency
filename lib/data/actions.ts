@@ -23,6 +23,9 @@ import {
   type OrgField,
   type PersonField,
 } from "./match"
+import { z } from "zod"
+
+import { askForJson } from "@/lib/ai/claude"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
   ACTIVITY_LABEL,
@@ -45,6 +48,8 @@ import {
   type ObjectivePeriod,
   SEVERITY,
   type FlagSeverity,
+  type SuggestedMilestone,
+  type SuggestedRole,
   type Priority,
   type TaskStatus,
 } from "./types"
@@ -2025,4 +2030,253 @@ export async function reopenProject(projectId: string): Promise<Result> {
 
   revalidateWork()
   return { ok: true, message: `${project.name} reopened` }
+}
+
+/* ----------------------------------------------------------------- Claude */
+// Claude suggests; people decide. Nothing Claude returns is written until a
+// person accepts it, line by line. Private flags are never sent to Claude.
+
+const firstName = (full?: string) => full?.split(" ")[0] ?? "Someone"
+
+/** The lead, or an owner or admin, on an active project in this workspace. */
+async function projectForLead(projectId: string) {
+  const ctx = await requireContext()
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === ctx.workspace.id)
+  if (!project) return { error: "That project is not here" }
+  if (!can.edit(ctx.role) || (project.lead_id !== ctx.user.id && !can.editWorkspace(ctx.role))) {
+    return { error: "Only the lead, or an owner or admin, can ask Claude about this project" }
+  }
+  if (project.status === "closed") return { error: "That project is closed" }
+  return { ctx, db, project }
+}
+
+/** The facts Claude sees about a project: work, dates and people. Never flags. */
+function projectFacts(db: Database, projectId: string) {
+  const p = db.projects.find((x) => x.id === projectId)!
+  const org = db.organisations.find((o) => o.id === p.organisation_id)
+  const name = (id: string) => firstName(db.profiles.find((x) => x.id === id)?.full_name)
+  return {
+    today: new Date().toISOString().slice(0, 10),
+    project: {
+      name: p.name,
+      for: org?.name ?? "our own work",
+      what_done_looks_like: p.scope ?? "not written",
+      ends: p.due_at?.slice(0, 10) ?? "no end date",
+      check_in: p.cadence,
+      lead: name(p.lead_id),
+    },
+    tasks: db.tasks
+      .filter((t) => t.project_id === projectId)
+      .map((t) => ({
+        title: t.title,
+        status: TASK_STATUS[t.status].label,
+        for: name(t.assignee_id),
+        due: t.due_at?.slice(0, 10) ?? null,
+        finished: t.completed_at?.slice(0, 10) ?? null,
+      })),
+  }
+}
+
+const TeamSchema = z.object({
+  roles: z
+    .array(
+      z.object({
+        role: z.string(),
+        headcount: z.number().int(),
+        kind: z.enum(["person", "ai"]),
+        why: z.string(),
+        suggested_member_id: z.string().nullable(),
+      })
+    ),
+  milestones: z.array(z.object({ title: z.string(), due_in_days: z.number().int() })),
+})
+
+/** Claude proposes roles, person or AI helper, and milestones. Kept whole; nothing is applied. */
+export async function suggestTeam(projectId: string): Promise<Result & { id?: string }> {
+  const got = await projectForLead(projectId)
+  if ("error" in got) return { ok: false, message: got.error ?? "Not allowed" }
+  const { ctx, db, project } = got
+
+  const people = db.memberships
+    .filter((m) => m.workspace_id === ctx.workspace.id && m.role !== "viewer")
+    .map((m) => ({
+      id: m.user_id,
+      name: firstName(db.profiles.find((x) => x.id === m.user_id)?.full_name),
+      title: m.title ?? null,
+      open_tasks: db.tasks.filter((t) => t.assignee_id === m.user_id && t.status !== "done").length,
+      on_this_project: project.member_ids.includes(m.user_id),
+    }))
+
+  const answer = await askForJson(
+    TeamSchema,
+    "Propose how to staff this project. List the roles it needs (with headcount), and for each say whether the work suits a person or an AI helper that drafts while a person approves. For a person role, you may name someone from the team list by their id if they fit and are not overloaded; otherwise use null. Never assume anyone agrees. Then propose up to five milestones, each due a number of days from today and before the project ends. Keep each reason to one sentence.",
+    { ...projectFacts(db, projectId), team: people }
+  )
+  if (!answer.ok) return { ok: false, message: answer.message }
+
+  // Only people who are really in this workspace can be suggested.
+  const known = new Set(people.map((p) => p.id))
+  const id = newId()
+  await mutate((d) => {
+    d.team_suggestions.push({
+      id,
+      workspace_id: ctx.workspace.id,
+      project_id: projectId,
+      requested_by: ctx.user.id,
+      roles: answer.data.roles.slice(0, 8).map((r) => ({
+        ...r,
+        headcount: Math.max(1, Math.min(20, r.headcount)),
+        suggested_member_id:
+          r.kind === "person" && r.suggested_member_id && known.has(r.suggested_member_id)
+            ? r.suggested_member_id
+            : null,
+      })),
+      milestones: answer.data.milestones.slice(0, 6).map((m) => ({
+        ...m,
+        due_in_days: Math.max(1, Math.min(365, m.due_in_days)),
+      })),
+      accepted: [],
+      dismissed: [],
+      created_at: now(),
+    })
+  })
+
+  revalidatePath(`/projects/${projectId}`)
+  return { ok: true, message: "Claude has suggestions. Accept the lines you agree with.", id }
+}
+
+/**
+ * Accepts or dismisses one line. Accepting a person role with a name adds that
+ * person to the project; accepting a milestone adds it as a task for the lead.
+ */
+export async function decideSuggestion(
+  suggestionId: string,
+  key: string,
+  decision: "accept" | "dismiss"
+): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const db = await readDb()
+  const s = db.team_suggestions.find((x) => x.id === suggestionId && x.workspace_id === workspace.id)
+  if (!s) return { ok: false, message: "Those suggestions are gone" }
+  const got = await projectForLead(s.project_id)
+  if ("error" in got) return { ok: false, message: got.error ?? "Not allowed" }
+  if (s.accepted.includes(key) || s.dismissed.includes(key)) return { ok: true, message: "" }
+
+  const [kind, raw] = key.split(":")
+  const index = Number(raw)
+  const line = kind === "role" ? s.roles[index] : kind === "milestone" ? s.milestones[index] : undefined
+  if (!line || !Number.isInteger(index)) return { ok: false, message: "That line is not in the suggestions" }
+
+  let message = "Dismissed"
+  await mutate((d) => {
+    const sug = d.team_suggestions.find((x) => x.id === suggestionId)!
+    if (decision === "dismiss") {
+      sug.dismissed.push(key)
+      return
+    }
+    sug.accepted.push(key)
+    const project = d.projects.find((p) => p.id === sug.project_id)!
+    if (kind === "role") {
+      const member = (line as SuggestedRole).suggested_member_id
+      const canWork = d.memberships.some(
+        (m) => m.workspace_id === workspace.id && m.user_id === member && m.role !== "viewer"
+      )
+      if (member && canWork) {
+        if (!project.member_ids.includes(member)) project.member_ids.push(member)
+        message = `${firstName(d.profiles.find((p) => p.id === member)?.full_name)} is on the project`
+      } else {
+        message = "Noted. Choose who takes it in Edit."
+      }
+    } else {
+      const m = line as SuggestedMilestone
+      d.tasks.push({
+        id: newId(),
+        workspace_id: workspace.id,
+        title: `Milestone: ${m.title}`,
+        status: "todo",
+        priority: "high",
+        due_at: new Date(Date.now() + m.due_in_days * 864e5).toISOString(),
+        assignee_id: project.lead_id,
+        created_by: user.id,
+        project_id: project.id,
+        organisation_id: project.organisation_id,
+        deal_id: project.deal_id,
+        created_at: now(),
+      })
+      message = "Milestone added as a task for the lead"
+    }
+  })
+
+  revalidateWork()
+  return { ok: true, message }
+}
+
+const CheckInSchema = z.object({
+  moved: z.string(),
+  stuck: z.string(),
+  next: z.string(),
+  risks: z.string(),
+})
+
+/** Claude writes a check-in draft from the tasks and the last check-ins. Nothing is posted. */
+export async function draftCheckInWithClaude(
+  projectId: string
+): Promise<Result & { draft?: z.infer<typeof CheckInSchema> }> {
+  const { user, workspace, role } = await requireContext()
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === workspace.id)
+  if (!project || project.status === "closed") return { ok: false, message: "That project is not open" }
+  if (!can.edit(role) || (!project.member_ids.includes(user.id) && !can.editWorkspace(role))) {
+    return { ok: false, message: "Only the people on the project, or an admin, can check in" }
+  }
+
+  const last = db.check_ins
+    .filter((c) => c.project_id === projectId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 2)
+    .map((c) => ({
+      date: c.created_at.slice(0, 10),
+      moved: c.moved,
+      stuck: c.stuck,
+      next: c.next,
+      risks: c.risks ?? "",
+    }))
+
+  const answer = await askForJson(
+    CheckInSchema,
+    "Draft this project's check-in, covering the time since the last check-in, or since it started. Write each part as short lines starting with \"- \", naming who is doing what by first name. moved: what got done. stuck: what is blocked or late, and what it is waiting on. next: what should happen before the next check-in. risks: one line on the biggest risk, or an empty string if there is none. Do not repeat what the last check-ins already said unless it is still true.",
+    { ...projectFacts(db, projectId), last_check_ins: last }
+  )
+  if (!answer.ok) return { ok: false, message: answer.message }
+  return {
+    ok: true,
+    message: "Drafted by Claude. Read it and change anything before posting.",
+    draft: answer.data,
+  }
+}
+
+const LessonsSchema = z.object({ lessons: z.array(z.string()) })
+
+/** Claude turns what went well and wrong into short lessons to pick from. Nothing is saved. */
+export async function suggestLessons(
+  projectId: string,
+  wentWell: string[],
+  wentWrong: string[]
+): Promise<Result & { lessons?: string[] }> {
+  const got = await projectForLead(projectId)
+  if ("error" in got) return { ok: false, message: got.error ?? "Not allowed" }
+  const clean = (l: string[]) => l.map((x) => String(x).slice(0, 500)).slice(0, 30)
+
+  const answer = await askForJson(
+    LessonsSchema,
+    "This project is closing. From what went well and what went wrong, suggest up to five short lessons worth carrying into the next project. Each lesson is one sentence saying what to do differently or keep doing, written as an instruction, for example: Give every task a due date when it is created. Do not blame anyone by name.",
+    { ...projectFacts(got.db, projectId), went_well: clean(wentWell), went_wrong: clean(wentWrong) }
+  )
+  if (!answer.ok) return { ok: false, message: answer.message }
+  return {
+    ok: true,
+    message: "Claude suggested some lessons. Tick the ones you agree with.",
+    lessons: answer.data.lessons.slice(0, 5),
+  }
 }
