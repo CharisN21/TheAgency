@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Check, Clock, Search, TrendingUp, UserPlus } from "lucide-react"
+import { ArrowRight, Check, ClipboardCheck, Clock, Search, TrendingUp, UserPlus } from "lucide-react"
 
 import { Band, BandTitle, toneAfterLead } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
@@ -11,6 +11,7 @@ import {
   getSetupState,
   getTodayNumbers,
   listAssignees,
+  listProjects,
   listTasks,
   pendingInviteCount,
 } from "@/lib/data/queries"
@@ -45,13 +46,18 @@ function Ring({ value, label }: { value: number; label: string }) {
 
 export default async function TodayPage() {
   const { user, workspace, role } = await requireContext()
-  const [setup, numbers, pending, myTasks, assignees] = await Promise.all([
+  const [setup, numbers, pending, myTasks, assignees, projects] = await Promise.all([
     getSetupState(workspace.id, user.id),
     getTodayNumbers(workspace.id),
     pendingInviteCount(workspace.id),
     listTasks(workspace.id, { assignee: user.id }),
     listAssignees(workspace.id),
+    listProjects(workspace.id),
   ])
+  // Check-ins land on whoever leads the project.
+  const checkInsDue = projects.filter(
+    (p) => p.status === "active" && p.lead_id === user.id && p.checkInInDays <= 0
+  )
   // Today shows what is late, due now or due soon; the rest waits on your page.
   const tasksNow = myTasks.filter((t) => t.dueInDays !== null && t.dueInDays <= 2).slice(0, 6)
 
@@ -68,12 +74,14 @@ export default async function TodayPage() {
   // Which bands are showing decides their tone, so neighbours always differ.
   const shown = [
     tasksNow.length > 0 && "tasks",
+    checkInsDue.length > 0 && "checkins",
     touchesDue.length > 0 && "speak",
     pipeline.closingSoon.length > 0 && "closing",
     setup.done < setup.total && "setup",
   ].filter(Boolean)
   const band = {
     tasks: shown.indexOf("tasks"),
+    checkins: shown.indexOf("checkins"),
     speak: shown.indexOf("speak"),
     closing: shown.indexOf("closing"),
     setup: shown.indexOf("setup"),
@@ -202,9 +210,39 @@ export default async function TodayPage() {
           </Band>
         )}
 
+        {/* Projects waiting on your check-in. */}
+        {checkInsDue.length > 0 && (
+          <Band tone={toneAfterLead(band.checkins)} index={2} narrow label="Check-ins due">
+            <BandTitle>Check-ins due</BandTitle>
+            <Card className="py-0">
+              <CardContent className="divide-border divide-y p-0">
+                {checkInsDue.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/projects/${p.id}`}
+                    className="hover:bg-muted/50 flex min-h-14 items-center gap-3 px-4 py-3 transition-colors"
+                  >
+                    <ClipboardCheck className="text-primary size-4 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{p.name}</span>
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {p.progress}% of tasks done
+                        {p.tasks.overdue > 0 ? ` · ${p.tasks.overdue} overdue` : ""}
+                      </span>
+                    </span>
+                    <span className="text-warn text-xs font-medium">
+                      {p.checkInInDays < 0 ? `${Math.abs(p.checkInInDays)}d late` : "today"}
+                    </span>
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+          </Band>
+        )}
+
         {/* Who is waiting on you. */}
         {touchesDue.length > 0 && (
-          <Band tone={toneAfterLead(band.speak)} index={2} narrow label="Speak to these people">
+          <Band tone={toneAfterLead(band.speak)} index={3} narrow label="Speak to these people">
             <BandTitle>Speak to these people</BandTitle>
             <Card className="py-0">
               <CardContent className="divide-border divide-y p-0">
@@ -244,7 +282,7 @@ export default async function TodayPage() {
 
         {/* Deals about to land. */}
         {pipeline.closingSoon.length > 0 && (
-          <Band tone={toneAfterLead(band.closing)} index={3} narrow label="Closing soon">
+          <Band tone={toneAfterLead(band.closing)} index={4} narrow label="Closing soon">
             <BandTitle
               action={
                 <Link
@@ -280,7 +318,7 @@ export default async function TodayPage() {
         )}
 
         {setup.done < setup.total && (
-          <Band tone={toneAfterLead(band.setup)} index={4} narrow label="Setting up">
+          <Band tone={toneAfterLead(band.setup)} index={5} narrow label="Setting up">
             <Card className="gap-0 py-0">
               <CardContent className="flex items-center gap-4 p-6">
                 <Ring

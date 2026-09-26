@@ -7,9 +7,16 @@ import { PageHeader } from "@/components/app/page-header"
 import { ProgressRing } from "@/components/app/progress-ring"
 import { HealthPill, ProjectForm, ProjectTasks } from "@/components/app/projects"
 import { NewTask } from "@/components/app/tasks"
+import { CheckInList, WriteCheckIn } from "@/components/app/check-ins"
 import { Timeline } from "@/components/app/timeline"
 import { Card, CardContent } from "@/components/ui/card"
-import { getProject, listAssignees, listOrganisations, listTasks } from "@/lib/data/queries"
+import {
+  draftCheckIn,
+  getProject,
+  listAssignees,
+  listOrganisations,
+  listTasks,
+} from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can } from "@/lib/data/types"
 
@@ -22,7 +29,9 @@ const initials = (name: string) =>
     .toUpperCase()
 
 const longDate = (iso?: string) =>
-  iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"
+  iso
+    ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    : "—"
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -37,8 +46,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   const { project: p } = found
   const editable = can.edit(role) && p.status === "active"
+  // The people on the project check in; owners and admins can too.
+  const mayCheckIn = editable && (p.member_ids.includes(user.id) || can.editWorkspace(role))
+  const draft = mayCheckIn ? await draftCheckIn(workspace.id, id) : null
+  const names = Object.fromEntries(found.people.map((x) => [x.id, x.full_name]))
   const checkIn =
-    p.checkInInDays <= 0 ? "due today" : p.checkInInDays === 1 ? "tomorrow" : `in ${p.checkInInDays} days`
+    p.checkInInDays <= 0
+      ? "due today"
+      : p.checkInInDays === 1
+        ? "tomorrow"
+        : `in ${p.checkInInDays} days`
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -99,13 +116,23 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
             <div className="flex gap-6 text-sm md:gap-10">
               <div>
-                <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Ends</p>
+                <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  Ends
+                </p>
                 <p className="font-semibold">{longDate(p.due_at)}</p>
               </div>
               {p.status === "active" && (
                 <div>
-                  <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Check-in</p>
-                  <p className={p.checkInInDays <= 0 ? "text-warn flex items-center gap-1 font-semibold" : "flex items-center gap-1 font-semibold"}>
+                  <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                    Check-in
+                  </p>
+                  <p
+                    className={
+                      p.checkInInDays <= 0
+                        ? "text-warn flex items-center gap-1 font-semibold"
+                        : "flex items-center gap-1 font-semibold"
+                    }
+                  >
                     <CalendarClock className="size-4" /> {checkIn}
                   </p>
                 </div>
@@ -121,7 +148,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 <NewTask
                   assignees={people}
                   defaultAssignee={p.lead_id}
-                  links={{ project_id: p.id, organisation_id: p.organisation_id, deal_id: p.deal_id }}
+                  links={{
+                    project_id: p.id,
+                    organisation_id: p.organisation_id,
+                    deal_id: p.deal_id,
+                  }}
                   context={`In ${p.name}. It also shows on their page.`}
                 />
               )
@@ -138,13 +169,40 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           />
         </Band>
 
-        <Band tone="soft" index={2} label="About the project">
+        <Band tone="soft" index={2} label="Check-ins">
+          <BandTitle
+            action={
+              draft && (
+                <WriteCheckIn
+                  projectId={p.id}
+                  projectName={p.name}
+                  draft={draft}
+                  due={p.checkInInDays <= 0}
+                />
+              )
+            }
+          >
+            Check-ins ·{" "}
+            {p.cadence === "weekly"
+              ? "every week"
+              : p.cadence === "fortnightly"
+                ? "every two weeks"
+                : "every month"}
+          </BandTitle>
+          <CheckInList checkIns={found.checkIns} names={names} />
+        </Band>
+
+        <Band index={3} label="About the project">
           <div className="grid gap-6 md:grid-cols-2">
             <div>
               <BandTitle>What done looks like</BandTitle>
               <Card className="py-0">
                 <CardContent className="p-4 text-sm leading-relaxed">
-                  {p.scope ?? <span className="text-muted-foreground">Not written yet. Use Edit to add it.</span>}
+                  {p.scope ?? (
+                    <span className="text-muted-foreground">
+                      Not written yet. Use Edit to add it.
+                    </span>
+                  )}
                   {p.deal && (
                     <Link
                       href={`/deals/${p.deal.id}`}
@@ -165,10 +223,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                       <span className="bg-fill-strong grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-semibold">
                         {initials(m.full_name)}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.full_name}</span>
-                      {m.id === p.lead_id && <span className="text-muted-foreground text-xs">Lead</span>}
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {m.full_name}
+                      </span>
+                      {m.id === p.lead_id && (
+                        <span className="text-muted-foreground text-xs">Lead</span>
+                      )}
                       <span className="text-muted-foreground text-xs">
-                        {tasks.filter((t) => t.assignee_id === m.id && t.status !== "done").length} open
+                        {tasks.filter((t) => t.assignee_id === m.id && t.status !== "done").length}{" "}
+                        open
                       </span>
                     </div>
                   ))}
@@ -178,7 +241,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           </div>
         </Band>
 
-        <Band index={3} label="History" className="pb-10">
+        <Band tone="soft" index={4} label="History" className="pb-10">
           <BandTitle>What happened</BandTitle>
           <Timeline
             activities={found.activities}

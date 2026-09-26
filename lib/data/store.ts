@@ -255,6 +255,21 @@ export function seed(): Database {
     projects: [ppeProject],
     tasks,
     objectives,
+    check_ins: [
+      {
+        id: newId(),
+        workspace_id: kilima.id,
+        project_id: ppeProject.id,
+        author_id: wanjiru.id,
+        moved: "Achieng collected prices from 3 suppliers; Vision Safety is cheapest on masks.",
+        stuck: "KEBS certificate for the gloves has not come back.",
+        next: "Confirm the KEBS certificate, send the quote to Safaricom, book the first truck.",
+        progress: 20,
+        risks: "If KEBS slips past 5 Oct, the first delivery moves too.",
+        health: "on_track" as const,
+        created_at: days(-7),
+      },
+    ],
     activities: [
       act("call", "Called about mask pricing — promised band 3 rates", 6, { organisation_id: vision.id, contact_id: mercy.id, deal_id: deals[0].id }),
       act("note", "Will discount at 500 units", 6, { organisation_id: vision.id, contact_id: mercy.id }),
@@ -280,6 +295,7 @@ export async function readDb(): Promise<Database> {
     parsed.projects ??= []
     parsed.tasks ??= []
     parsed.objectives ??= []
+    parsed.check_ins ??= []
     cache = parsed as Database
   } catch {
     cache = seed()

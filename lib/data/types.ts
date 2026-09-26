@@ -296,6 +296,25 @@ export type Project = {
   closed_at?: string
 }
 
+/**
+ * A project's progress note on its rhythm: what moved, what is stuck, what is
+ * next, and where it stands. Kept as the project's progress history.
+ */
+export type CheckIn = {
+  id: string
+  workspace_id: string
+  project_id: string
+  author_id: string
+  moved: string
+  stuck: string
+  next: string
+  /** 0–100, as judged by the person writing it. */
+  progress: number
+  risks?: string
+  health: ProjectHealth
+  created_at: string
+}
+
 export type ObjectivePeriod = "week" | "month" | "year"
 
 export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
@@ -357,6 +376,7 @@ export type Database = {
   projects: Project[]
   tasks: Task[]
   objectives: Objective[]
+  check_ins: CheckIn[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */

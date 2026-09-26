@@ -1753,3 +1753,59 @@ export async function deleteObjective(objectiveId: string): Promise<Result> {
   revalidatePath(`/team/${o.owner_id}`)
   return { ok: true, message: "Objective removed" }
 }
+
+/* -------------------------------------------------------------- check-ins */
+
+/**
+ * Posts a check-in. The people on the project write them, and owners and
+ * admins can too. Posting sets the project's health and restarts the clock.
+ */
+export async function postCheckIn(projectId: string, formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot post check-ins" }
+
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === workspace.id)
+  if (!project) return { ok: false, message: "That project is not here" }
+  if (project.status === "closed") return { ok: false, message: "That project is closed" }
+  if (!project.member_ids.includes(user.id) && !can.editWorkspace(role)) {
+    return { ok: false, message: "Only the people on the project, or an admin, can check in" }
+  }
+
+  const moved = str(formData, "moved")
+  const stuck = str(formData, "stuck")
+  const next = str(formData, "next")
+  if (!moved && !stuck && !next) return { ok: false, message: "Write at least one of the three" }
+  if ([moved, stuck, next].some((t) => t.length > 4000)) return { ok: false, message: "Keep each part under 4,000 characters" }
+  const progress = Number(str(formData, "progress"))
+  if (!Number.isFinite(progress) || progress < 0 || progress > 100) {
+    return { ok: false, message: "Progress is a number from 0 to 100" }
+  }
+  const health = (str(formData, "health") || project.health) as ProjectHealth
+  if (!(health in HEALTH)) return { ok: false, message: "Pick on track, at risk or blocked" }
+
+  await mutate((d) => {
+    d.check_ins.push({
+      id: newId(),
+      workspace_id: workspace.id,
+      project_id: projectId,
+      author_id: user.id,
+      moved,
+      stuck,
+      next,
+      progress: Math.round(progress),
+      risks: str(formData, "risks") || undefined,
+      health,
+      created_at: now(),
+    })
+    const p = d.projects.find((x) => x.id === projectId)!
+    p.health = health
+    log(d, workspace.id, user.id, `checked in on ${p.name}: ${Math.round(progress)}%, ${HEALTH[health].label.toLowerCase()}`, {
+      organisation_id: p.organisation_id,
+      deal_id: p.deal_id,
+    })
+  })
+
+  revalidateWork()
+  return { ok: true, message: "Check-in posted" }
+}

@@ -32,6 +32,8 @@ import {
   periodStart,
   type Objective,
   type ObjectivePeriod,
+  type CheckIn,
+  TASK_STATUS,
 } from "./types"
 
 export type Member = Profile & { role: Role; title?: string; joined: string }
@@ -653,6 +655,7 @@ export type ProjectRow = Project & {
   progress: number
   /** Days until the next check-in is due; 0 is today, negative is late. */
   checkInInDays: number
+  lastCheckIn?: CheckIn
   dueInDays: number | null
 }
 
@@ -663,9 +666,13 @@ function toProjectRow(db: Awaited<ReturnType<typeof readDb>>, p: Project): Proje
   const overdue = tasks.filter(
     (t) => t.status !== "done" && t.due_at && Math.ceil((new Date(t.due_at).getTime() - Date.now()) / 864e5) < 0
   ).length
-  // Check-ins fall due every cadence period from the day the project started.
+  // The next check-in falls one period after the last one, or after the start.
   const every = CADENCE_DAYS[p.cadence]
-  const age = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 864e5)
+  const lastCheckIn = db.check_ins
+    .filter((c) => c.project_id === p.id)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+  const from = new Date(lastCheckIn?.created_at ?? p.created_at).getTime()
+  const since = Math.floor((Date.now() - from) / 864e5)
   const org = db.organisations.find((o) => o.id === p.organisation_id)
   const deal = db.deals.find((d) => d.id === p.deal_id)
   return {
@@ -678,8 +685,8 @@ function toProjectRow(db: Awaited<ReturnType<typeof readDb>>, p: Project): Proje
       .filter((x): x is Profile => Boolean(x)),
     tasks: { total: tasks.length, done, overdue },
     progress: tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100),
-    // The first check-in falls one period after the start, then every period after that.
-    checkInInDays: age > 0 && age % every === 0 ? 0 : every - (age % every),
+    checkInInDays: every - since,
+    lastCheckIn,
     dueInDays: p.due_at ? Math.ceil((new Date(p.due_at).getTime() - Date.now()) / 864e5) : null,
   }
 }
@@ -704,6 +711,9 @@ export async function getProject(workspaceId: string, id: string) {
   if (!project) return null
   return {
     project: toProjectRow(db, project),
+    checkIns: db.check_ins
+      .filter((c) => c.project_id === id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at)),
     // Activity has no project of its own yet: the project's deal, or a mention by name.
     activities: db.activities
       .filter(
@@ -770,4 +780,47 @@ export async function listObjectives(
       .sort((a, b) => a.created_at.localeCompare(b.created_at))
   }
   return out
+}
+
+/* -------------------------------------------------------------- check-ins */
+
+/**
+ * A starting point for a check-in, written from the project's tasks since the
+ * last one. It is a draft: the person edits every line before it is posted.
+ */
+export async function draftCheckIn(workspaceId: string, projectId: string) {
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === workspaceId)
+  if (!project) return null
+  const row = toProjectRow(db, project)
+  const since = row.lastCheckIn?.created_at ?? project.created_at
+  const tasks = db.tasks.filter((t) => t.project_id === projectId)
+  const who = (id: string) => db.profiles.find((p) => p.id === id)?.full_name.split(" ")[0] ?? "Someone"
+  const daysLeft = (t: Task) => (t.due_at ? Math.ceil((new Date(t.due_at).getTime() - Date.now()) / 864e5) : null)
+  const line = (items: string[], none: string) => (items.length ? items.map((i) => `- ${i}`).join("\n") : none)
+
+  const moved = tasks.filter((t) => t.status === "done" && (t.completed_at ?? "") >= since)
+  const stuck = tasks.filter(
+    (t) => t.status === "blocked" || (t.status !== "done" && (daysLeft(t) ?? 1) < 0)
+  )
+  const horizon = CADENCE_DAYS[project.cadence]
+  const next = tasks.filter(
+    (t) => t.status !== "done" && !stuck.includes(t) && (daysLeft(t) ?? horizon + 1) <= horizon
+  )
+
+  return {
+    moved: line(moved.map((t) => `${t.title} (${who(t.assignee_id)})`), ""),
+    stuck: line(
+      stuck.map((t) =>
+        t.status === "blocked"
+          ? `${t.title}: ${TASK_STATUS.blocked.label.toLowerCase()} (${who(t.assignee_id)})`
+          : `${t.title}: ${Math.abs(daysLeft(t) ?? 0)}d late (${who(t.assignee_id)})`
+      ),
+      ""
+    ),
+    next: line(next.map((t) => `${t.title} (${who(t.assignee_id)})`), ""),
+    progress: row.progress,
+    health: project.health,
+    since,
+  }
 }
