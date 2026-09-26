@@ -26,6 +26,8 @@ import {
   type SavedView,
   type StageId,
   type Task,
+  CADENCE_DAYS,
+  type Project,
 } from "./types"
 
 export type Member = Profile & { role: Role; title?: string; joined: string }
@@ -594,10 +596,12 @@ export async function listTasks(workspaceId: string, f: TaskFilter = {}): Promis
       const org = db.organisations.find((o) => o.id === t.organisation_id)
       const contact = db.contacts.find((c) => c.id === t.contact_id)
       // Name the most specific record, and skip the one the page is already about.
+      // Inside a project, its own organisation goes without saying.
+      const orgImplied = f.organisation || (project && project.organisation_id === t.organisation_id && f.project)
       const link =
         deal && !f.deal
           ? { label: deal.title, href: `/deals/${deal.id}` }
-          : org && !f.organisation
+          : org && !orgImplied
             ? { label: org.name, href: `/organisations/${org.id}` }
             : contact && org
               ? { label: contact.full_name, href: `/organisations/${org.id}` }
@@ -631,4 +635,80 @@ export async function listAssignees(workspaceId: string) {
   return (await listMembers(workspaceId))
     .filter((m) => m.role !== "viewer")
     .map((m) => ({ value: m.id, label: m.full_name }))
+}
+
+/* --------------------------------------------------------------- projects */
+
+export type ProjectRow = Project & {
+  organisation?: { id: string; name: string }
+  deal?: { id: string; title: string }
+  lead?: Profile
+  members: Profile[]
+  tasks: { total: number; done: number; overdue: number }
+  /** Share of tasks done, 0–100. */
+  progress: number
+  /** Days until the next check-in is due; 0 is today, negative is late. */
+  checkInInDays: number
+  dueInDays: number | null
+}
+
+function toProjectRow(db: Awaited<ReturnType<typeof readDb>>, p: Project): ProjectRow {
+  const tasks = db.tasks.filter((t) => t.project_id === p.id)
+  const done = tasks.filter((t) => t.status === "done").length
+  // Late means the due day has passed, the same rule the task rows use.
+  const overdue = tasks.filter(
+    (t) => t.status !== "done" && t.due_at && Math.ceil((new Date(t.due_at).getTime() - Date.now()) / 864e5) < 0
+  ).length
+  // Check-ins fall due every cadence period from the day the project started.
+  const every = CADENCE_DAYS[p.cadence]
+  const age = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 864e5)
+  const org = db.organisations.find((o) => o.id === p.organisation_id)
+  const deal = db.deals.find((d) => d.id === p.deal_id)
+  return {
+    ...p,
+    organisation: org ? { id: org.id, name: org.name } : undefined,
+    deal: deal ? { id: deal.id, title: deal.title } : undefined,
+    lead: db.profiles.find((x) => x.id === p.lead_id),
+    members: p.member_ids
+      .map((id) => db.profiles.find((x) => x.id === id))
+      .filter((x): x is Profile => Boolean(x)),
+    tasks: { total: tasks.length, done, overdue },
+    progress: tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100),
+    // The first check-in falls one period after the start, then every period after that.
+    checkInInDays: age > 0 && age % every === 0 ? 0 : every - (age % every),
+    dueInDays: p.due_at ? Math.ceil((new Date(p.due_at).getTime() - Date.now()) / 864e5) : null,
+  }
+}
+
+export async function listProjects(workspaceId: string): Promise<ProjectRow[]> {
+  const db = await readDb()
+  const order = { blocked: 0, at_risk: 1, on_track: 2 }
+  return db.projects
+    .filter((p) => p.workspace_id === workspaceId)
+    .map((p) => toProjectRow(db, p))
+    .sort(
+      (a, b) =>
+        (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1) ||
+        order[a.health] - order[b.health] ||
+        (a.dueInDays ?? 9999) - (b.dueInDays ?? 9999)
+    )
+}
+
+export async function getProject(workspaceId: string, id: string) {
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === id && p.workspace_id === workspaceId)
+  if (!project) return null
+  return {
+    project: toProjectRow(db, project),
+    // Activity has no project of its own yet: the project's deal, or a mention by name.
+    activities: db.activities
+      .filter(
+        (a) =>
+          a.workspace_id === workspaceId &&
+          ((project.deal_id && a.deal_id === project.deal_id) || a.summary.includes(project.name))
+      )
+      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+      .slice(0, 20),
+    people: db.profiles,
+  }
 }

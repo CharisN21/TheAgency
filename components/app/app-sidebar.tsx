@@ -49,7 +49,7 @@ export function AppSidebar({
   currentId: string
   user: { full_name: string; email: string }
   role: Role
-  counts: { organisations: number; people: number; openDeals: number }
+  counts: { organisations: number; people: number; openDeals: number; projects: number }
 }) {
   const pathname = usePathname()
   const initials = user.full_name
@@ -67,7 +67,7 @@ export function AppSidebar({
 
   const WORK: Item[] = [
     { href: "/today", label: "Today", icon: Sun },
-    { href: "/projects", label: "Projects", icon: FolderKanban, soon: true },
+    { href: "/projects", label: "Projects", icon: FolderKanban, count: counts.projects },
     { href: "/meetings", label: "Meetings", icon: CalendarDays, soon: true },
     { href: "/notebook", label: "Notebook", icon: NotebookPen, soon: true },
   ]

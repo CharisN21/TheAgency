@@ -36,6 +36,10 @@ import {
   type StageId,
   PRIORITY_LABEL,
   TASK_STATUS,
+  CADENCE_DAYS,
+  HEALTH,
+  type Cadence,
+  type ProjectHealth,
   type Priority,
   type TaskStatus,
 } from "./types"
@@ -1543,4 +1547,114 @@ export async function deleteTask(taskId: string): Promise<Result> {
 
   revalidateWork()
   return { ok: true, message: "Task removed" }
+}
+
+/* --------------------------------------------------------------- projects */
+
+/** Reads the project form and checks everything it points at. */
+function readProjectForm(db: Database, workspaceId: string, formData: FormData, fallbackLead: string) {
+  const name = str(formData, "name")
+  if (name.length < 2) return { error: "Give the project a name" }
+  const cadence = (str(formData, "cadence") || "weekly") as Cadence
+  if (!(cadence in CADENCE_DAYS)) return { error: "Pick how often to check in" }
+  const due = str(formData, "due_at")
+  if (due && Number.isNaN(Date.parse(due))) return { error: "That end date is not a date" }
+
+  const lead_id = str(formData, "lead_id") || fallbackLead
+  const member_ids = [
+    ...new Set([lead_id, ...formData.getAll("member_ids").map(String).filter(Boolean)]),
+  ]
+  for (const id of member_ids) {
+    const problem = checkTaskLinks(db, workspaceId, { assignee_id: id })
+    if (problem) return { error: problem.replace("The task has to be for", "Everyone on it has to be") }
+  }
+
+  const deal_id = str(formData, "deal_id") || undefined
+  const deal = db.deals.find((d) => d.id === deal_id && d.workspace_id === workspaceId)
+  const organisation_id = str(formData, "organisation_id") || deal?.organisation_id || undefined
+  const problem = checkTaskLinks(db, workspaceId, { organisation_id, deal_id })
+  if (problem) return { error: problem }
+
+  return {
+    fields: {
+      name,
+      scope: str(formData, "scope") || undefined,
+      cadence,
+      due_at: due || undefined,
+      lead_id,
+      member_ids,
+      organisation_id,
+      deal_id,
+    },
+  }
+}
+
+export async function createProject(formData: FormData): Promise<Result & { id?: string }> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot start projects" }
+
+  const db = await readDb()
+  const read = readProjectForm(db, workspace.id, formData, user.id)
+  if ("error" in read) return { ok: false, message: read.error! }
+
+  const id = newId()
+  await mutate((d) => {
+    d.projects.push({
+      id,
+      workspace_id: workspace.id,
+      ...read.fields!,
+      status: "active",
+      health: "on_track",
+      created_at: now(),
+    })
+    log(d, workspace.id, user.id, `started the project ${read.fields!.name}`, {
+      organisation_id: read.fields!.organisation_id,
+      deal_id: read.fields!.deal_id,
+    })
+  })
+
+  revalidateWork()
+  return { ok: true, message: `${read.fields.name} started`, id }
+}
+
+export async function updateProject(projectId: string, formData: FormData): Promise<Result> {
+  const { workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change projects" }
+
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === workspace.id)
+  if (!project) return { ok: false, message: "That project is not here" }
+  const read = readProjectForm(db, workspace.id, formData, project.lead_id)
+  if ("error" in read) return { ok: false, message: read.error! }
+
+  await mutate((d) => {
+    const p = d.projects.find((x) => x.id === projectId)!
+    Object.assign(p, read.fields)
+  })
+
+  revalidateWork()
+  return { ok: true, message: "Saved" }
+}
+
+export async function setProjectHealth(projectId: string, health: ProjectHealth): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change projects" }
+  if (!(health in HEALTH)) return { ok: false, message: "That is not a status" }
+
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === workspace.id)
+  if (!project) return { ok: false, message: "That project is not here" }
+  if (project.health === health) return { ok: true, message: "" }
+
+  await mutate((d) => {
+    const p = d.projects.find((x) => x.id === projectId)!
+    p.health = health
+    log(d, workspace.id, user.id, `marked ${p.name} ${HEALTH[health].label.toLowerCase()}`, {
+      organisation_id: p.organisation_id,
+      deal_id: p.deal_id,
+    })
+  })
+
+  revalidateWork()
+  return { ok: true, message: `${project.name}: ${HEALTH[health].label.toLowerCase()}` }
 }
