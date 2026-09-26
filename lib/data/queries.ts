@@ -713,6 +713,7 @@ export async function getProject(workspaceId: string, id: string) {
   if (!project) return null
   return {
     project: toProjectRow(db, project),
+    retrospective: db.retrospectives.find((r) => r.project_id === id),
     checkIns: db.check_ins
       .filter((c) => c.project_id === id)
       .sort((a, b) => b.created_at.localeCompare(a.created_at)),
@@ -874,4 +875,76 @@ export async function getFlag(workspaceId: string, viewer: Viewer, id: string): 
   const f = db.flags.find((x) => x.id === id && x.workspace_id === workspaceId)
   if (!f || !can.seeFlag(viewer.role, viewer.id, f)) return null
   return toFlagRow(db, f)
+}
+
+/* ---------------------------------------------------------- retrospective */
+
+export type Noticed = { text: string; lesson?: string }
+
+/**
+ * What the app noticed about a project, for the closing retrospective. Only
+ * tasks, dates and check-ins are read: private flags are never used here.
+ */
+export async function noticeForRetro(workspaceId: string, projectId: string) {
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === workspaceId)
+  if (!project) return null
+
+  const tasks = db.tasks.filter((t) => t.project_id === projectId)
+  const done = tasks.filter((t) => t.status === "done")
+  const open = tasks.filter((t) => t.status !== "done")
+  const day = (iso: string) => iso.slice(0, 10)
+  const late = done.filter((t) => t.due_at && t.completed_at && day(t.completed_at) > day(t.due_at))
+  const onTime = done.filter((t) => t.due_at && t.completed_at && day(t.completed_at) <= day(t.due_at))
+  const noDeadline = tasks.filter((t) => !t.due_at)
+  const blocked = open.filter((t) => t.status === "blocked")
+
+  const every = CADENCE_DAYS[project.cadence]
+  const ageDays = Math.floor((Date.now() - new Date(project.created_at).getTime()) / 864e5)
+  const expected = Math.floor(ageDays / every)
+  const posted = db.check_ins.filter((c) => c.project_id === projectId).length
+  const missed = Math.max(0, expected - posted)
+  const endedLateBy = project.due_at ? Math.floor((Date.now() - new Date(project.due_at).getTime()) / 864e5) : null
+
+  const n = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`
+  const wentWell: string[] = []
+  const wentWrong: Noticed[] = []
+
+  if (onTime.length > 0) wentWell.push(`${onTime.length} of ${done.length} finished tasks were on time`)
+  if (done.length > 0 && open.length === 0) wentWell.push("Every task was finished")
+  if (expected > 0 && missed === 0) wentWell.push("Every check-in was posted")
+  if (endedLateBy !== null && endedLateBy <= 0) wentWell.push("Finished on or before the end date")
+
+  if (noDeadline.length > 0)
+    wentWrong.push({
+      text: `${n(noDeadline.length, "task")} had no deadline`,
+      lesson: "Give every task a due date when it is created.",
+    })
+  if (late.length > 0)
+    wentWrong.push({
+      text: `${n(late.length, "task")} finished late`,
+      lesson: "Look at deadlines in each check-in and move them early, not after they pass.",
+    })
+  if (blocked.length > 0)
+    wentWrong.push({
+      text: `${n(blocked.length, "task")} still blocked at the end`,
+      lesson: "Raise anything blocked for more than a day at once, not at the next check-in.",
+    })
+  if (open.length > 0)
+    wentWrong.push({
+      text: `${n(open.length, "task")} still open when it closed`,
+      lesson: "Before closing, finish or hand over what is left.",
+    })
+  if (missed > 0)
+    wentWrong.push({
+      text: `${n(missed, "check-in")} missed`,
+      lesson: "Keep the check-in rhythm, even in a quiet week.",
+    })
+  if (endedLateBy !== null && endedLateBy > 0)
+    wentWrong.push({
+      text: `Ended ${n(endedLateBy, "day")} after the end date`,
+      lesson: "Set the end date from the tasks, then add a buffer.",
+    })
+
+  return { wentWell, wentWrong, openTasks: open.length }
 }

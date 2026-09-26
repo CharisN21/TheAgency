@@ -255,6 +255,7 @@ export function seed(): Database {
     projects: [ppeProject],
     tasks,
     objectives,
+    retrospectives: [],
     flags: [
       {
         id: newId(),
@@ -312,6 +313,7 @@ export async function readDb(): Promise<Database> {
     parsed.objectives ??= []
     parsed.check_ins ??= []
     parsed.flags ??= []
+    parsed.retrospectives ??= []
     cache = parsed as Database
   } catch {
     cache = seed()

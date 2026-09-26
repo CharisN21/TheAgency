@@ -348,6 +348,21 @@ export type Flag = {
   created_at: string
 }
 
+/**
+ * Written when a project closes: what went well, what went wrong, and the
+ * lessons worth carrying into the next one. The Mentor reads the lessons.
+ */
+export type Retrospective = {
+  id: string
+  workspace_id: string
+  project_id: string
+  written_by: string
+  went_well: string[]
+  went_wrong: string[]
+  lessons: string[]
+  created_at: string
+}
+
 export type ObjectivePeriod = "week" | "month" | "year"
 
 export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
@@ -411,6 +426,7 @@ export type Database = {
   objectives: Objective[]
   check_ins: CheckIn[]
   flags: Flag[]
+  retrospectives: Retrospective[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */

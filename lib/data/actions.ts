@@ -1933,3 +1933,96 @@ export async function deleteFlag(flagId: string): Promise<Result> {
   revalidatePath("/team", "layout")
   redirect("/flags")
 }
+
+/* ----------------------------------------------------- close and reopen */
+
+const lines = (formData: FormData, key: string) =>
+  formData
+    .getAll(key)
+    .map((v) => String(v).trim())
+    .filter(Boolean)
+    .slice(0, 30)
+
+/**
+ * Closes a project with its retrospective. The lead, or an owner or admin,
+ * does it. Open tasks stay on people's lists unless the closer marks them done.
+ */
+export async function closeProject(projectId: string, formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot close projects" }
+
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === workspace.id)
+  if (!project) return { ok: false, message: "That project is not here" }
+  if (project.status === "closed") return { ok: false, message: "That project is closed already" }
+  if (project.lead_id !== user.id && !can.editWorkspace(role)) {
+    return { ok: false, message: "Only the lead, or an owner or admin, can close a project" }
+  }
+
+  const went_well = lines(formData, "went_well")
+  const went_wrong = lines(formData, "went_wrong")
+  const lessons = lines(formData, "lessons")
+  if (went_well.length + went_wrong.length + lessons.length === 0) {
+    return { ok: false, message: "Note at least one thing before closing" }
+  }
+  if ([...went_well, ...went_wrong, ...lessons].some((l) => l.length > 500)) {
+    return { ok: false, message: "Keep each line under 500 characters" }
+  }
+  const finishOpen = str(formData, "finish_open") === "1"
+
+  await mutate((d) => {
+    const p = d.projects.find((x) => x.id === projectId)!
+    p.status = "closed"
+    p.closed_at = now()
+    if (finishOpen) {
+      for (const t of d.tasks) {
+        if (t.project_id === projectId && t.status !== "done") {
+          t.status = "done"
+          t.completed_at = now()
+        }
+      }
+    }
+    d.retrospectives = d.retrospectives.filter((r) => r.project_id !== projectId)
+    d.retrospectives.push({
+      id: newId(),
+      workspace_id: workspace.id,
+      project_id: projectId,
+      written_by: user.id,
+      went_well,
+      went_wrong,
+      lessons,
+      created_at: now(),
+    })
+    log(d, workspace.id, user.id, `closed the project ${p.name}`, {
+      organisation_id: p.organisation_id,
+      deal_id: p.deal_id,
+    })
+  })
+
+  revalidateWork()
+  return { ok: true, message: `${project.name} closed. The lessons are kept.` }
+}
+
+/** Owners and admins can reopen a closed project. The retrospective is kept. */
+export async function reopenProject(projectId: string): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.editWorkspace(role)) return { ok: false, message: "Only owners and admins can reopen a project" }
+
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === workspace.id)
+  if (!project) return { ok: false, message: "That project is not here" }
+  if (project.status === "active") return { ok: true, message: "" }
+
+  await mutate((d) => {
+    const p = d.projects.find((x) => x.id === projectId)!
+    p.status = "active"
+    p.closed_at = undefined
+    log(d, workspace.id, user.id, `reopened the project ${p.name}`, {
+      organisation_id: p.organisation_id,
+      deal_id: p.deal_id,
+    })
+  })
+
+  revalidateWork()
+  return { ok: true, message: `${project.name} reopened` }
+}

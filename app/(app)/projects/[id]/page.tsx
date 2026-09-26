@@ -9,6 +9,7 @@ import { HealthPill, ProjectForm, ProjectTasks } from "@/components/app/projects
 import { NewTask } from "@/components/app/tasks"
 import { CheckInList, WriteCheckIn } from "@/components/app/check-ins"
 import { RaiseFlag } from "@/components/app/flags"
+import { CloseProject, ReopenProject } from "@/components/app/retro"
 import { Timeline } from "@/components/app/timeline"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -17,6 +18,7 @@ import {
   listAssignees,
   listOrganisations,
   listTasks,
+  noticeForRetro,
 } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can } from "@/lib/data/types"
@@ -50,6 +52,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   // The people on the project check in; owners and admins can too.
   const mayCheckIn = editable && (p.member_ids.includes(user.id) || can.editWorkspace(role))
   const draft = mayCheckIn ? await draftCheckIn(workspace.id, id) : null
+  // The lead closes a project; owners and admins can too, and only they reopen one.
+  const mayClose = editable && (p.lead_id === user.id || can.editWorkspace(role))
+  const noticed = mayClose ? await noticeForRetro(workspace.id, id) : null
+  const retro = found.retrospective
   const names = Object.fromEntries(found.people.map((x) => [x.id, x.full_name]))
   const checkIn =
     p.checkInInDays <= 0
@@ -77,6 +83,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             organisations={organisations.map((o) => ({ value: o.id, label: o.name }))}
           />
         )}
+        {noticed && <CloseProject projectId={p.id} projectName={p.name} noticed={noticed} />}
+        {p.status === "closed" && can.editWorkspace(role) && <ReopenProject projectId={p.id} />}
       </PageHeader>
 
       <main className="flex-1">
@@ -141,6 +149,45 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
         </Band>
+
+        {retro && (
+          <Band tone="soft" index={1} label="Retrospective">
+            <BandTitle>
+              Retrospective · {names[retro.written_by] ?? "someone"},{" "}
+              {new Date(retro.created_at).toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </BandTitle>
+            <div className="grid gap-3 md:grid-cols-3">
+              {(
+                [
+                  ["What went well", retro.went_well],
+                  ["What went wrong", retro.went_wrong],
+                  ["Lessons", retro.lessons],
+                ] as const
+              ).map(([label, items]) => (
+                <Card key={label} className="py-0">
+                  <CardContent className="p-4">
+                    <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                      {label}
+                    </p>
+                    {items.length === 0 ? (
+                      <p className="text-muted-foreground mt-2 text-sm">Nothing noted.</p>
+                    ) : (
+                      <ul className="mt-2 flex list-disc flex-col gap-1 pl-4 text-sm">
+                        {items.map((i) => (
+                          <li key={i}>{i}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </Band>
+        )}
 
         <Band index={1} wide label="Tasks">
           <BandTitle
