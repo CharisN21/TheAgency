@@ -2,7 +2,15 @@
 
 import Link from "next/link"
 import { useOptimistic, useState, useTransition } from "react"
-import { CalendarClock, ChevronDown, FolderKanban, Link2, Loader2, Plus, Trash2 } from "lucide-react"
+import {
+  CalendarClock,
+  ChevronDown,
+  FolderKanban,
+  Link2,
+  Loader2,
+  Plus,
+  Trash2,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "cn"
@@ -77,7 +85,7 @@ export function StatusPill({
     <span
       className={cn(
         "inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-medium whitespace-nowrap",
-        s.tone
+        s.tone,
       )}
     >
       {s.label}
@@ -123,10 +131,11 @@ export function TaskList({
   empty: string
 }) {
   const [, start] = useTransition()
+  const [showDone, setShowDone] = useState(false)
   const [shown, setShown] = useOptimistic(
     tasks,
     (state, change: { id: string; status: TaskStatus }) =>
-      state.map((t) => (t.id === change.id ? { ...t, status: change.status } : t))
+      state.map((t) => (t.id === change.id ? { ...t, status: change.status } : t)),
   )
 
   function move(t: TaskRow, status: TaskStatus) {
@@ -138,6 +147,90 @@ export function TaskList({
     })
   }
 
+  // Progressive disclosure: open tasks first, finished ones one tap away.
+  const visible = shown.filter((t) => t.status !== "done")
+  const finished = shown.filter((t) => t.status === "done")
+  const openCount = visible.length
+  const doneCount = finished.length
+
+  function row(t: TaskRow) {
+    const done = t.status === "done"
+    const d = due(t.dueInDays, done)
+    return (
+      <li key={t.id} className="flex min-h-14 items-center gap-3 px-3 py-2 sm:px-4">
+        <span className="grid size-11 shrink-0 place-items-center">
+          <Checkbox
+            checked={done}
+            disabled={!canEdit}
+            onCheckedChange={(c) => move(t, c ? "done" : "todo")}
+            aria-label={done ? `Mark ${t.title} as not done` : `Mark ${t.title} as done`}
+          />
+        </span>
+
+        <span className="min-w-0 flex-1">
+          {canEdit ? (
+            <EditTask task={t} assignees={assignees} canDelete={isAdmin || t.created_by === userId}>
+              <button
+                type="button"
+                className={cn(
+                  "focus-visible:ring-ring block max-w-full truncate rounded-sm text-left text-sm font-medium hover:underline focus-visible:ring-2 focus-visible:outline-none",
+                  done && "text-muted-foreground line-through",
+                )}
+              >
+                {t.title}
+              </button>
+            </EditTask>
+          ) : (
+            <span
+              className={cn(
+                "block truncate text-sm font-medium",
+                done && "text-muted-foreground line-through",
+              )}
+            >
+              {t.title}
+            </span>
+          )}
+          <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+            {d && d.text && (
+              <span className={cn("flex items-center gap-1", d.tone)}>
+                <CalendarClock className="size-3" /> {d.text}
+              </span>
+            )}
+            {t.priority === "high" && !done && (
+              <span className="text-warn font-medium">High priority</span>
+            )}
+            {t.project && (
+              <Link
+                href={`/projects/${t.project.id}`}
+                className="flex items-center gap-1 hover:underline"
+              >
+                <FolderKanban className="size-3" /> {t.project.name}
+              </Link>
+            )}
+            {t.link && (
+              <Link href={t.link.href} className="flex min-w-0 items-center gap-1 hover:underline">
+                <Link2 className="size-3 shrink-0" />{" "}
+                <span className="truncate">{t.link.label}</span>
+              </Link>
+            )}
+          </span>
+        </span>
+
+        <StatusPill status={t.status} onChange={(s) => move(t, s)} disabled={!canEdit} />
+
+        {showAssignee && (
+          <span
+            title={t.assignee?.full_name}
+            aria-label={`For ${t.assignee?.full_name ?? "someone"}`}
+            className="bg-fill-strong hidden size-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold sm:grid"
+          >
+            {initials(t.assignee?.full_name)}
+          </span>
+        )}
+      </li>
+    )
+  }
+
   if (shown.length === 0) {
     return (
       <p className="text-muted-foreground rounded-xl border border-dashed px-4 py-6 text-center text-sm">
@@ -147,74 +240,35 @@ export function TaskList({
   }
 
   return (
-    <ul className="bg-card divide-border border-border divide-y rounded-xl border">
-      {shown.map((t) => {
-        const done = t.status === "done"
-        const d = due(t.dueInDays, done)
-        return (
-          <li key={t.id} className="flex min-h-14 items-center gap-3 px-3 py-2 sm:px-4">
-            <span className="grid size-11 shrink-0 place-items-center">
-              <Checkbox
-                checked={done}
-                disabled={!canEdit}
-                onCheckedChange={(c) => move(t, c ? "done" : "todo")}
-                aria-label={done ? `Mark ${t.title} as not done` : `Mark ${t.title} as done`}
-              />
-            </span>
-
-            <span className="min-w-0 flex-1">
-              {canEdit ? (
-                <EditTask task={t} assignees={assignees} canDelete={isAdmin || t.created_by === userId}>
-                  <button
-                    type="button"
-                    className={cn(
-                      "focus-visible:ring-ring block max-w-full truncate rounded-sm text-left text-sm font-medium hover:underline focus-visible:ring-2 focus-visible:outline-none",
-                      done && "text-muted-foreground line-through"
-                    )}
-                  >
-                    {t.title}
-                  </button>
-                </EditTask>
-              ) : (
-                <span className={cn("block truncate text-sm font-medium", done && "text-muted-foreground line-through")}>
-                  {t.title}
-                </span>
-              )}
-              <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
-                {d && d.text && (
-                  <span className={cn("flex items-center gap-1", d.tone)}>
-                    <CalendarClock className="size-3" /> {d.text}
-                  </span>
-                )}
-                {t.priority === "high" && !done && <span className="text-warn font-medium">High priority</span>}
-                {t.project && (
-                  <Link href={`/projects/${t.project.id}`} className="flex items-center gap-1 hover:underline">
-                    <FolderKanban className="size-3" /> {t.project.name}
-                  </Link>
-                )}
-                {t.link && (
-                  <Link href={t.link.href} className="flex min-w-0 items-center gap-1 hover:underline">
-                    <Link2 className="size-3 shrink-0" /> <span className="truncate">{t.link.label}</span>
-                  </Link>
-                )}
-              </span>
-            </span>
-
-            <StatusPill status={t.status} onChange={(s) => move(t, s)} disabled={!canEdit} />
-
-            {showAssignee && (
-              <span
-                title={t.assignee?.full_name}
-                aria-label={`For ${t.assignee?.full_name ?? "someone"}`}
-                className="bg-fill-strong hidden size-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold sm:grid"
-              >
-                {initials(t.assignee?.full_name)}
-              </span>
-            )}
-          </li>
-        )
-      })}
-    </ul>
+    <>
+      {openCount > 0 && (
+        <ul className="bg-card divide-border border-border divide-y rounded-xl border">
+          {visible.map((t) => row(t))}
+        </ul>
+      )}
+      {doneCount > 0 && (
+        <>
+          {showDone && (
+            <ul className="bg-card divide-border border-border mt-2 divide-y rounded-xl border">
+              {finished.map((t) => row(t))}
+            </ul>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground mt-2"
+            aria-expanded={showDone}
+            onClick={() => setShowDone((v) => !v)}
+          >
+            <ChevronDown
+              className={cn("transition-transform duration-200", showDone && "rotate-180")}
+            />
+            {showDone ? "Hide finished" : `Show ${doneCount} finished`}
+          </Button>
+        </>
+      )}
+    </>
   )
 }
 
@@ -284,7 +338,13 @@ function TaskFields({
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="t-notes">Notes</Label>
-        <Textarea id="t-notes" name="notes" rows={2} defaultValue={task?.notes} placeholder="Anything they need to know" />
+        <Textarea
+          id="t-notes"
+          name="notes"
+          rows={2}
+          defaultValue={task?.notes}
+          placeholder="Anything they need to know"
+        />
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ import { ClipboardCheck, Loader2, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "cn"
+import { ShowMore } from "@/components/app/show-more"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -234,7 +235,8 @@ export function CheckInList({
     )
   }
   return (
-    <ol className="flex flex-col gap-3">
+    // The latest check-in is what matters; older ones are one tap away.
+    <ShowMore initial={1} noun="check-ins" className="flex flex-col gap-3">
       {checkIns.map((c) => (
         <li key={c.id} className="bg-card rounded-xl border p-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -272,6 +274,6 @@ export function CheckInList({
           )}
         </li>
       ))}
-    </ol>
+    </ShowMore>
   )
 }
