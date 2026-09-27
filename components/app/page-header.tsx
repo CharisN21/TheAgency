@@ -1,3 +1,4 @@
+import { NotificationBell } from "@/components/app/notification-bell"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 /** Every screen wears the same hat: trigger on phones, title, then actions. */
@@ -22,6 +23,7 @@ export function PageHeader({
         )}
       </div>
       {children}
+      <NotificationBell />
     </header>
   )
 }

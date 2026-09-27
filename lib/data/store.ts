@@ -306,6 +306,30 @@ export function seed(): Database {
         created_at: now(),
       },
     ],
+    notifications: [
+      {
+        id: newId(),
+        workspace_id: kilima.id,
+        user_id: charis.id,
+        type: "task_done" as const,
+        title: "Achieng finished Collect 3 supplier prices",
+        href: `/projects/${ppeProject.id}`,
+        actor_id: achieng.id,
+        created_at: days(-2),
+      },
+      {
+        id: newId(),
+        workspace_id: kilima.id,
+        user_id: charis.id,
+        type: "check_in_posted" as const,
+        title: "Wanjiru checked in on PPE Campaign",
+        href: `/projects/${ppeProject.id}`,
+        actor_id: wanjiru.id,
+        created_at: days(-7),
+        read_at: days(-6),
+      },
+    ],
+    notification_prefs: [],
     custom_values: [
       { workspace_id: kilima.id, field_id: creditTermsId, record_id: vision.id, value: "30 days" },
       { workspace_id: kilima.id, field_id: leadTimeId, record_id: vision.id, value: "7" },
@@ -371,6 +395,8 @@ export async function readDb(): Promise<Database> {
     parsed.team_suggestions ??= []
     parsed.custom_fields ??= []
     parsed.custom_values ??= []
+    parsed.notifications ??= []
+    parsed.notification_prefs ??= []
     cache = parsed as Database
   } catch {
     cache = seed()

@@ -3,10 +3,10 @@ import Link from "next/link"
 import { ChevronRight, Clock, Eye, Lock, Mail, UserRound } from "lucide-react"
 
 import { Band, BandStat, BandTitle } from "@/components/app/band"
+import { PageHeader } from "@/components/app/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { listInvites, listMembers } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
@@ -35,15 +35,13 @@ export default async function TeamPage() {
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="bg-bar border-border sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-4 backdrop-blur-xl">
-        <SidebarTrigger className="md:hidden" />
-        <h1 className="flex-1 font-semibold">Team</h1>
+      <PageHeader title="Team">
         {can.invite(role) && (
           <Suspense fallback={null}>
             <InviteDialog workspaceName={workspace.name} />
           </Suspense>
         )}
-      </header>
+      </PageHeader>
 
       <main className="flex-1">
         <Band tone="accent" index={0} narrow label={`People in ${workspace.name}`}>

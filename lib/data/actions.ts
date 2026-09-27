@@ -26,6 +26,7 @@ import {
 import { z } from "zod"
 
 import { askForJson } from "@/lib/ai/claude"
+import { actorName, notify } from "./notify"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
   ACTIVITY_LABEL,
@@ -49,6 +50,8 @@ import {
   type ObjectivePeriod,
   SEVERITY,
   type FlagSeverity,
+  NOTIFICATION_LABEL,
+  type NotificationType,
   type SuggestedMilestone,
   type SuggestedRole,
   FIELD_OBJECT_LABEL,
@@ -295,6 +298,14 @@ export async function acceptInvite(token: string): Promise<Result> {
       })
     }
     log(d, i.workspace_id, user.id, `joined as ${i.role}`)
+    notify(d, {
+      workspace_id: i.workspace_id,
+      user_id: i.invited_by,
+      actor_id: user.id,
+      type: "invite_accepted",
+      title: `${actorName(d, user.id)} accepted your invite and joined`,
+      href: "/team",
+    })
   })
 
   await setCurrentWorkspace(invite.workspace_id)
@@ -634,6 +645,14 @@ export async function moveDeal(
       `moved ${target.title} from ${from} to ${to}${stage === "lost" && lostReason ? ` — ${lostReason}` : ""}`,
       { organisation_id: target.organisation_id, deal_id: dealId }
     )
+    notify(d, {
+      workspace_id: workspace.id,
+      user_id: target.owner_id,
+      actor_id: user.id,
+      type: "deal_moved",
+      title: `${actorName(d, user.id)} moved ${target.title} to ${to}`,
+      href: `/deals/${dealId}`,
+    })
   })
 
   revalidatePath("/deals", "layout")
@@ -687,7 +706,18 @@ export async function updateDeal(dealId: string, formData: FormData): Promise<Re
     if (rawValue) x.value = Math.round(value)
     if (formData.has("expected_close")) x.expected_close = str(formData, "expected_close") || undefined
     if (formData.has("contact_id")) x.contact_id = contactId || undefined
+    const handedOver = Boolean(ownerId && ownerId !== x.owner_id)
     if (ownerId) x.owner_id = ownerId
+    if (handedOver) {
+      notify(d, {
+        workspace_id: workspace.id,
+        user_id: ownerId,
+        actor_id: user.id,
+        type: "deal_assigned",
+        title: `${actorName(d, user.id)} handed you ${x.title}`,
+        href: `/deals/${dealId}`,
+      })
+    }
     log(d, workspace.id, user.id, `updated ${x.title}`, {
       organisation_id: x.organisation_id,
       deal_id: dealId,
@@ -786,6 +816,14 @@ export async function bulkAssignOwner(ids: string[], userId: string): Promise<Re
       if (o.workspace_id === ctx.workspace.id && ids.includes(o.id)) o.owner_id = userId
     }
     log(d, ctx.workspace.id, ctx.user.id, `gave ${countWord(ids.length)} to ${target.full_name}`)
+    notify(d, {
+      workspace_id: ctx.workspace.id,
+      user_id: userId,
+      actor_id: ctx.user.id,
+      type: "records_assigned",
+      title: `${actorName(d, ctx.user.id)} handed you ${countWord(ids.length)}`,
+      href: `/organisations?owner=${userId}`,
+    })
   })
 
   revalidatePath("/organisations")
@@ -1402,6 +1440,17 @@ export async function unmarkNotDuplicate(id: string): Promise<Result> {
 
 /* ------------------------------------------------------------------ tasks */
 
+/** Where a task notification takes you: its project, deal or organisation, else their list. */
+function taskHref(
+  t: { project_id?: string; deal_id?: string; organisation_id?: string },
+  assigneeId: string
+) {
+  if (t.project_id) return `/projects/${t.project_id}`
+  if (t.deal_id) return `/deals/${t.deal_id}`
+  if (t.organisation_id) return `/organisations/${t.organisation_id}`
+  return `/team/${assigneeId}`
+}
+
 function revalidateWork() {
   revalidatePath("/team", "layout")
   revalidatePath("/projects", "layout")
@@ -1476,6 +1525,14 @@ export async function createTask(formData: FormData): Promise<Result> {
       created_at: now(),
       ...links,
     })
+    notify(d, {
+      workspace_id: workspace.id,
+      user_id: links.assignee_id,
+      actor_id: user.id,
+      type: "task_assigned",
+      title: `${actorName(d, user.id)} gave you a task: ${title}`,
+      href: taskHref(links, links.assignee_id),
+    })
     if (links.deal_id || links.organisation_id) {
       log(d, workspace.id, user.id, `added a task for ${forName}: ${title}`, {
         organisation_id: links.organisation_id,
@@ -1505,6 +1562,16 @@ export async function setTaskStatus(taskId: string, status: TaskStatus): Promise
     const t = d.tasks.find((x) => x.id === taskId)!
     t.status = status
     t.completed_at = status === "done" ? now() : undefined
+    if (status === "done") {
+      notify(d, {
+        workspace_id: workspace.id,
+        user_id: t.created_by,
+        actor_id: user.id,
+        type: "task_done",
+        title: `${actorName(d, user.id)} finished ${t.title}`,
+        href: taskHref(t, t.assignee_id),
+      })
+    }
     if (status === "done" && (t.deal_id || t.organisation_id)) {
       log(d, workspace.id, user.id, `finished: ${t.title}`, {
         organisation_id: t.organisation_id,
@@ -1518,7 +1585,7 @@ export async function setTaskStatus(taskId: string, status: TaskStatus): Promise
 }
 
 export async function updateTask(taskId: string, formData: FormData): Promise<Result> {
-  const { workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireContext()
   if (!can.edit(role)) return { ok: false, message: "Viewers cannot change tasks" }
 
   const db = await readDb()
@@ -1540,6 +1607,16 @@ export async function updateTask(taskId: string, formData: FormData): Promise<Re
     t.title = title
     t.priority = priority
     t.due_at = due || undefined
+    if (t.assignee_id !== assignee_id) {
+      notify(d, {
+        workspace_id: workspace.id,
+        user_id: assignee_id,
+        actor_id: user.id,
+        type: "task_assigned",
+        title: `${actorName(d, user.id)} gave you a task: ${title}`,
+        href: taskHref(t, assignee_id),
+      })
+    }
     t.assignee_id = assignee_id
     t.notes = str(formData, "notes") || undefined
   })
@@ -1817,6 +1894,16 @@ export async function postCheckIn(projectId: string, formData: FormData): Promis
       organisation_id: p.organisation_id,
       deal_id: p.deal_id,
     })
+    for (const member of new Set([p.lead_id, ...p.member_ids])) {
+      notify(d, {
+        workspace_id: workspace.id,
+        user_id: member,
+        actor_id: user.id,
+        type: "check_in_posted",
+        title: `${actorName(d, user.id)} checked in on ${p.name}`,
+        href: `/projects/${p.id}`,
+      })
+    }
   })
 
   revalidateWork()
@@ -2313,6 +2400,14 @@ export async function bulkPeopleOwner(ids: string[], userId: string): Promise<Re
   await mutate((d) => {
     for (const c of d.contacts) if (g.ids.includes(c.id)) c.owner_id = userId
     log(d, g.ctx.workspace.id, g.ctx.user.id, `gave ${peopleWord(g.ids.length)} to ${target.full_name}`)
+    notify(d, {
+      workspace_id: g.ctx.workspace.id,
+      user_id: userId,
+      actor_id: g.ctx.user.id,
+      type: "records_assigned",
+      title: `${actorName(d, g.ctx.user.id)} handed you ${peopleWord(g.ids.length)}`,
+      href: `/people?owner=${userId}`,
+    })
   })
   revalidatePath("/people", "layout")
   revalidatePath("/team", "layout")
@@ -2444,6 +2539,14 @@ export async function bulkDealsOwner(ids: string[], userId: string): Promise<Res
   await mutate((d) => {
     for (const deal of d.deals) if (g.ids.includes(deal.id)) deal.owner_id = userId
     log(d, g.ctx.workspace.id, g.ctx.user.id, `gave ${dealWord(g.ids.length)} to ${target.full_name}`)
+    notify(d, {
+      workspace_id: g.ctx.workspace.id,
+      user_id: userId,
+      actor_id: g.ctx.user.id,
+      type: "deal_assigned",
+      title: `${actorName(d, g.ctx.user.id)} handed you ${dealWord(g.ids.length)}`,
+      href: `/deals?view=list&owner=${userId}`,
+    })
   })
   revalidateDeals()
   return { ok: true, message: `${dealWord(g.ids.length)} now with ${target.full_name.split(" ")[0]}` }
@@ -2471,6 +2574,14 @@ export async function bulkDealsStage(ids: string[], stage: StageId, reason = "")
       log(d, g.ctx.workspace.id, g.ctx.user.id, `moved ${deal.title} from ${from} to ${to}${stage === "lost" ? ` — ${why}` : ""}`, {
         organisation_id: deal.organisation_id,
         deal_id: deal.id,
+      })
+      notify(d, {
+        workspace_id: g.ctx.workspace.id,
+        user_id: deal.owner_id,
+        actor_id: g.ctx.user.id,
+        type: "deal_moved",
+        title: `${actorName(d, g.ctx.user.id)} moved ${deal.title} to ${to}`,
+        href: `/deals/${deal.id}`,
       })
     }
   })
@@ -2836,4 +2947,114 @@ export async function updateContact(contactId: string, formData: FormData): Prom
   revalidatePath("/organisations", "layout")
   revalidatePath("/today")
   return { ok: true, message: "Saved" }
+}
+
+/* ---------------------------------------------------------- notifications */
+// Read state is per person: marking one read here marks it read everywhere.
+
+export async function markNotificationRead(notificationId: string): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const db = await readDb()
+  const n = db.notifications.find(
+    (x) => x.id === notificationId && x.workspace_id === workspace.id && x.user_id === user.id
+  )
+  if (!n) return { ok: false, message: "That notification is gone" }
+  if (!n.read_at) {
+    await mutate((d) => {
+      d.notifications.find((x) => x.id === notificationId)!.read_at = now()
+    })
+  }
+  revalidatePath("/", "layout")
+  return { ok: true, message: "" }
+}
+
+export async function markAllNotificationsRead(): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  let count = 0
+  await mutate((d) => {
+    for (const n of d.notifications) {
+      if (n.workspace_id === workspace.id && n.user_id === user.id && !n.read_at) {
+        n.read_at = now()
+        count++
+      }
+    }
+  })
+  revalidatePath("/", "layout")
+  return { ok: true, message: count ? `Marked ${count} as read` : "Nothing unread" }
+}
+
+/** Switch one kind of notification on or off for yourself, in this workspace. */
+export async function setNotificationMuted(type: NotificationType, muted: boolean): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  if (!(type in NOTIFICATION_LABEL)) return { ok: false, message: "That is not a kind of notification" }
+
+  await mutate((d) => {
+    let prefs = d.notification_prefs.find((p) => p.workspace_id === workspace.id && p.user_id === user.id)
+    if (!prefs) {
+      prefs = { workspace_id: workspace.id, user_id: user.id, muted: [] }
+      d.notification_prefs.push(prefs)
+    }
+    prefs.muted = muted ? [...new Set([...prefs.muted, type])] : prefs.muted.filter((t) => t !== type)
+  })
+  revalidatePath("/settings")
+  return { ok: true, message: muted ? "Switched off" : "Switched on" }
+}
+
+/**
+ * The two reminders that depend on the date rather than on an action: a
+ * check-in due on a project you lead, and people you own who are overdue.
+ * Made at most once a day per person, the first time they open the app.
+ */
+export async function refreshDailyReminders(): Promise<void> {
+  const ctx = await requireContext().catch(() => null)
+  if (!ctx || !can.edit(ctx.role)) return
+  const { user, workspace } = ctx
+  const today = new Date().toISOString().slice(0, 10)
+  const db = await readDb()
+  if (db.notifications.some((n) => n.user_id === user.id && n.dedupe_key?.endsWith(`:${today}`))) return
+
+  const every = (c: Cadence) => CADENCE_DAYS[c]
+  const dueProjects = db.projects.filter((p) => {
+    if (p.workspace_id !== workspace.id || p.status !== "active" || p.lead_id !== user.id) return false
+    const last = db.check_ins
+      .filter((c) => c.project_id === p.id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+    const since = Math.floor((Date.now() - new Date(last?.created_at ?? p.created_at).getTime()) / 864e5)
+    return since >= every(p.cadence)
+  })
+  const overdue = db.contacts.filter(
+    (c) =>
+      c.workspace_id === workspace.id &&
+      c.owner_id === user.id &&
+      c.next_touch_at &&
+      c.next_touch_at.slice(0, 10) < today
+  ).length
+
+  if (dueProjects.length === 0 && overdue === 0) return
+  await mutate((d) => {
+    // A reminder "from the app": the actor is nobody, so it is never skipped as self-made.
+    const system = "system"
+    for (const p of dueProjects) {
+      notify(d, {
+        workspace_id: workspace.id,
+        user_id: user.id,
+        actor_id: system,
+        type: "check_in_due",
+        title: `A check-in is due on ${p.name}`,
+        href: `/projects/${p.id}`,
+        dedupe_key: `check_in_due:${p.id}:${today}`,
+      })
+    }
+    if (overdue > 0) {
+      notify(d, {
+        workspace_id: workspace.id,
+        user_id: user.id,
+        actor_id: system,
+        type: "people_overdue",
+        title: `${overdue} ${overdue === 1 ? "person is" : "people are"} overdue to speak to`,
+        href: `/people?owner=${user.id}&touch=due`,
+        dedupe_key: `people_overdue:${today}`,
+      })
+    }
+  })
 }

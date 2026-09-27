@@ -433,6 +433,56 @@ export type CustomValue = {
   value: string
 }
 
+export type NotificationType =
+  | "deal_moved"
+  | "deal_assigned"
+  | "task_assigned"
+  | "task_done"
+  | "check_in_posted"
+  | "check_in_due"
+  | "people_overdue"
+  | "records_assigned"
+  | "invite_accepted"
+
+/** What each kind is called in the settings, in plain words. */
+export const NOTIFICATION_LABEL: Record<NotificationType, string> = {
+  deal_moved: "A deal you own moves stage",
+  deal_assigned: "A deal is handed to you",
+  task_assigned: "A task is given to you",
+  task_done: "A task you set is finished",
+  check_in_posted: "Someone checks in on your project",
+  check_in_due: "A check-in is due on a project you lead",
+  people_overdue: "People you own are overdue to speak to",
+  records_assigned: "People or organisations are handed to you",
+  invite_accepted: "Someone accepts your invite",
+}
+
+/**
+ * Something that happened to your work. The title is safe to read on a lock
+ * screen: who did what to which record, never money or private notes.
+ */
+export type Notification = {
+  id: string
+  workspace_id: string
+  user_id: string
+  type: NotificationType
+  title: string
+  /** Where tapping it goes, e.g. /deals/123. */
+  href?: string
+  actor_id?: string
+  read_at?: string
+  created_at: string
+  /** For once-a-day kinds: stops the same reminder twice in a day. */
+  dedupe_key?: string
+}
+
+/** Kinds a person has switched off. Everything is on unless listed here. */
+export type NotificationPrefs = {
+  workspace_id: string
+  user_id: string
+  muted: NotificationType[]
+}
+
 export type ObjectivePeriod = "week" | "month" | "year"
 
 export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
@@ -500,6 +550,8 @@ export type Database = {
   team_suggestions: TeamSuggestion[]
   custom_fields: CustomField[]
   custom_values: CustomValue[]
+  notifications: Notification[]
+  notification_prefs: NotificationPrefs[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */
