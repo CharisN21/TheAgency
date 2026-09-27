@@ -2280,3 +2280,125 @@ export async function suggestLessons(
     lessons: answer.data.lessons.slice(0, 5),
   }
 }
+
+/* ------------------------------------------------------- people, in bulk */
+// Every id is checked against this workspace; anything else is ignored.
+
+const peopleWord = (n: number) => `${n} ${n === 1 ? "person" : "people"}`
+
+async function peopleGuard(ids: string[]) {
+  const ctx = await requireContext()
+  if (!can.edit(ctx.role)) return { error: "Viewers cannot change people" }
+  const db = await readDb()
+  const mine = db.contacts.filter((c) => c.workspace_id === ctx.workspace.id && ids.includes(c.id))
+  if (mine.length === 0) return { error: "Nothing selected" }
+  return { ctx, db, ids: mine.map((c) => c.id) }
+}
+
+export async function bulkPeopleOwner(ids: string[], userId: string): Promise<Result> {
+  const g = await peopleGuard(ids)
+  if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
+  const member = g.db.memberships.find((m) => m.workspace_id === g.ctx.workspace.id && m.user_id === userId)
+  const target = g.db.profiles.find((p) => p.id === userId)
+  if (!member || !target || member.role === "viewer") {
+    return { ok: false, message: "The owner has to be someone who can work in this workspace" }
+  }
+
+  await mutate((d) => {
+    for (const c of d.contacts) if (g.ids.includes(c.id)) c.owner_id = userId
+    log(d, g.ctx.workspace.id, g.ctx.user.id, `gave ${peopleWord(g.ids.length)} to ${target.full_name}`)
+  })
+  revalidatePath("/people", "layout")
+  revalidatePath("/team", "layout")
+  return { ok: true, message: `${peopleWord(g.ids.length)} now with ${target.full_name.split(" ")[0]}` }
+}
+
+export async function bulkPeopleTag(ids: string[], tag: string): Promise<Result> {
+  const g = await peopleGuard(ids)
+  if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
+  const clean = tag.trim()
+  if (clean.length < 1 || clean.length > 40) return { ok: false, message: "A tag is 1 to 40 characters" }
+
+  await mutate((d) => {
+    for (const c of d.contacts) {
+      if (g.ids.includes(c.id) && !c.tags.some((t) => t.toLowerCase() === clean.toLowerCase())) c.tags.push(clean)
+    }
+  })
+  revalidatePath("/people", "layout")
+  return { ok: true, message: `Tagged ${peopleWord(g.ids.length)} ${clean}` }
+}
+
+/** "Speak again on" for everyone selected; an empty date clears it. */
+export async function bulkPeopleNextTouch(ids: string[], date: string): Promise<Result> {
+  const g = await peopleGuard(ids)
+  if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
+  if (date && Number.isNaN(Date.parse(date))) return { ok: false, message: "That is not a date" }
+
+  await mutate((d) => {
+    for (const c of d.contacts) if (g.ids.includes(c.id)) c.next_touch_at = date || undefined
+  })
+  revalidatePath("/people", "layout")
+  revalidatePath("/today")
+  return {
+    ok: true,
+    message: date
+      ? `Speak to ${peopleWord(g.ids.length)} on ${new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+      : `Cleared the date for ${peopleWord(g.ids.length)}`,
+  }
+}
+
+/**
+ * Owners and admins only. Deals, tasks and history are kept and lose the link
+ * to the person; nothing else is removed.
+ */
+export async function bulkPeopleDelete(ids: string[]): Promise<Result> {
+  const g = await peopleGuard(ids)
+  if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
+  if (!can.editWorkspace(g.ctx.role)) return { ok: false, message: "Only owners and admins can delete people" }
+
+  await mutate((d) => {
+    d.contacts = d.contacts.filter((c) => !g.ids.includes(c.id))
+    for (const deal of d.deals) if (deal.contact_id && g.ids.includes(deal.contact_id)) deal.contact_id = undefined
+    for (const t of d.tasks) if (t.contact_id && g.ids.includes(t.contact_id)) t.contact_id = undefined
+    for (const a of d.activities) if (a.contact_id && g.ids.includes(a.contact_id)) a.contact_id = undefined
+    d.not_duplicates = d.not_duplicates.filter((n) => !g.ids.includes(n.a_id) && !g.ids.includes(n.b_id))
+    log(d, g.ctx.workspace.id, g.ctx.user.id, `deleted ${peopleWord(g.ids.length)}`)
+  })
+  revalidatePath("/people", "layout")
+  revalidatePath("/organisations", "layout")
+  revalidatePath("/deals", "layout")
+  revalidatePath("/today")
+  return { ok: true, message: `${peopleWord(g.ids.length)} deleted. Their deals and history were kept.` }
+}
+
+/** CSV of the people selected, or everyone when nothing is. */
+export async function exportPeople(ids: string[]): Promise<{ filename: string; csv: string }> {
+  const { workspace } = await requireContext()
+  const db = await readDb()
+  const rows = db.contacts.filter(
+    (c) => c.workspace_id === workspace.id && (ids.length === 0 || ids.includes(c.id))
+  )
+  const cell = (v: string | undefined) => {
+    const s = String(v ?? "")
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const header = ["Name", "Role", "Organisation", "Phone", "Email", "Tags", "Speak again on", "Owner"]
+  const lines = rows.map((c) =>
+    [
+      c.full_name,
+      c.title,
+      db.organisations.find((o) => o.id === c.organisation_id)?.name,
+      c.phone,
+      c.email,
+      c.tags.join(" | "),
+      c.next_touch_at?.slice(0, 10),
+      db.profiles.find((p) => p.id === c.owner_id)?.full_name,
+    ]
+      .map(cell)
+      .join(",")
+  )
+  return {
+    filename: `${workspace.name.toLowerCase().replace(/\s+/g, "-")}-people.csv`,
+    csv: [header.join(","), ...lines].join("\n"),
+  }
+}

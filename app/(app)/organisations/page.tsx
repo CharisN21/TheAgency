@@ -15,8 +15,8 @@ import {
   listViews,
 } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
-import { can, money, moneyShort } from "@/lib/data/types"
-import { FilterBar } from "./filter-bar"
+import { ORG_CATEGORIES, ORG_CATEGORY_LABEL, can, money, moneyShort } from "@/lib/data/types"
+import { FilterBar } from "@/components/app/filter-bar"
 import { NewOrganisation } from "./new-organisation"
 import { OrgTable } from "./org-table"
 
@@ -110,8 +110,47 @@ export default async function OrganisationsPage({
         <Band index={1} wide label="All organisations">
           <Suspense fallback={<div className="h-20" />}>
             <FilterBar
-              people={members.map((m) => ({ value: m.id, label: m.full_name }))}
-              tags={tags}
+              object="organisations"
+              searchPlaceholder="Search organisations"
+              fields={[
+                {
+                  key: "category",
+                  label: "Type",
+                  options: ORG_CATEGORIES.map((c) => ({ value: c, label: ORG_CATEGORY_LABEL[c] })),
+                  phrase: "Type is {}",
+                },
+                {
+                  key: "owner",
+                  label: "Owner",
+                  options: members.map((m) => ({ value: m.id, label: m.full_name })),
+                  phrase: "Owned by {}",
+                },
+                {
+                  key: "tag",
+                  label: "Tag",
+                  options: tags.map((t) => ({ value: t, label: t })),
+                  phrase: "Tagged {}",
+                },
+                {
+                  key: "stale",
+                  label: "Last contact",
+                  options: [
+                    { value: "14", label: "over 14 days ago" },
+                    { value: "30", label: "over 30 days ago" },
+                    { value: "60", label: "over 60 days ago" },
+                  ],
+                  phrase: "Last contact {}",
+                },
+                {
+                  key: "hasDeals",
+                  label: "Open deals",
+                  options: [
+                    { value: "open", label: "has open deals" },
+                    { value: "none", label: "has none" },
+                  ],
+                  phrase: "Deals: {}",
+                },
+              ]}
               views={views.map((v) => ({
                 id: v.id,
                 name: v.name,

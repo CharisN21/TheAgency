@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Bookmark, Filter, Loader2, Search, Trash2, X } from "lucide-react"
+import { Bookmark, Filter, Loader2, Search, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -17,11 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -32,16 +28,16 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { deleteView, saveView } from "@/lib/data/actions"
-import { ORG_CATEGORIES, ORG_CATEGORY_LABEL } from "@/lib/data/types"
 
 type Option = { value: string; label: string }
 
-type FieldDef = {
+/** One filter a list offers. Plain data, so a server page can build it. */
+export type FilterFieldDef = {
   key: string
   label: string
   options: Option[]
-  /** How the chip reads once chosen, e.g. "Type is Supplier". */
-  phrase: (label: string) => string
+  /** How the chip reads once chosen; "{}" is the chosen option, e.g. "Type is {}". */
+  phrase: string
 }
 
 export type SavedViewChip = {
@@ -52,68 +48,40 @@ export type SavedViewChip = {
   mine: boolean
 }
 
+/**
+ * Saved views, filter chips, "Add filter" and search for a list page. The
+ * filters live in the address, so a view is just a saved query string.
+ */
 export function FilterBar({
-  people,
-  tags,
+  object,
+  fields,
   views,
   canShare,
+  searchPlaceholder,
 }: {
-  people: Option[]
-  tags: string[]
+  object: "organisations" | "people" | "deals"
+  fields: FilterFieldDef[]
   views: SavedViewChip[]
   canShare: boolean
+  searchPlaceholder: string
 }) {
   const params = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
   const [pending, start] = useTransition()
   const [adding, setAdding] = useState(false)
-  const [field, setField] = useState<string>("category")
+  const [field, setField] = useState<string>(fields[0]?.key ?? "")
   const [value, setValue] = useState<string>("")
   const [saving, setSaving] = useState(false)
   const [shared, setShared] = useState(false)
 
-  const FIELDS: FieldDef[] = [
-    {
-      key: "category",
-      label: "Type",
-      options: ORG_CATEGORIES.map((c) => ({ value: c, label: ORG_CATEGORY_LABEL[c] })),
-      phrase: (l) => `Type is ${l}`,
-    },
-    { key: "owner", label: "Owner", options: people, phrase: (l) => `Owned by ${l}` },
-    {
-      key: "tag",
-      label: "Tag",
-      options: tags.map((t) => ({ value: t, label: t })),
-      phrase: (l) => `Tagged ${l}`,
-    },
-    {
-      key: "stale",
-      label: "Last contact",
-      options: [
-        { value: "14", label: "over 14 days ago" },
-        { value: "30", label: "over 30 days ago" },
-        { value: "60", label: "over 60 days ago" },
-      ],
-      phrase: (l) => `Last contact ${l}`,
-    },
-    {
-      key: "hasDeals",
-      label: "Open deals",
-      options: [
-        { value: "open", label: "has open deals" },
-        { value: "none", label: "has none" },
-      ],
-      phrase: (l) => `Deals: ${l}`,
-    },
-  ]
-
+  const FIELDS = fields
   const current = new URLSearchParams(params.toString())
   const active = FIELDS.flatMap((f) => {
     const v = current.get(f.key)
     if (!v) return []
     const label = f.options.find((o) => o.value === v)?.label ?? v
-    return [{ key: f.key, text: f.phrase(label) }]
+    return [{ key: f.key, text: f.phrase.replace("{}", label) }]
   })
 
   function go(next: URLSearchParams) {
@@ -140,7 +108,7 @@ export function FilterBar({
     const name = String(formData.get("name") ?? "")
     const query = params.toString()
     start(async () => {
-      const result = await saveView("organisations", name, query, shared)
+      const result = await saveView(object, name, query, shared)
       if (result.ok) {
         setSaving(false)
         setShared(false)
@@ -151,7 +119,7 @@ export function FilterBar({
     })
   }
 
-  const fieldDef = FIELDS.find((f) => f.key === field)!
+  const fieldDef = FIELDS.find((f) => f.key === field) ?? FIELDS[0]
   const hasFilters = active.length > 0 || Boolean(current.get("q"))
 
   return (
@@ -159,12 +127,12 @@ export function FilterBar({
       {/* Saved views */}
       <div className="flex flex-wrap items-center gap-2">
         <Link
-          href="/organisations"
+          href={`/${object}`}
           className={cn(
             "rounded-full px-3 py-1 text-xs font-semibold",
             !hasFilters
               ? "bg-accent text-accent-foreground"
-              : "text-muted-foreground hover:bg-muted"
+              : "text-muted-foreground hover:bg-muted",
           )}
         >
           All
@@ -174,12 +142,10 @@ export function FilterBar({
           return (
             <span key={v.id} className="group relative inline-flex">
               <Link
-                href={`/organisations?${v.query}`}
+                href={`/${object}?${v.query}`}
                 className={cn(
                   "rounded-full px-3 py-1 text-xs font-semibold",
-                  on
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-muted"
+                  on ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted",
                 )}
               >
                 {v.name}
@@ -192,7 +158,8 @@ export function FilterBar({
                   onClick={() =>
                     start(async () => {
                       const r = await deleteView(v.id)
-                      r.ok ? toast.success(r.message) : toast.error(r.message)
+                      if (r.ok) toast.success(r.message)
+                      else toast.error(r.message)
                     })
                   }
                 >
@@ -259,7 +226,7 @@ export function FilterBar({
                     <SelectValue placeholder="Choose" />
                   </SelectTrigger>
                   <SelectContent>
-                    {fieldDef.options.length === 0 ? (
+                    {!fieldDef || fieldDef.options.length === 0 ? (
                       <div className="text-muted-foreground px-2 py-1.5 text-sm">
                         Nothing to pick yet
                       </div>
@@ -292,7 +259,7 @@ export function FilterBar({
           </>
         )}
 
-        <form action="/organisations" className="ml-auto">
+        <form action={`/${object}`} className="ml-auto">
           {/* Keep the filters when searching. */}
           {active.map((a) => (
             <input key={a.key} type="hidden" name={a.key} value={current.get(a.key) ?? ""} />
@@ -302,7 +269,7 @@ export function FilterBar({
             <Input
               name="q"
               defaultValue={current.get("q") ?? ""}
-              placeholder="Search organisations"
+              placeholder={searchPlaceholder}
               className="w-56 pl-8"
             />
           </div>

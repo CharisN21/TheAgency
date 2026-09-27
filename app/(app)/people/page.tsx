@@ -1,53 +1,73 @@
+import { Suspense } from "react"
 import Link from "next/link"
-import { Contact, Mail, MessageCircle, Phone } from "lucide-react"
+import { Contact } from "lucide-react"
 
 import { Band, BandStat } from "@/components/app/band"
 import { DuplicatesNotice } from "@/components/app/duplicates"
+import { FilterBar } from "@/components/app/filter-bar"
 import { PageHeader } from "@/components/app/page-header"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { listContacts, listDuplicatePeople } from "@/lib/data/queries"
+import {
+  listContacts,
+  listDuplicatePeople,
+  listMembers,
+  listOrganisations,
+  listPeopleTags,
+  listViews,
+} from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
+import { can } from "@/lib/data/types"
+import { PeopleTable } from "./people-table"
 
-const initials = (name: string) =>
-  name
+const initials = (name?: string) =>
+  (name ?? "?")
     .split(" ")
     .map((p) => p[0])
     .slice(0, 2)
     .join("")
     .toUpperCase()
 
-function touch(days: number | null) {
-  if (days === null) return { text: "No date set", tone: "text-muted-foreground" }
-  if (days < 0)
-    return { text: `${Math.abs(days)} days overdue`, tone: "text-destructive font-medium" }
-  if (days === 0) return { text: "Speak today", tone: "text-warn font-medium" }
-  if (days <= 7) return { text: `in ${days} days`, tone: "text-warn" }
-  return { text: `in ${days} days`, tone: "text-muted-foreground" }
-}
+export default async function PeoplePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>
+}) {
+  const { user, workspace, role } = await requireContext()
+  const sp = await searchParams
 
-export default async function PeoplePage() {
-  const { workspace } = await requireContext()
-  const [people, duplicates] = await Promise.all([
+  const [shown, everyone, duplicates, members, organisations, tags, views] = await Promise.all([
+    listContacts(workspace.id, {
+      q: sp.q,
+      owner: sp.owner,
+      organisation: sp.organisation,
+      tag: sp.tag,
+      touch: sp.touch,
+    }),
     listContacts(workspace.id),
     listDuplicatePeople(workspace.id),
+    listMembers(workspace.id),
+    listOrganisations(workspace.id, { sort: "name" }),
+    listPeopleTags(workspace.id),
+    listViews(workspace.id, user.id, "people"),
   ])
-  const due = people.filter((p) => (p.touchDueInDays ?? 99) <= 0).length
-  const thisWeek = people.filter(
+
+  // The lead numbers are for everyone, whatever the filter.
+  const due = everyone.filter((p) => (p.touchDueInDays ?? 99) <= 0).length
+  const thisWeek = everyone.filter(
     (p) => (p.touchDueInDays ?? -1) >= 1 && (p.touchDueInDays ?? 99) <= 7,
   ).length
-  const undated = people.filter((p) => p.touchDueInDays === null).length
+  const undated = everyone.filter((p) => p.touchDueInDays === null).length
+  const filtered = Object.keys(sp).some((k) => sp[k])
 
   return (
     <div className="flex min-h-svh flex-col">
       <PageHeader
         title="People"
-        meta={due > 0 ? `${people.length} · ${due} to speak to` : `${people.length}`}
+        meta={due > 0 ? `${everyone.length} · ${due} to speak to` : `${everyone.length}`}
       />
 
       <main className="flex-1">
-        {people.length > 0 && (
+        {everyone.length > 0 && (
           <Band tone="accent" index={0} label="Who to speak to">
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <BandStat
@@ -75,8 +95,8 @@ export default async function PeoplePage() {
           </Band>
         )}
 
-        <Band index={1} label="Everyone">
-          {people.length === 0 ? (
+        <Band index={1} wide label="Everyone" className="pb-10">
+          {everyone.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
               <Contact className="text-ink-3 size-9" />
               <h3 className="font-semibold">Nobody here yet</h3>
@@ -89,90 +109,85 @@ export default async function PeoplePage() {
               </Button>
             </div>
           ) : (
-            <Card className="py-0">
-              <CardContent className="divide-border divide-y p-0">
-                {people.map((p) => {
-                  const t = touch(p.touchDueInDays)
-                  return (
-                    <div
-                      key={p.id}
-                      className="flex min-h-16 flex-wrap items-center gap-3 px-4 py-2.5"
-                    >
-                      <span className="bg-fill-strong grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold">
-                        {initials(p.full_name)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{p.full_name}</span>
-                        <span className="text-muted-foreground block truncate text-xs">
-                          {p.title ? `${p.title} · ` : ""}
-                          {p.organisation ? (
-                            <Link
-                              href={`/organisations/${p.organisation.id}`}
-                              className="hover:underline"
-                            >
-                              {p.organisation.name}
-                            </Link>
-                          ) : (
-                            "No organisation"
-                          )}
-                        </span>
-                      </span>
+            <>
+              <Suspense fallback={<div className="h-20" />}>
+                <FilterBar
+                  object="people"
+                  searchPlaceholder="Search people"
+                  fields={[
+                    {
+                      key: "touch",
+                      label: "Speak next",
+                      options: [
+                        { value: "due", label: "due now" },
+                        { value: "week", label: "within a week" },
+                        { value: "none", label: "no date set" },
+                      ],
+                      phrase: "Speak next: {}",
+                    },
+                    {
+                      key: "owner",
+                      label: "Owner",
+                      options: members.map((m) => ({ value: m.id, label: m.full_name })),
+                      phrase: "Owned by {}",
+                    },
+                    {
+                      key: "organisation",
+                      label: "Organisation",
+                      options: organisations.map((o) => ({ value: o.id, label: o.name })),
+                      phrase: "At {}",
+                    },
+                    {
+                      key: "tag",
+                      label: "Tag",
+                      options: tags.map((t) => ({ value: t, label: t })),
+                      phrase: "Tagged {}",
+                    },
+                  ]}
+                  views={views.map((v) => ({
+                    id: v.id,
+                    name: v.name,
+                    query: v.query,
+                    shared: v.shared,
+                    mine: v.user_id === user.id,
+                  }))}
+                  canShare={can.edit(role)}
+                />
+              </Suspense>
 
-                      <span className={`text-xs ${t.tone}`}>{t.text}</span>
-
-                      {p.tags.slice(0, 1).map((tag) => (
-                        <Badge key={tag} variant="outline" className="hidden sm:inline-flex">
-                          {tag}
-                        </Badge>
-                      ))}
-
-                      <span className="flex gap-1">
-                        {p.phone && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              asChild
-                              aria-label={`Call ${p.full_name}`}
-                            >
-                              <a href={`tel:${p.phone.replace(/\s/g, "")}`}>
-                                <Phone />
-                              </a>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              asChild
-                              aria-label={`WhatsApp ${p.full_name}`}
-                            >
-                              <a
-                                href={`https://wa.me/?text=${encodeURIComponent(`Hi ${p.full_name.split(" ")[0]},`)}`}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                <MessageCircle />
-                              </a>
-                            </Button>
-                          </>
-                        )}
-                        {p.email && (
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            asChild
-                            aria-label={`Email ${p.full_name}`}
-                          >
-                            <a href={`mailto:${p.email}`}>
-                              <Mail />
-                            </a>
-                          </Button>
-                        )}
-                      </span>
-                    </div>
-                  )
-                })}
-              </CardContent>
-            </Card>
+              {shown.length === 0 ? (
+                <div className="mt-6 flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
+                  <h3 className="font-semibold">Nobody matches that</h3>
+                  <p className="text-muted-foreground text-sm">
+                    {filtered
+                      ? "Clear a filter, or try another saved view."
+                      : "Try another search."}
+                  </p>
+                </div>
+              ) : (
+                <PeopleTable
+                  rows={shown.map((p) => ({
+                    id: p.id,
+                    name: p.full_name,
+                    title: p.title,
+                    organisation: p.organisation
+                      ? { id: p.organisation.id, name: p.organisation.name }
+                      : undefined,
+                    touchDueInDays: p.touchDueInDays,
+                    tags: p.tags,
+                    phone: p.phone,
+                    email: p.email,
+                    ownerInitials: initials(p.owner?.full_name),
+                    ownerName: p.owner?.full_name ?? "Unassigned",
+                  }))}
+                  owners={members
+                    .filter((m) => m.role !== "viewer")
+                    .map((m) => ({ value: m.id, label: m.full_name }))}
+                  canEdit={can.edit(role)}
+                  canDelete={can.editWorkspace(role)}
+                />
+              )}
+            </>
           )}
         </Band>
       </main>

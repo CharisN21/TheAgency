@@ -275,10 +275,33 @@ export type ContactRow = Contact & {
   touchDueInDays: number | null
 }
 
-export async function listContacts(workspaceId: string): Promise<ContactRow[]> {
+export type ContactFilters = {
+  q?: string
+  owner?: string
+  organisation?: string
+  tag?: string
+  /** "due" = today or overdue, "week" = within 7 days, "none" = no date set. */
+  touch?: string
+}
+
+export async function listContacts(
+  workspaceId: string,
+  f: ContactFilters = {}
+): Promise<ContactRow[]> {
   const db = await readDb()
+  const q = f.q?.trim().toLowerCase()
   return db.contacts
     .filter((c) => c.workspace_id === workspaceId)
+    .filter((c) => (f.owner ? c.owner_id === f.owner : true))
+    .filter((c) => (f.organisation ? c.organisation_id === f.organisation : true))
+    .filter((c) => (f.tag ? c.tags.some((t) => t.toLowerCase() === f.tag!.toLowerCase()) : true))
+    .filter((c) => {
+      if (!q) return true
+      const org = db.organisations.find((o) => o.id === c.organisation_id)
+      return `${c.full_name} ${c.title ?? ""} ${c.email ?? ""} ${c.phone ?? ""} ${org?.name ?? ""} ${c.tags.join(" ")}`
+        .toLowerCase()
+        .includes(q)
+    })
     .map((c) => ({
       ...c,
       organisation: db.organisations.find((o) => o.id === c.organisation_id),
@@ -287,7 +310,19 @@ export async function listContacts(workspaceId: string): Promise<ContactRow[]> {
         ? Math.ceil((new Date(c.next_touch_at).getTime() - Date.now()) / 864e5)
         : null,
     }))
+    .filter((c) => {
+      if (f.touch === "due") return c.touchDueInDays !== null && c.touchDueInDays <= 0
+      if (f.touch === "week") return c.touchDueInDays !== null && c.touchDueInDays <= 7
+      if (f.touch === "none") return c.touchDueInDays === null
+      return true
+    })
     .sort((a, b) => (a.touchDueInDays ?? 999) - (b.touchDueInDays ?? 999))
+}
+
+/** Every tag in use on people, for the filter. */
+export async function listPeopleTags(workspaceId: string): Promise<string[]> {
+  const db = await readDb()
+  return [...new Set(db.contacts.filter((c) => c.workspace_id === workspaceId).flatMap((c) => c.tags))].sort()
 }
 
 /* ------------------------------------------------------------------ today */
