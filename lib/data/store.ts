@@ -245,6 +245,9 @@ export function seed(): Database {
     objective(wanjiru.id, "KEBS certificates for all PPE lines", "month", "number", 3, 1),
   ]
 
+  const creditTermsId = newId()
+  const leadTimeId = newId()
+
   return {
     profiles: [charis, wanjiru, otieno, achieng, brian],
     workspaces: [kilima, ppe],
@@ -278,6 +281,35 @@ export function seed(): Database {
     objectives,
     retrospectives: [],
     team_suggestions: [],
+    // Two fields to show the idea; add your own in Settings.
+    custom_fields: [
+      {
+        id: creditTermsId,
+        workspace_id: kilima.id,
+        object: "organisations" as const,
+        label: "Credit terms",
+        type: "choice" as const,
+        options: ["Cash on delivery", "7 days", "30 days", "60 days"],
+        position: 0,
+        created_by: charis.id,
+        created_at: now(),
+      },
+      {
+        id: leadTimeId,
+        workspace_id: kilima.id,
+        object: "organisations" as const,
+        label: "Lead time (days)",
+        type: "number" as const,
+        options: [],
+        position: 1,
+        created_by: charis.id,
+        created_at: now(),
+      },
+    ],
+    custom_values: [
+      { workspace_id: kilima.id, field_id: creditTermsId, record_id: vision.id, value: "30 days" },
+      { workspace_id: kilima.id, field_id: leadTimeId, record_id: vision.id, value: "7" },
+    ],
     flags: [
       {
         id: newId(),
@@ -337,6 +369,8 @@ export async function readDb(): Promise<Database> {
     parsed.flags ??= []
     parsed.retrospectives ??= []
     parsed.team_suggestions ??= []
+    parsed.custom_fields ??= []
+    parsed.custom_values ??= []
     cache = parsed as Database
   } catch {
     cache = seed()

@@ -5,12 +5,19 @@ import { ArrowLeft, Phone, Plus, Users } from "lucide-react"
 import { Band, BandTitle } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
 import { NewTask, TaskList } from "@/components/app/tasks"
+import { CustomValues } from "@/components/app/custom-fields"
 import { Timeline } from "@/components/app/timeline"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { NewDeal } from "@/app/(app)/deals/new-deal"
-import { getOrganisation, listAssignees, listOrganisations, listTasks } from "@/lib/data/queries"
+import {
+  getCustomValues,
+  getOrganisation,
+  listAssignees,
+  listOrganisations,
+  listTasks,
+} from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { ORG_CATEGORY_LABEL, can, money, stageOf } from "@/lib/data/types"
 import { AddContact, LogActivity } from "./record-actions"
@@ -30,10 +37,11 @@ export default async function OrganisationPage({ params }: { params: Promise<{ i
   if (!found) notFound()
 
   const { organisation: o, owner, contacts, deals, activities, openValue, wonValue } = found
-  const [organisations, tasks, assignees] = await Promise.all([
+  const [organisations, tasks, assignees, customFields] = await Promise.all([
     listOrganisations(workspace.id),
     listTasks(workspace.id, { organisation: id, withDone: true }),
     listAssignees(workspace.id),
+    getCustomValues(workspace.id, "organisations", id),
   ])
   const editable = can.edit(role)
 
@@ -112,6 +120,13 @@ export default async function OrganisationPage({ params }: { params: Promise<{ i
                   ))}
                 </CardContent>
               </Card>
+              <CustomValues
+                object="organisations"
+                recordId={o.id}
+                fields={customFields}
+                canEdit={editable}
+                canManage={can.editWorkspace(role)}
+              />
             </aside>
 
             {/* Timeline */}

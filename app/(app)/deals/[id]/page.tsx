@@ -6,11 +6,12 @@ import { LogActivity } from "@/app/(app)/organisations/[id]/record-actions"
 import { Band, BandTitle } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
 import { NewTask, TaskList } from "@/components/app/tasks"
+import { CustomValues } from "@/components/app/custom-fields"
 import { Timeline } from "@/components/app/timeline"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { getDeal, listAssignees, listMembers, listTasks } from "@/lib/data/queries"
+import { getCustomValues, getDeal, listAssignees, listMembers, listTasks } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can, money, moneyShort, stageOf } from "@/lib/data/types"
 import { EditDeal, StageSteps } from "./deal-actions"
@@ -32,11 +33,12 @@ function closing(iso?: string) {
 export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const { user, workspace, role } = await requireContext()
-  const [found, members, tasks, assignees] = await Promise.all([
+  const [found, members, tasks, assignees, customFields] = await Promise.all([
     getDeal(workspace.id, id),
     listMembers(workspace.id),
     listTasks(workspace.id, { deal: id, withDone: true }),
     listAssignees(workspace.id),
+    getCustomValues(workspace.id, "deals", id),
   ])
   if (!found) notFound()
 
@@ -254,6 +256,15 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                   ))}
                 </CardContent>
               </Card>
+              <div className="mt-3">
+                <CustomValues
+                  object="deals"
+                  recordId={deal.id}
+                  fields={customFields}
+                  canEdit={editable}
+                  canManage={can.editWorkspace(role)}
+                />
+              </div>
             </div>
           </div>
 

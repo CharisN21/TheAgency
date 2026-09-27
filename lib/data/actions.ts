@@ -51,6 +51,11 @@ import {
   type FlagSeverity,
   type SuggestedMilestone,
   type SuggestedRole,
+  FIELD_OBJECT_LABEL,
+  FIELD_TYPE_LABEL,
+  type CustomField,
+  type FieldObject,
+  type FieldType,
   type Priority,
   type TaskStatus,
 } from "./types"
@@ -2539,5 +2544,237 @@ export async function exportDeals(ids: string[]): Promise<{ filename: string; cs
   return {
     filename: `${workspace.name.toLowerCase().replace(/\s+/g, "-")}-deals.csv`,
     csv: [header.join(","), ...lines].join("\n"),
+  }
+}
+
+/* ---------------------------------------------------------- custom fields */
+// Owners and admins shape the fields; anyone who can edit fills them in.
+
+const FIELD_TYPES = Object.keys(FIELD_TYPE_LABEL) as FieldType[]
+const FIELD_OBJECTS = Object.keys(FIELD_OBJECT_LABEL) as FieldObject[]
+
+/** Reads and checks a field definition from a form. */
+function readFieldForm(formData: FormData) {
+  const label = str(formData, "label")
+  if (label.length < 2 || label.length > 40) return { error: "A field name is 2 to 40 characters" }
+  const type = str(formData, "type") as FieldType
+  if (!FIELD_TYPES.includes(type)) return { error: "Pick what kind of field it is" }
+  const options =
+    type === "choice"
+      ? [...new Set(str(formData, "options").split(/[,\n]/).map((o) => o.trim()).filter(Boolean))]
+      : []
+  if (type === "choice" && (options.length < 2 || options.length > 20)) {
+    return { error: "A choice needs 2 to 20 options, separated by commas" }
+  }
+  if (options.some((o) => o.length > 40)) return { error: "Keep each option under 40 characters" }
+  return { label, type, options }
+}
+
+export async function createCustomField(formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.editWorkspace(role)) return { ok: false, message: "Only owners and admins can add fields" }
+
+  const object = str(formData, "object") as FieldObject
+  if (!FIELD_OBJECTS.includes(object)) return { ok: false, message: "Pick organisations or deals" }
+  const read = readFieldForm(formData)
+  if ("error" in read) return { ok: false, message: read.error ?? "Check the field" }
+
+  const db = await readDb()
+  const siblings = db.custom_fields.filter((f) => f.workspace_id === workspace.id && f.object === object)
+  if (siblings.length >= 30) return { ok: false, message: "That is 30 fields already. Remove one first." }
+  if (siblings.some((f) => f.label.toLowerCase() === read.label.toLowerCase())) {
+    return { ok: false, message: `${FIELD_OBJECT_LABEL[object]} already have a field called ${read.label}` }
+  }
+
+  await mutate((d) => {
+    d.custom_fields.push({
+      id: newId(),
+      workspace_id: workspace.id,
+      object,
+      label: read.label,
+      type: read.type,
+      options: read.options,
+      position: siblings.length,
+      created_by: user.id,
+      created_at: now(),
+    })
+  })
+
+  revalidatePath("/settings")
+  revalidatePath(`/${object}`, "layout")
+  return { ok: true, message: `${read.label} added to ${FIELD_OBJECT_LABEL[object].toLowerCase()}` }
+}
+
+/** Renames a field or changes its choices. Its type stays, so filled-in values stay meaningful. */
+export async function updateCustomField(fieldId: string, formData: FormData): Promise<Result> {
+  const { workspace, role } = await requireContext()
+  if (!can.editWorkspace(role)) return { ok: false, message: "Only owners and admins can change fields" }
+
+  const db = await readDb()
+  const field = db.custom_fields.find((f) => f.id === fieldId && f.workspace_id === workspace.id)
+  if (!field) return { ok: false, message: "That field is gone" }
+  formData.set("type", field.type)
+  const read = readFieldForm(formData)
+  if ("error" in read) return { ok: false, message: read.error ?? "Check the field" }
+  const clash = db.custom_fields.some(
+    (f) =>
+      f.workspace_id === workspace.id &&
+      f.object === field.object &&
+      f.id !== fieldId &&
+      f.label.toLowerCase() === read.label.toLowerCase()
+  )
+  if (clash) return { ok: false, message: `There is already a field called ${read.label}` }
+
+  await mutate((d) => {
+    const f = d.custom_fields.find((x) => x.id === fieldId)!
+    f.label = read.label
+    f.options = read.options
+  })
+
+  revalidatePath("/settings")
+  revalidatePath(`/${field.object}`, "layout")
+  return { ok: true, message: "Field saved" }
+}
+
+/** Removes a field and every value filled in for it. Owners and admins, after a confirm. */
+export async function deleteCustomField(fieldId: string): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.editWorkspace(role)) return { ok: false, message: "Only owners and admins can remove fields" }
+
+  const db = await readDb()
+  const field = db.custom_fields.find((f) => f.id === fieldId && f.workspace_id === workspace.id)
+  if (!field) return { ok: false, message: "That field is gone already" }
+  const filled = db.custom_values.filter((v) => v.field_id === fieldId && v.value).length
+
+  await mutate((d) => {
+    d.custom_fields = d.custom_fields.filter((f) => f.id !== fieldId)
+    d.custom_values = d.custom_values.filter((v) => v.field_id !== fieldId)
+    log(d, workspace.id, user.id, `removed the field ${field.label} from ${FIELD_OBJECT_LABEL[field.object].toLowerCase()}`)
+  })
+
+  revalidatePath("/settings")
+  revalidatePath(`/${field.object}`, "layout")
+  return {
+    ok: true,
+    message: filled ? `${field.label} removed, with ${filled} value${filled === 1 ? "" : "s"}` : `${field.label} removed`,
+  }
+}
+
+/** Checks one value against its field and returns it as stored text, or an error. */
+function cleanValue(field: CustomField, raw: string): { value: string } | { error: string } {
+  const v = raw.trim()
+  if (!v) return { value: "" }
+  switch (field.type) {
+    case "number": {
+      const n = Number(v.replace(/,/g, ""))
+      return Number.isFinite(n) ? { value: String(n) } : { error: `${field.label} has to be a number` }
+    }
+    case "money": {
+      const n = Number(v.replace(/[^0-9.]/g, ""))
+      return Number.isFinite(n) && n >= 0 ? { value: String(Math.round(n)) } : { error: `${field.label} has to be an amount` }
+    }
+    case "date":
+      return Number.isNaN(Date.parse(v)) ? { error: `${field.label} has to be a date` } : { value: v.slice(0, 10) }
+    case "choice":
+      return field.options.includes(v) ? { value: v } : { error: `Pick one of the choices for ${field.label}` }
+    default:
+      return v.length > 500 ? { error: `Keep ${field.label} under 500 characters` } : { value: v }
+  }
+}
+
+/** Saves the custom field values for one organisation or deal. */
+export async function saveCustomValues(object: FieldObject, recordId: string, formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change records" }
+  if (!FIELD_OBJECTS.includes(object)) return { ok: false, message: "That kind of record has no fields" }
+
+  const db = await readDb()
+  const rows: { id: string; workspace_id: string }[] = object === "organisations" ? db.organisations : db.deals
+  if (!rows.some((r) => r.id === recordId && r.workspace_id === workspace.id)) {
+    return { ok: false, message: "That record is not in this workspace" }
+  }
+
+  const fields = db.custom_fields.filter((f) => f.workspace_id === workspace.id && f.object === object)
+  const next: { field: CustomField; value: string }[] = []
+  for (const field of fields) {
+    if (!formData.has(field.id)) continue
+    const cleaned = cleanValue(field, str(formData, field.id))
+    if ("error" in cleaned) return { ok: false, message: cleaned.error }
+    next.push({ field, value: cleaned.value })
+  }
+
+  const changed: string[] = []
+  await mutate((d) => {
+    for (const { field, value } of next) {
+      const existing = d.custom_values.find((v) => v.field_id === field.id && v.record_id === recordId)
+      if ((existing?.value ?? "") === value) continue
+      changed.push(field.label)
+      if (existing) existing.value = value
+      else d.custom_values.push({ workspace_id: workspace.id, field_id: field.id, record_id: recordId, value })
+    }
+    d.custom_values = d.custom_values.filter((v) => v.value !== "")
+    if (changed.length) {
+      const deal = object === "deals" ? d.deals.find((x) => x.id === recordId) : undefined
+      log(d, workspace.id, user.id, `updated ${changed.join(", ")}`, {
+        organisation_id: object === "organisations" ? recordId : deal?.organisation_id,
+        deal_id: deal?.id,
+      })
+    }
+  })
+
+  revalidatePath(`/${object}/${recordId}`)
+  return { ok: true, message: changed.length ? `Saved ${changed.join(", ")}` : "Nothing changed" }
+}
+
+const FieldSuggestionSchema = z.object({
+  fields: z.array(
+    z.object({
+      object: z.enum(["organisations", "deals"]),
+      label: z.string(),
+      type: z.enum(["text", "number", "money", "date", "choice"]),
+      options: z.array(z.string()),
+      why: z.string(),
+    })
+  ),
+})
+
+/**
+ * Claude looks at what this workspace records and suggests fields worth
+ * adding. Nothing is added: each suggestion is accepted on its own.
+ */
+export async function suggestCustomFields(): Promise<
+  Result & { fields?: z.infer<typeof FieldSuggestionSchema>["fields"] }
+> {
+  const { workspace, role } = await requireContext()
+  if (!can.editWorkspace(role)) return { ok: false, message: "Only owners and admins can add fields" }
+
+  const db = await readDb()
+  const orgs = db.organisations.filter((o) => o.workspace_id === workspace.id)
+  const facts = {
+    workspace: workspace.name,
+    organisations: orgs.slice(0, 40).map((o) => ({
+      type: ORG_CATEGORY_LABEL[o.category],
+      what_they_do: o.what_they_do ?? "",
+      tags: o.tags,
+    })),
+    deals: db.deals
+      .filter((d) => d.workspace_id === workspace.id)
+      .slice(0, 40)
+      .map((d) => ({ title: d.title, stage: stageOf(d.stage).label })),
+    fields_already: db.custom_fields
+      .filter((f) => f.workspace_id === workspace.id)
+      .map((f) => ({ object: f.object, label: f.label })),
+  }
+
+  const answer = await askForJson(
+    FieldSuggestionSchema,
+    "Suggest up to six custom fields worth adding to this business's organisations or deals, based on what it buys, sells and records. Prefer facts a Kenyan small business actually tracks (for example payment terms, KRA PIN, delivery region, tender number). Do not repeat the fields it already has, or built-in ones (name, type, phone, email, location, owner, tags, value, stage, close date). For a choice field give 2 to 8 options; for other types give an empty options list. Keep each reason to one sentence.",
+    facts
+  )
+  if (!answer.ok) return { ok: false, message: answer.message }
+  return {
+    ok: true,
+    message: "Claude has some suggestions. Add the ones you want.",
+    fields: answer.data.fields.slice(0, 6),
   }
 }

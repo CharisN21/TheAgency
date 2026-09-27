@@ -36,6 +36,9 @@ import {
   TASK_STATUS,
   can,
   type Flag,
+  type CustomField,
+  type FieldObject,
+  money,
 } from "./types"
 
 export type Member = Profile & { role: Role; title?: string; joined: string }
@@ -1076,4 +1079,38 @@ export async function getAnalytics(workspaceId: string) {
       return i === weeks - 1 ? "This week" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
     }),
   }
+}
+
+/* ---------------------------------------------------------- custom fields */
+
+export async function listCustomFields(workspaceId: string, object?: FieldObject): Promise<CustomField[]> {
+  const db = await readDb()
+  return db.custom_fields
+    .filter((f) => f.workspace_id === workspaceId && (!object || f.object === object))
+    .sort((a, b) => a.object.localeCompare(b.object) || a.position - b.position)
+}
+
+export type FieldWithValue = CustomField & { value: string; display: string }
+
+/** A record's custom fields with their values, ready to show. */
+export async function getCustomValues(
+  workspaceId: string,
+  object: FieldObject,
+  recordId: string
+): Promise<FieldWithValue[]> {
+  const db = await readDb()
+  const fields = await listCustomFields(workspaceId, object)
+  return fields.map((f) => {
+    const value = db.custom_values.find((v) => v.field_id === f.id && v.record_id === recordId)?.value ?? ""
+    const display = !value
+      ? ""
+      : f.type === "money"
+        ? money(Number(value))
+        : f.type === "number"
+          ? Number(value).toLocaleString("en-KE")
+          : f.type === "date"
+            ? new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+            : value
+    return { ...f, value, display }
+  })
 }

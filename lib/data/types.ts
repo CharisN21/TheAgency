@@ -392,6 +392,46 @@ export type TeamSuggestion = {
   created_at: string
 }
 
+export type FieldType = "text" | "number" | "money" | "date" | "choice"
+
+export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
+  text: "Text",
+  number: "Number",
+  money: "Amount in KSh",
+  date: "Date",
+  choice: "A choice from a list",
+}
+
+/** Records that can carry custom fields. People follow when they get a page of their own. */
+export type FieldObject = "organisations" | "deals"
+
+export const FIELD_OBJECT_LABEL: Record<FieldObject, string> = {
+  organisations: "Organisations",
+  deals: "Deals",
+}
+
+/** A field this workspace added to its organisations or deals. */
+export type CustomField = {
+  id: string
+  workspace_id: string
+  object: FieldObject
+  label: string
+  type: FieldType
+  /** For "choice" fields. */
+  options: string[]
+  position: number
+  created_by: string
+  created_at: string
+}
+
+/** One record's value for one custom field, always kept as text. */
+export type CustomValue = {
+  workspace_id: string
+  field_id: string
+  record_id: string
+  value: string
+}
+
 export type ObjectivePeriod = "week" | "month" | "year"
 
 export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
@@ -457,6 +497,8 @@ export type Database = {
   flags: Flag[]
   retrospectives: Retrospective[]
   team_suggestions: TeamSuggestion[]
+  custom_fields: CustomField[]
+  custom_values: CustomValue[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */
