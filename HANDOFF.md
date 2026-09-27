@@ -2,6 +2,10 @@
 
 Last updated 25 Sep 2026. Read this first when starting a new session, then `CLAUDE.md` for the rules.
 
+## The repo
+
+https://github.com/CharisN21/TheAgency. `main` always works; every piece of work gets its own branch and a pull request (`docs/branching.md`). Milestones are tagged: `v0.1.0` Phase 0, `v0.2.0` CRM core, `v0.3.0` Phase 1.
+
 ## Run it
 
 ```bash

@@ -43,7 +43,7 @@ The look is fixed and lives in a published design system (maroon `#7c1f35` on wa
 ## Working style
 
 - Plan first, in plain words. Build in small steps. After each step, say what to click.
-- Commit after each working step with a clear message, then push.
+- Work on a branch, never on `main`: `feature/<name>`, `fix/<name>`, `design/<name>` or `docs/<name>`, started from the latest `main`. Commit after each working step with a clear message and push the branch. When the piece of work is done, open a pull request into `main` with what to click to test it; Charis merges it (squash and merge). Tag `main` when a phase is finished. Full guide: `docs/branching.md`.
 - Before changing the database, say what data could be lost.
 - Never approve a destructive migration without explaining it first.
 
