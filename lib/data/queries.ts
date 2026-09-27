@@ -182,23 +182,53 @@ export type DealCard = Deal & {
   contact?: Contact
   owner?: Profile
   daysInStage: number
+  /** Days until the expected close; negative when late, null with no date. */
+  closesInDays: number | null
 }
 
-export async function listDeals(
-  workspaceId: string,
-  opts: { owner?: string; organisation?: string } = {}
-): Promise<DealCard[]> {
+export type DealFilters = {
+  owner?: string
+  organisation?: string
+  q?: string
+  /** "late" = past its close date and still open, "week" / "month" = closes within. */
+  closing?: string
+  /** Smallest value in shillings, e.g. "100000". */
+  min?: string
+}
+
+export async function listDeals(workspaceId: string, opts: DealFilters = {}): Promise<DealCard[]> {
   const db = await readDb()
+  const q = opts.q?.trim().toLowerCase()
+  const min = Number(opts.min)
+  const closesIn = (d: Deal) =>
+    d.expected_close ? Math.ceil((new Date(d.expected_close).getTime() - Date.now()) / 864e5) : null
   return db.deals
     .filter((d) => d.workspace_id === workspaceId)
     .filter((d) => (opts.owner ? d.owner_id === opts.owner : true))
     .filter((d) => (opts.organisation ? d.organisation_id === opts.organisation : true))
+    .filter((d) => (Number.isFinite(min) && min > 0 ? d.value >= min : true))
+    .filter((d) => {
+      if (!opts.closing) return true
+      const days = closesIn(d)
+      if (days === null || !OPEN_STAGES.includes(d.stage)) return false
+      if (opts.closing === "late") return days < 0
+      if (opts.closing === "week") return days >= 0 && days <= 7
+      if (opts.closing === "month") return days >= 0 && days <= 31
+      return true
+    })
+    .filter((d) => {
+      if (!q) return true
+      const org = db.organisations.find((o) => o.id === d.organisation_id)
+      const person = db.contacts.find((c) => c.id === d.contact_id)
+      return `${d.title} ${org?.name ?? ""} ${person?.full_name ?? ""}`.toLowerCase().includes(q)
+    })
     .map((d) => ({
       ...d,
       organisation: db.organisations.find((o) => o.id === d.organisation_id),
       contact: db.contacts.find((c) => c.id === d.contact_id),
       owner: db.profiles.find((p) => p.id === d.owner_id),
       daysInStage: daysSince(d.stage_changed_at) ?? 0,
+      closesInDays: closesIn(d),
     }))
     .sort((a, b) => b.value - a.value)
 }
@@ -211,10 +241,7 @@ export type Pipeline = {
   closingSoon: DealCard[]
 }
 
-export async function getPipeline(
-  workspaceId: string,
-  opts: { owner?: string } = {}
-): Promise<Pipeline> {
+export async function getPipeline(workspaceId: string, opts: DealFilters = {}): Promise<Pipeline> {
   const deals = await listDeals(workspaceId, opts)
   const columns = STAGES.map((stage) => {
     const inStage = deals.filter((d) => d.stage === stage.id)

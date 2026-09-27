@@ -58,12 +58,15 @@ export function FilterBar({
   views,
   canShare,
   searchPlaceholder,
+  sticky = [],
 }: {
   object: "organisations" | "people" | "deals"
   fields: FilterFieldDef[]
   views: SavedViewChip[]
   canShare: boolean
   searchPlaceholder: string
+  /** Address settings that are not filters (like the Deals list/board switch) and survive Clear. */
+  sticky?: string[]
 }) {
   const params = useSearchParams()
   const router = useRouter()
@@ -83,6 +86,14 @@ export function FilterBar({
     const label = f.options.find((o) => o.value === v)?.label ?? v
     return [{ key: f.key, text: f.phrase.replace("{}", label) }]
   })
+
+  // What Clear and "All" keep: the page's own settings, never the filters.
+  const kept = new URLSearchParams()
+  for (const k of sticky) {
+    const v = params.get(k)
+    if (v) kept.set(k, v)
+  }
+  const base = kept.toString() ? `/${object}?${kept.toString()}` : `/${object}`
 
   function go(next: URLSearchParams) {
     const q = next.toString()
@@ -127,7 +138,7 @@ export function FilterBar({
       {/* Saved views */}
       <div className="flex flex-wrap items-center gap-2">
         <Link
-          href={`/${object}`}
+          href={base}
           className={cn(
             "rounded-full px-3 py-1 text-xs font-semibold",
             !hasFilters
@@ -250,7 +261,7 @@ export function FilterBar({
 
         {hasFilters && (
           <>
-            <Button variant="ghost" size="sm" onClick={() => router.push(pathname)}>
+            <Button variant="ghost" size="sm" onClick={() => router.push(base)}>
               Clear
             </Button>
             <Button variant="outline" size="sm" onClick={() => setSaving(true)}>
@@ -260,10 +271,12 @@ export function FilterBar({
         )}
 
         <form action={`/${object}`} className="ml-auto">
-          {/* Keep the filters when searching. */}
-          {active.map((a) => (
-            <input key={a.key} type="hidden" name={a.key} value={current.get(a.key) ?? ""} />
-          ))}
+          {/* Keep the filters, and the page's own settings, when searching. */}
+          {[...current.entries()]
+            .filter(([k]) => k !== "q")
+            .map(([k, v]) => (
+              <input key={k} type="hidden" name={k} value={v} />
+            ))}
           <div className="relative">
             <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
             <Input

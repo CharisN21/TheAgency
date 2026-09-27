@@ -39,17 +39,18 @@ There is **no database on purpose**. Everything lives in `.data/agency.json`, wr
 - **Claude** (`lib/ai/claude.ts`, server-only; switched on by `ANTHROPIC_API_KEY` in `.env.local`, status shown in Settings). Model `claude-opus-5`, adaptive thinking, effort medium, structured JSON output checked with zod, server-side refusal fallback (`fallbacks: "default"`). Three uses, all suggestions a person accepts: **Suggest a team** on a project (lead or admin): roles with headcount, person or AI helper, who from the team might fit, and milestones; each line is accepted or dismissed on its own (accepting a named person adds them to the project; a milestone becomes a task for the lead); the whole proposal is kept in `team_suggestions` with what was accepted. **Draft with Claude** in the check-in form fills the boxes to edit. **Suggest lessons with Claude** in the close steps adds lessons to tick. Claude sees project names, scope, task titles, statuses, dates and first names, never private flags. Without a key the buttons are hidden and the app explains how to switch Claude on. **Not yet tried against the live API** (no key on this laptop).
 - Data: `projects`, `tasks`, `objectives`, `check_ins`, `flags`, `retrospectives`, `team_suggestions` in the store; migrations `0003` to `0007` (flags' privacy rule is in the database too, as `can_see_flag`).
 
+**Lists** — Organisations, People and Deals share one filter bar (`components/app/filter-bar.tsx`: saved views, filter chips, search; each page passes its own filters as plain data, and `sticky` keeps page settings such as the Deals `view`). People filter by when to speak next, owner, organisation and tag; Deals by when they close, owner, organisation and size, on the board or in a list (`?view=list`). Each list has tick boxes and a bulk bar: People — owner, tag, speak-again date, export, delete; Deals — stage (Lost asks why once for all), owner, close date, export, delete. Deleting is owners and admins only, after a confirm, and keeps linked tasks and history.
+
 Every action returns a result and raises a toast. Lists have skeletons and empty states. `app/(app)/error.tsx` catches the rest.
 
 ## What is next, in order
 
 1. **Try the import on the real supplier and Safaricom sheets**, then run the duplicates review on what came in.
 2. **Publish the design system** so it picks up the new `Layout-01-Bands` board (source regenerated with `python design-system/gen_bands.py`; tokens and build rules updated).
-3. **Bulk actions and filters on people and deals** — the organisations pattern, copied across (`org-table.tsx` and `filter-bar.tsx` are the models).
-4. **Custom fields** — per workspace, per object, AI-suggested and approved.
-5. **Phase 5 — notifications, then encrypted messaging.** Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
-6. **Phase 1 is built.** Next: add a Claude API key and try the three Claude features for real; then use Phase 1 on a real project before Phase 2 (a CLAUDE.md rule).
-7. **Supabase**, once the flows and the feel are settled. Rewrite `store.ts` as a Postgres adapter, run the migrations (`0001`, then `0002_not_duplicates`), enable Google and magic-link auth, then delete the local store. Merging must become one database function (one transaction) — see the note at the end of `0002`.
+3. **Custom fields** — per workspace, per object, AI-suggested and approved.
+4. **Phase 5 — notifications, then encrypted messaging.** Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
+5. **Phase 1 is built.** Next: add a Claude API key and try the three Claude features for real; then use Phase 1 on a real project before Phase 2 (a CLAUDE.md rule).
+6. **Supabase**, once the flows and the feel are settled. Rewrite `store.ts` as a Postgres adapter, run the migrations (`0001`, then `0002_not_duplicates`), enable Google and magic-link auth, then delete the local store. Merging must become one database function (one transaction) — see the note at the end of `0002`.
 
 ## Where things are
 

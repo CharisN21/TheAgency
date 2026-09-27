@@ -31,6 +31,7 @@ import {
   ACTIVITY_LABEL,
   can,
   ORG_CATEGORY_LABEL,
+  STAGES,
   stageOf,
   type ActivityType,
   type Database,
@@ -2399,6 +2400,144 @@ export async function exportPeople(ids: string[]): Promise<{ filename: string; c
   )
   return {
     filename: `${workspace.name.toLowerCase().replace(/\s+/g, "-")}-people.csv`,
+    csv: [header.join(","), ...lines].join("\n"),
+  }
+}
+
+/* -------------------------------------------------------- deals, in bulk */
+
+const STAGE_IDS = STAGES.map((st) => st.id)
+// Every id is checked against this workspace; anything else is ignored.
+
+const dealWord = (n: number) => `${n} deal${n === 1 ? "" : "s"}`
+
+async function dealsGuard(ids: string[]) {
+  const ctx = await requireContext()
+  if (!can.edit(ctx.role)) return { error: "Viewers cannot change deals" }
+  const db = await readDb()
+  const mine = db.deals.filter((d) => d.workspace_id === ctx.workspace.id && ids.includes(d.id))
+  if (mine.length === 0) return { error: "Nothing selected" }
+  return { ctx, db, ids: mine.map((d) => d.id) }
+}
+
+function revalidateDeals() {
+  revalidatePath("/deals", "layout")
+  revalidatePath("/organisations", "layout")
+  revalidatePath("/team", "layout")
+  revalidatePath("/today")
+}
+
+export async function bulkDealsOwner(ids: string[], userId: string): Promise<Result> {
+  const g = await dealsGuard(ids)
+  if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
+  const member = g.db.memberships.find((m) => m.workspace_id === g.ctx.workspace.id && m.user_id === userId)
+  const target = g.db.profiles.find((p) => p.id === userId)
+  if (!member || !target || member.role === "viewer") {
+    return { ok: false, message: "The owner has to be someone who can work in this workspace" }
+  }
+
+  await mutate((d) => {
+    for (const deal of d.deals) if (g.ids.includes(deal.id)) deal.owner_id = userId
+    log(d, g.ctx.workspace.id, g.ctx.user.id, `gave ${dealWord(g.ids.length)} to ${target.full_name}`)
+  })
+  revalidateDeals()
+  return { ok: true, message: `${dealWord(g.ids.length)} now with ${target.full_name.split(" ")[0]}` }
+}
+
+/** Moves every selected deal to one stage. Lost always needs a reason, given once for all of them. */
+export async function bulkDealsStage(ids: string[], stage: StageId, reason = ""): Promise<Result> {
+  const g = await dealsGuard(ids)
+  if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
+  if (!STAGE_IDS.includes(stage)) return { ok: false, message: "That is not a stage" }
+  const why = reason.trim()
+  if (stage === "lost" && why.length < 3) return { ok: false, message: "Say why they were lost" }
+
+  const to = stageOf(stage).label
+  let moved = 0
+  await mutate((d) => {
+    for (const deal of d.deals) {
+      if (!g.ids.includes(deal.id) || deal.stage === stage) continue
+      const from = stageOf(deal.stage).label
+      deal.stage = stage
+      deal.stage_changed_at = now()
+      deal.closed_at = stage === "won" || stage === "lost" ? now() : undefined
+      deal.lost_reason = stage === "lost" ? why : undefined
+      moved++
+      log(d, g.ctx.workspace.id, g.ctx.user.id, `moved ${deal.title} from ${from} to ${to}${stage === "lost" ? ` — ${why}` : ""}`, {
+        organisation_id: deal.organisation_id,
+        deal_id: deal.id,
+      })
+    }
+  })
+  revalidateDeals()
+  return { ok: true, message: moved ? `${dealWord(moved)} moved to ${to}` : `They were already in ${to}` }
+}
+
+/** One expected close date for everything selected; an empty date clears it. */
+export async function bulkDealsClose(ids: string[], date: string): Promise<Result> {
+  const g = await dealsGuard(ids)
+  if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
+  if (date && Number.isNaN(Date.parse(date))) return { ok: false, message: "That is not a date" }
+
+  await mutate((d) => {
+    for (const deal of d.deals) if (g.ids.includes(deal.id)) deal.expected_close = date || undefined
+  })
+  revalidateDeals()
+  return {
+    ok: true,
+    message: date
+      ? `${dealWord(g.ids.length)} expected to close ${new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+      : `Cleared the close date on ${dealWord(g.ids.length)}`,
+  }
+}
+
+/**
+ * Owners and admins only. Tasks, projects and history are kept and lose the
+ * link to the deal.
+ */
+export async function bulkDealsDelete(ids: string[]): Promise<Result> {
+  const g = await dealsGuard(ids)
+  if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
+  if (!can.editWorkspace(g.ctx.role)) return { ok: false, message: "Only owners and admins can delete deals" }
+
+  await mutate((d) => {
+    d.deals = d.deals.filter((deal) => !g.ids.includes(deal.id))
+    for (const t of d.tasks) if (t.deal_id && g.ids.includes(t.deal_id)) t.deal_id = undefined
+    for (const p of d.projects) if (p.deal_id && g.ids.includes(p.deal_id)) p.deal_id = undefined
+    for (const a of d.activities) if (a.deal_id && g.ids.includes(a.deal_id)) a.deal_id = undefined
+    log(d, g.ctx.workspace.id, g.ctx.user.id, `deleted ${dealWord(g.ids.length)}`)
+  })
+  revalidateDeals()
+  revalidatePath("/projects", "layout")
+  return { ok: true, message: `${dealWord(g.ids.length)} deleted. Their tasks and history were kept.` }
+}
+
+/** CSV of the deals selected, or every deal when nothing is. */
+export async function exportDeals(ids: string[]): Promise<{ filename: string; csv: string }> {
+  const { workspace } = await requireContext()
+  const db = await readDb()
+  const rows = db.deals.filter((d) => d.workspace_id === workspace.id && (ids.length === 0 || ids.includes(d.id)))
+  const cell = (v: string | number | undefined) => {
+    const s = String(v ?? "")
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const header = ["Deal", "Organisation", "Person", "Value (KSh)", "Stage", "Expected close", "Owner", "Lost because"]
+  const lines = rows.map((d) =>
+    [
+      d.title,
+      db.organisations.find((o) => o.id === d.organisation_id)?.name,
+      db.contacts.find((c) => c.id === d.contact_id)?.full_name,
+      d.value,
+      stageOf(d.stage).label,
+      d.expected_close?.slice(0, 10),
+      db.profiles.find((p) => p.id === d.owner_id)?.full_name,
+      d.lost_reason,
+    ]
+      .map(cell)
+      .join(",")
+  )
+  return {
+    filename: `${workspace.name.toLowerCase().replace(/\s+/g, "-")}-deals.csv`,
     csv: [header.join(","), ...lines].join("\n"),
   }
 }
