@@ -249,7 +249,7 @@ export default async function TodayPage() {
                 {touchesDue.slice(0, 5).map((c) => (
                   <Link
                     key={c.id}
-                    href={c.organisation ? `/organisations/${c.organisation.id}` : "/people"}
+                    href={`/people/${c.id}`}
                     className="hover:bg-muted/50 flex items-center gap-3 px-4 py-3"
                   >
                     <span className="bg-accent text-accent-foreground grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold">

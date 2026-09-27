@@ -402,15 +402,16 @@ export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
   choice: "A choice from a list",
 }
 
-/** Records that can carry custom fields. People follow when they get a page of their own. */
-export type FieldObject = "organisations" | "deals"
+/** Records that can carry custom fields. */
+export type FieldObject = "organisations" | "people" | "deals"
 
 export const FIELD_OBJECT_LABEL: Record<FieldObject, string> = {
   organisations: "Organisations",
+  people: "People",
   deals: "Deals",
 }
 
-/** A field this workspace added to its organisations or deals. */
+/** A field this workspace added to its organisations, people or deals. */
 export type CustomField = {
   id: string
   workspace_id: string
