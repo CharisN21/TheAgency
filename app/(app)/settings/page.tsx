@@ -1,11 +1,12 @@
 import { Database, Share, Sparkles, SquarePlus, Smartphone } from "lucide-react"
 
 import { Band } from "@/components/app/band"
+import { PageHeader } from "@/components/app/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 import { aiAvailable } from "@/lib/ai/claude"
 import { FieldManager } from "@/components/app/custom-fields"
-import { listCustomFields } from "@/lib/data/queries"
+import { NotificationSwitches } from "@/components/app/notifications"
+import { getMutedNotifications, listCustomFields } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can, ROLE_HELP, ROLE_LABEL } from "@/lib/data/types"
 import { WorkspaceNameForm, ResetDemo } from "./forms"
@@ -18,14 +19,11 @@ const INSTALL = [
 ] as const
 
 export default async function SettingsPage() {
-  const { workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireContext()
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="bg-bar border-border sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-4 backdrop-blur-xl">
-        <SidebarTrigger className="md:hidden" />
-        <h1 className="flex-1 font-semibold">Settings</h1>
-      </header>
+      <PageHeader title="Settings" />
 
       <main className="flex-1">
         <Band tone="accent" index={0} narrow label="Your place here">
@@ -54,7 +52,23 @@ export default async function SettingsPage() {
           </Card>
         </Band>
 
-        <Band tone="soft" index={2} narrow label="Install on your iPhone">
+        <Band tone="soft" index={2} narrow label="Notifications">
+          <Card id="notifications" className="scroll-mt-20">
+            <CardHeader>
+              <CardTitle>Notifications</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 p-0">
+              <p className="text-muted-foreground px-6 text-sm">
+                The bell in the top bar tells you what happened to your work. Switch off what you do
+                not need; this is yours only and changes nothing for anyone else. Email digests and
+                quiet hours come next.
+              </p>
+              <NotificationSwitches muted={await getMutedNotifications(workspace.id, user.id)} />
+            </CardContent>
+          </Card>
+        </Band>
+
+        <Band index={3} narrow label="Install on your iPhone">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -81,7 +95,7 @@ export default async function SettingsPage() {
         </Band>
 
         {can.editWorkspace(role) && (
-          <Band index={3} narrow label="Custom fields">
+          <Band tone="soft" index={4} narrow label="Custom fields">
             <Card id="custom-fields" className="scroll-mt-20">
               <CardHeader>
                 <CardTitle>Custom fields</CardTitle>

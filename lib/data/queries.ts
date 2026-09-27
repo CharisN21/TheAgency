@@ -39,6 +39,8 @@ import {
   type CustomField,
   type FieldObject,
   money,
+  type Notification,
+  type NotificationType,
 } from "./types"
 
 export type Member = Profile & { role: Role; title?: string; joined: string }
@@ -1145,4 +1147,59 @@ export async function getPerson(workspaceId: string, id: string) {
       .slice(0, 40),
     people: db.profiles,
   }
+}
+
+/* ---------------------------------------------------------- notifications */
+
+export type NotificationRow = Notification & { actorName?: string; ago: string; day: string }
+
+/** "just now", "5 min ago", "3 h ago", "yesterday", "12 Sep". */
+function ago(iso: string) {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins} min ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours} h ago`
+  if (hours < 48) return "yesterday"
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+}
+
+function dayLabel(iso: string) {
+  const d = iso.slice(0, 10)
+  const today = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10)
+  if (d === today) return "Today"
+  if (d === yesterday) return "Yesterday"
+  return new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
+}
+
+/** Your notifications in this workspace, newest first. Only ever your own. */
+export async function listNotifications(
+  workspaceId: string,
+  userId: string,
+  f: { unread?: boolean; type?: string; limit?: number } = {}
+): Promise<NotificationRow[]> {
+  const db = await readDb()
+  return db.notifications
+    .filter((n) => n.workspace_id === workspaceId && n.user_id === userId)
+    .filter((n) => (f.unread ? !n.read_at : true))
+    .filter((n) => (f.type ? n.type === f.type : true))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, f.limit ?? 200)
+    .map((n) => ({
+      ...n,
+      actorName: db.profiles.find((p) => p.id === n.actor_id)?.full_name,
+      ago: ago(n.created_at),
+      day: dayLabel(n.created_at),
+    }))
+}
+
+export async function unreadNotificationCount(workspaceId: string, userId: string): Promise<number> {
+  const db = await readDb()
+  return db.notifications.filter((n) => n.workspace_id === workspaceId && n.user_id === userId && !n.read_at).length
+}
+
+export async function getMutedNotifications(workspaceId: string, userId: string): Promise<NotificationType[]> {
+  const db = await readDb()
+  return db.notification_prefs.find((p) => p.workspace_id === workspaceId && p.user_id === userId)?.muted ?? []
 }
