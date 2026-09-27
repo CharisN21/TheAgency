@@ -530,7 +530,7 @@ export async function createContact(formData: FormData): Promise<AddResult> {
             id: c.id,
             name: c.full_name,
             detail: [c.title, theirOrg?.name].filter(Boolean).join(" · ") || "No organisation",
-            href: theirOrg ? `/organisations/${theirOrg.id}` : "/people",
+            href: `/people/${c.id}`,
             reason: REASON_LABEL[reason],
           },
         }
@@ -2575,7 +2575,7 @@ export async function createCustomField(formData: FormData): Promise<Result> {
   if (!can.editWorkspace(role)) return { ok: false, message: "Only owners and admins can add fields" }
 
   const object = str(formData, "object") as FieldObject
-  if (!FIELD_OBJECTS.includes(object)) return { ok: false, message: "Pick organisations or deals" }
+  if (!FIELD_OBJECTS.includes(object)) return { ok: false, message: "Pick organisations, people or deals" }
   const read = readFieldForm(formData)
   if ("error" in read) return { ok: false, message: read.error ?? "Check the field" }
 
@@ -2689,7 +2689,8 @@ export async function saveCustomValues(object: FieldObject, recordId: string, fo
   if (!FIELD_OBJECTS.includes(object)) return { ok: false, message: "That kind of record has no fields" }
 
   const db = await readDb()
-  const rows: { id: string; workspace_id: string }[] = object === "organisations" ? db.organisations : db.deals
+  const rows: { id: string; workspace_id: string }[] =
+    object === "organisations" ? db.organisations : object === "people" ? db.contacts : db.deals
   if (!rows.some((r) => r.id === recordId && r.workspace_id === workspace.id)) {
     return { ok: false, message: "That record is not in this workspace" }
   }
@@ -2715,9 +2716,11 @@ export async function saveCustomValues(object: FieldObject, recordId: string, fo
     d.custom_values = d.custom_values.filter((v) => v.value !== "")
     if (changed.length) {
       const deal = object === "deals" ? d.deals.find((x) => x.id === recordId) : undefined
+      const person = object === "people" ? d.contacts.find((x) => x.id === recordId) : undefined
       log(d, workspace.id, user.id, `updated ${changed.join(", ")}`, {
-        organisation_id: object === "organisations" ? recordId : deal?.organisation_id,
+        organisation_id: object === "organisations" ? recordId : (deal ?? person)?.organisation_id,
         deal_id: deal?.id,
+        contact_id: person?.id,
       })
     }
   })
@@ -2729,7 +2732,7 @@ export async function saveCustomValues(object: FieldObject, recordId: string, fo
 const FieldSuggestionSchema = z.object({
   fields: z.array(
     z.object({
-      object: z.enum(["organisations", "deals"]),
+      object: z.enum(["organisations", "people", "deals"]),
       label: z.string(),
       type: z.enum(["text", "number", "money", "date", "choice"]),
       options: z.array(z.string()),
@@ -2768,7 +2771,7 @@ export async function suggestCustomFields(): Promise<
 
   const answer = await askForJson(
     FieldSuggestionSchema,
-    "Suggest up to six custom fields worth adding to this business's organisations or deals, based on what it buys, sells and records. Prefer facts a Kenyan small business actually tracks (for example payment terms, KRA PIN, delivery region, tender number). Do not repeat the fields it already has, or built-in ones (name, type, phone, email, location, owner, tags, value, stage, close date). For a choice field give 2 to 8 options; for other types give an empty options list. Keep each reason to one sentence.",
+    "Suggest up to six custom fields worth adding to this business's organisations, people or deals, based on what it buys, sells and records. Prefer facts a Kenyan small business actually tracks (for example payment terms, KRA PIN, delivery region, tender number). Do not repeat the fields it already has, or built-in ones (name, type, phone, email, location, owner, tags, value, stage, close date). For a choice field give 2 to 8 options; for other types give an empty options list. Keep each reason to one sentence.",
     facts
   )
   if (!answer.ok) return { ok: false, message: answer.message }
@@ -2777,4 +2780,60 @@ export async function suggestCustomFields(): Promise<
     message: "Claude has some suggestions. Add the ones you want.",
     fields: answer.data.fields.slice(0, 6),
   }
+}
+
+/* ------------------------------------------------------------- one person */
+
+/** Edits one person: who they are, where they work, who owns them, when to speak next. */
+export async function updateContact(contactId: string, formData: FormData): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.edit(role)) return { ok: false, message: "Viewers cannot change people" }
+
+  const db = await readDb()
+  const person = db.contacts.find((c) => c.id === contactId && c.workspace_id === workspace.id)
+  if (!person) return { ok: false, message: "That person is not here" }
+
+  const full_name = str(formData, "full_name")
+  if (full_name.length < 2 || full_name.length > 80) return { ok: false, message: "A name is 2 to 80 characters" }
+  const email = str(formData, "email")
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "That email does not look right" }
+  const next = str(formData, "next_touch_at")
+  if (next && Number.isNaN(Date.parse(next))) return { ok: false, message: "That is not a date" }
+
+  const organisation_id = str(formData, "organisation_id") || undefined
+  if (organisation_id && !db.organisations.some((o) => o.id === organisation_id && o.workspace_id === workspace.id)) {
+    return { ok: false, message: "That organisation is not in this workspace" }
+  }
+  const owner_id = str(formData, "owner_id") || person.owner_id
+  const owner = db.memberships.find((m) => m.workspace_id === workspace.id && m.user_id === owner_id)
+  if (!owner || owner.role === "viewer") {
+    return { ok: false, message: "The owner has to be someone who can work in this workspace" }
+  }
+
+  await mutate((d) => {
+    const c = d.contacts.find((x) => x.id === contactId)!
+    const moved = c.organisation_id !== organisation_id
+    c.full_name = full_name
+    c.title = str(formData, "title") || undefined
+    c.phone = str(formData, "phone") || undefined
+    c.email = email || undefined
+    c.tags = tags(formData, "tags")
+    c.next_touch_at = next || undefined
+    c.organisation_id = organisation_id
+    c.owner_id = owner_id
+    log(
+      d,
+      workspace.id,
+      user.id,
+      moved
+        ? `moved ${full_name} to ${d.organisations.find((o) => o.id === organisation_id)?.name ?? "no organisation"}`
+        : `updated ${full_name}`,
+      { organisation_id, contact_id: contactId }
+    )
+  })
+
+  revalidatePath("/people", "layout")
+  revalidatePath("/organisations", "layout")
+  revalidatePath("/today")
+  return { ok: true, message: "Saved" }
 }

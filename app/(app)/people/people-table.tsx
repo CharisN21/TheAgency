@@ -287,7 +287,9 @@ export function PeopleTable({
                           {initials(p.name)}
                         </span>
                         <span className="min-w-0">
-                          <span className="block truncate font-medium">{p.name}</span>
+                          <Link href={`/people/${p.id}`} className="block truncate font-medium hover:underline">
+                            {p.name}
+                          </Link>
                           <span className="text-muted-foreground block truncate text-xs">
                             {p.title ? `${p.title} · ` : ""}
                             {p.organisation ? (

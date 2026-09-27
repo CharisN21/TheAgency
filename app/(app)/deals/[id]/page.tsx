@@ -174,7 +174,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                           .toUpperCase()}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{contact.full_name}</span>
+                        <Link href={`/people/${contact.id}`} className="block truncate font-medium hover:underline">
+                          {contact.full_name}
+                        </Link>
                         <span className="text-muted-foreground block truncate text-sm">
                           {contact.title ?? contact.email ?? "—"}
                         </span>

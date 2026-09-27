@@ -1,4 +1,4 @@
--- Custom fields on organisations and deals. Adds two tables; changes nothing
+-- Custom fields on organisations, people and deals. Adds two tables; changes nothing
 -- that exists.
 
 create type public.field_type as enum ('text', 'number', 'money', 'date', 'choice');
@@ -6,7 +6,7 @@ create type public.field_type as enum ('text', 'number', 'money', 'date', 'choic
 create table public.custom_fields (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces on delete cascade,
-  object text not null check (object in ('organisations', 'deals')),
+  object text not null check (object in ('organisations', 'people', 'deals')),
   label text not null check (char_length(label) between 2 and 40),
   type public.field_type not null,
   options text[] not null default '{}',

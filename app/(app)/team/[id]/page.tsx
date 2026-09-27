@@ -225,7 +225,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                   return (
                     <Link
                       key={c.id}
-                      href={c.organisation ? `/organisations/${c.organisation.id}` : "/people"}
+                      href={`/people/${c.id}`}
                       className="hover:bg-muted/50 flex min-h-14 items-center gap-3 px-4 py-2.5 transition-colors"
                     >
                       <span className="bg-fill-strong grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold">

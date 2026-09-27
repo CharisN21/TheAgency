@@ -524,7 +524,7 @@ export async function listDuplicatePeople(workspaceId: string): Promise<Duplicat
       id: c.id,
       name: c.full_name,
       subtitle: [c.title, orgOf(c.organisation_id)?.name].filter(Boolean).join(" · ") || "No organisation",
-      href: c.organisation_id ? `/organisations/${c.organisation_id}` : undefined,
+      href: `/people/${c.id}`,
       deals: db.deals.filter((d) => d.contact_id === c.id).length,
       activities: db.activities.filter((x) => x.contact_id === c.id && x.type !== "system").length,
       created_at: c.created_at,
@@ -651,6 +651,7 @@ export type TaskFilter = {
   project?: string
   deal?: string
   organisation?: string
+  contact?: string
   /** Done tasks are hidden unless asked for; the most recent few come back. */
   withDone?: boolean
 }
@@ -663,6 +664,7 @@ export async function listTasks(workspaceId: string, f: TaskFilter = {}): Promis
     .filter((t) => (f.project ? t.project_id === f.project : true))
     .filter((t) => (f.deal ? t.deal_id === f.deal : true))
     .filter((t) => (f.organisation ? t.organisation_id === f.organisation : true))
+    .filter((t) => (f.contact ? t.contact_id === f.contact : true))
     .map((t): TaskRow => {
       const project = db.projects.find((p) => p.id === t.project_id)
       const deal = db.deals.find((d) => d.id === t.deal_id)
@@ -1113,4 +1115,34 @@ export async function getCustomValues(
             : value
     return { ...f, value, display }
   })
+}
+
+/* ------------------------------------------------------------ person page */
+
+/** One person: who they are, their deals, the work around them and what happened. */
+export async function getPerson(workspaceId: string, id: string) {
+  const db = await readDb()
+  const person = db.contacts.find((c) => c.id === id && c.workspace_id === workspaceId)
+  if (!person) return null
+  const organisation = db.organisations.find((o) => o.id === person.organisation_id)
+  return {
+    person,
+    organisation,
+    owner: db.profiles.find((p) => p.id === person.owner_id),
+    touchDueInDays: person.next_touch_at
+      ? Math.ceil((new Date(person.next_touch_at).getTime() - Date.now()) / 864e5)
+      : null,
+    deals: db.deals
+      .filter((d) => d.contact_id === id)
+      .sort((a, b) => b.value - a.value),
+    /** Others at the same organisation, to jump between. */
+    colleagues: db.contacts
+      .filter((c) => c.workspace_id === workspaceId && c.id !== id && c.organisation_id && c.organisation_id === person.organisation_id)
+      .sort((a, b) => a.full_name.localeCompare(b.full_name)),
+    activities: db.activities
+      .filter((a) => a.contact_id === id)
+      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+      .slice(0, 40),
+    people: db.profiles,
+  }
 }

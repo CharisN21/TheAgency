@@ -171,9 +171,12 @@ export default async function OrganisationPage({ params }: { params: Promise<{ i
                             {initials(c.full_name)}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">
+                            <Link
+                              href={`/people/${c.id}`}
+                              className="block truncate text-sm font-medium hover:underline"
+                            >
                               {c.full_name}
-                            </span>
+                            </Link>
                             <span className="text-muted-foreground block truncate text-xs">
                               {c.title ?? c.email ?? "—"}
                             </span>
