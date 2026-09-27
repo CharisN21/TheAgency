@@ -44,7 +44,7 @@ Every action returns a result and raises a toast. Lists have skeletons and empty
 ## What is next, in order
 
 1. **Try the import on the real supplier and Safaricom sheets**, then run the duplicates review on what came in.
-2. **Record the band pattern in the design system** source (`design-system/`), so the published system matches the app. Also fix the one lint error in `app/(app)/team/invite-dialog.tsx` (setState inside an effect).
+2. **Publish the design system** so it picks up the new `Layout-01-Bands` board (source regenerated with `python design-system/gen_bands.py`; tokens and build rules updated).
 3. **Bulk actions and filters on people and deals** — the organisations pattern, copied across (`org-table.tsx` and `filter-bar.tsx` are the models).
 4. **Custom fields** — per workspace, per object, AI-suggested and approved.
 5. **Phase 5 — notifications, then encrypted messaging.** Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
