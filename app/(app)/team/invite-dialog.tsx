@@ -26,16 +26,13 @@ const CHOICES: Role[] = ["admin", "member", "viewer"]
 export function InviteDialog({ workspaceName }: { workspaceName: string }) {
   const params = useSearchParams()
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  // The sidebar and Today both link here with ?invite=1: start open, then tidy the address.
+  const [open, setOpen] = useState(() => Boolean(params.get("invite")))
   const [role, setRole] = useState<Role>("member")
   const [pending, start] = useTransition()
 
-  // The sidebar and Today both link here with ?invite=1.
   useEffect(() => {
-    if (params.get("invite")) {
-      setOpen(true)
-      router.replace("/team")
-    }
+    if (params.get("invite")) router.replace("/team")
   }, [params, router])
 
   function submit(formData: FormData) {
