@@ -20,6 +20,8 @@ const INSTALL = [
 
 export default async function SettingsPage() {
   const { user, workspace, role } = await requireContext()
+  const fields = can.editWorkspace(role) ? await listCustomFields(workspace.id) : []
+  const fieldCount = fields.length
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -68,13 +70,13 @@ export default async function SettingsPage() {
           </Card>
         </Band>
 
-        <Band index={3} narrow label="Install on your iPhone">
+        <Band
+          index={3}
+          narrow
+          label="Install on your iPhone"
+          fold={{ title: "Install on your iPhone", summary: "four taps in Safari" }}
+        >
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Smartphone className="size-4" /> Install on your iPhone
-              </CardTitle>
-            </CardHeader>
             <CardContent className="p-0">
               <ol className="divide-border divide-y">
                 {INSTALL.map(([title, body, Icon], i) => (
@@ -95,21 +97,21 @@ export default async function SettingsPage() {
         </Band>
 
         {can.editWorkspace(role) && (
-          <Band tone="soft" index={4} narrow label="Custom fields">
-            <Card id="custom-fields" className="scroll-mt-20">
-              <CardHeader>
-                <CardTitle>Custom fields</CardTitle>
-              </CardHeader>
+          <Band
+            tone="soft"
+            index={4}
+            narrow
+            label="Custom fields"
+            fold={{ title: "Custom fields", summary: `${fieldCount} set up` }}
+          >
+            <Card id="custom-fields" className="scroll-mt-20 pt-6">
               <CardContent className="flex flex-col gap-4">
                 <p className="text-muted-foreground text-sm">
                   Your own details on every organisation or deal, like credit terms, a KRA PIN or a
                   tender number. Everyone in {workspace.name} can fill them in; only owners and
                   admins change the list.
                 </p>
-                <FieldManager
-                  fields={await listCustomFields(workspace.id)}
-                  aiEnabled={aiAvailable()}
-                />
+                <FieldManager fields={fields} aiEnabled={aiAvailable()} />
               </CardContent>
             </Card>
           </Band>
@@ -121,6 +123,10 @@ export default async function SettingsPage() {
           narrow
           label="Data"
           className="pb-10"
+          fold={{
+            title: "Claude and your data",
+            summary: aiAvailable() ? "Claude is switched on" : "Claude is switched off",
+          }}
         >
           <Card className="mb-6">
             <CardHeader>

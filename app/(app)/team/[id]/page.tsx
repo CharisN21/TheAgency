@@ -283,10 +283,15 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           )}
         </Band>
 
-        <Band tone={toneAfterLead(4)} index={5} label="Organisations">
-          <BandTitle>
-            Organisations {first} look{self ? "" : "s"} after
-          </BandTitle>
+        <Band
+          tone={toneAfterLead(4)}
+          index={5}
+          label="Organisations"
+          fold={{
+            title: `Organisations ${first} look${self ? "" : "s"} after`,
+            summary: `${organisations.length}`,
+          }}
+        >
           {organisations.length === 0 ? (
             <Empty icon={Building2}>
               None yet. An organisation belongs to whoever added it, until someone reassigns it.
@@ -321,8 +326,16 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           )}
         </Band>
 
-        <Band tone={toneAfterLead(5)} index={6} label="Recent activity" className="pb-10">
-          <BandTitle>What {first} logged lately</BandTitle>
+        <Band
+          tone={toneAfterLead(5)}
+          index={6}
+          label="Recent activity"
+          className="pb-10"
+          fold={{
+            title: `What ${first} logged lately`,
+            summary: `${found.activities.length} ${found.activities.length === 1 ? "entry" : "entries"}`,
+          }}
+        >
           <Timeline
             activities={found.activities}
             people={found.people}

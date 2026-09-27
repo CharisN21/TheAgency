@@ -51,6 +51,8 @@ There is **no database on purpose**. Everything lives in `.data/agency.json`, wr
 
 **Notification centre (Phase 5a, part 1)** — a bell in every page's top bar with your unread count and latest 20, and `/notifications` with All / Unread and per-kind filters, grouped by day. Written by `notify()` (`lib/data/notify.ts`) inside the same change as the action: a deal you own moved or handed to you, a task given to you or one you set finished, a check-in on your project, records handed to you, your invite accepted. Never about your own actions, never about private flags, titles safe for a lock screen. Date-based reminders (check-in due on a project you lead, people you own overdue) are made at most once a day when you open the app. Settings → Notifications switches kinds off for yourself. Part 2 (email digests via Resend, quiet hours) needs a Resend key.
 
+**Progressive disclosure** — secondary sections fold away behind their title and a one-line summary (`Band` `fold` prop, the browser's own details element): a project's About and History, a member page's organisations and recent activity, Settings' iPhone install, custom fields and Claude-and-data. Long lists show the first few (`components/app/show-more.tsx`): timelines the latest 6, a project its latest check-in; task lists show open tasks with finished ones behind "Show N finished".
+
 Every action returns a result and raises a toast. Lists have skeletons and empty states. `app/(app)/error.tsx` catches the rest.
 
 ## What is next, in order

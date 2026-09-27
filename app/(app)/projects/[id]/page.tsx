@@ -246,7 +246,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <CheckInList checkIns={found.checkIns} names={names} />
         </Band>
 
-        <Band index={3} label="About the project">
+        <Band
+          index={3}
+          label="About the project"
+          fold={{
+            title: "About the project",
+            summary: `${p.members.length} ${p.members.length === 1 ? "person" : "people"} on it${p.scope ? " · what done looks like" : ""}`,
+          }}
+        >
           <div className="grid gap-6 md:grid-cols-2">
             <div>
               <BandTitle>What done looks like</BandTitle>
@@ -332,8 +339,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           )}
         </Band>
 
-        <Band tone="soft" index={4} label="History" className="pb-10">
-          <BandTitle>What happened</BandTitle>
+        <Band
+          tone="soft"
+          index={4}
+          label="History"
+          className="pb-10"
+          fold={{ title: "What happened", summary: `${found.activities.length} ${found.activities.length === 1 ? "entry" : "entries"}` }}
+        >
           <Timeline
             activities={found.activities}
             people={found.people}

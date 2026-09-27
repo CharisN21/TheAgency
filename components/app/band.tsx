@@ -1,3 +1,5 @@
+import { ChevronDown } from "lucide-react"
+
 import { cn } from "cn"
 
 /**
@@ -17,8 +19,15 @@ export function Band({
   narrow = false,
   wide = false,
   className,
+  fold,
   children,
 }: {
+  /**
+   * Progressive disclosure: the band shows only its title and a one-line
+   * summary until opened. Uses the browser's own details element, so it works
+   * before any script loads and is announced as expandable.
+   */
+  fold?: { title: string; summary?: string; open?: boolean }
   tone?: "plain" | "soft" | "accent"
   index?: number
   /** A reading-width column, for pages like Today. */
@@ -47,7 +56,28 @@ export function Band({
           narrow ? "max-w-4xl" : wide ? "max-w-none" : "max-w-5xl",
         )}
       >
-        {children}
+        {fold ? (
+          <details open={fold.open} className="group">
+            <summary className="focus-visible:ring-ring flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md focus-visible:ring-2 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+              <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                {fold.title}
+              </span>
+              {fold.summary && (
+                <span className="text-muted-foreground text-xs group-open:hidden">
+                  · {fold.summary}
+                </span>
+              )}
+              <span className="text-muted-foreground ml-auto flex items-center gap-1 text-xs">
+                <span className="group-open:hidden">Show</span>
+                <span className="hidden group-open:inline">Hide</span>
+                <ChevronDown className="size-4 transition-transform duration-200 group-open:rotate-180" />
+              </span>
+            </summary>
+            <div className="pt-3">{children}</div>
+          </details>
+        ) : (
+          children
+        )}
       </div>
     </section>
   )

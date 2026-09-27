@@ -1,5 +1,6 @@
 import { CalendarDays, Mail, MapPin, MessageCircle, NotebookPen, Phone } from "lucide-react"
 
+import { ShowMore } from "@/components/app/show-more"
 import { ACTIVITY_LABEL, type Activity, type ActivityType, type Profile } from "@/lib/data/types"
 
 const ICON: Record<ActivityType, typeof Phone> = {
@@ -25,7 +26,10 @@ export function Timeline({
   activities,
   people,
   empty,
+  initial = 6,
 }: {
+  /** How many entries show before "Show all". */
+  initial?: number
   activities: Activity[]
   people: Profile[]
   empty: string
@@ -39,7 +43,7 @@ export function Timeline({
   }
 
   return (
-    <ol className="flex flex-col gap-4">
+    <ShowMore initial={initial} noun="entries" className="flex flex-col gap-4">
       {activities.map((a) => {
         const Icon = ICON[a.type]
         const actor = people.find((p) => p.id === a.actor_id)
@@ -64,6 +68,6 @@ export function Timeline({
           </li>
         )
       })}
-    </ol>
+    </ShowMore>
   )
 }
