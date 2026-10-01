@@ -43,10 +43,10 @@ async function addDevice(userId: string): Promise<Phone> {
   return { userId, deviceId: r.deviceId!, keys, pub }
 }
 
-async function general(phone: Phone) {
+async function announcements(phone: Phone) {
   as(phone.userId)
   const r = await actions.loadChannels(phone.deviceId)
-  return r.channels.find((c) => c.name === "general")!.id
+  return r.channels.find((c) => c.kind === "announcements")!.id
 }
 
 /** What the drawer does when the server says the key is out of date. */
@@ -100,7 +100,7 @@ async function readAll(phone: Phone, channelId: string) {
 describe("encrypted channels", () => {
   it("members talk; the server only holds sealed text", async () => {
     const charis = await addDevice(f.charis.id)
-    const ch = await general(charis)
+    const ch = await announcements(charis)
     await rotate(charis, ch)
     expect((await send(charis, ch, "Supplier price is KSh 450 a box")).ok).toBe(true)
 
@@ -119,7 +119,7 @@ describe("encrypted channels", () => {
 
   it("nothing can be sent until a new device has been given the key", async () => {
     const charis = await addDevice(f.charis.id)
-    const ch = await general(charis)
+    const ch = await announcements(charis)
     await rotate(charis, ch)
     await addDevice(f.wanjiru.id)
     const r = await send(charis, ch, "Should wait")
@@ -129,7 +129,7 @@ describe("encrypted channels", () => {
   it("someone who leaves the workspace is left out of the next key", async () => {
     const charis = await addDevice(f.charis.id)
     const otieno = await addDevice(f.otieno.id)
-    const ch = await general(charis)
+    const ch = await announcements(charis)
     await rotate(charis, ch)
 
     await mutate((d) => {
@@ -149,7 +149,7 @@ describe("encrypted channels", () => {
   it("a removed device cannot open the channel and is left out of the next key", async () => {
     const charis = await addDevice(f.charis.id)
     const old = await addDevice(f.charis.id)
-    const ch = await general(charis)
+    const ch = await announcements(charis)
     await rotate(charis, ch)
 
     as(f.charis.id)
@@ -164,7 +164,7 @@ describe("encrypted channels", () => {
     const charis = await addDevice(f.charis.id)
     const wanjiru = await addDevice(f.wanjiru.id)
     const zawadi = await addDevice(f.zawadi.id)
-    const ch = await general(charis)
+    const ch = await announcements(charis)
     const key = await createChannelKey()
     const wrap = async (p: Phone) => ({
       device_id: p.deviceId,
@@ -183,7 +183,7 @@ describe("encrypted channels", () => {
   it("people outside the workspace, and other people's devices, get nowhere", async () => {
     const charis = await addDevice(f.charis.id)
     const zawadi = await addDevice(f.zawadi.id)
-    const ch = await general(charis)
+    const ch = await announcements(charis)
     await rotate(charis, ch)
 
     as(f.zawadi.id)
@@ -209,7 +209,7 @@ describe("encrypted channels", () => {
   it("unread counts are per person", async () => {
     const charis = await addDevice(f.charis.id)
     const wanjiru = await addDevice(f.wanjiru.id)
-    const ch = await general(charis)
+    const ch = await announcements(charis)
     await rotate(charis, ch)
     await send(charis, ch, "One")
     await send(charis, ch, "Two")
@@ -219,5 +219,124 @@ describe("encrypted channels", () => {
     expect((await actions.loadChannels(wanjiru.deviceId)).channels[0].unread).toBe(0)
     as(f.charis.id)
     expect((await actions.loadChannels(charis.deviceId)).channels[0].unread).toBe(0)
+  })
+})
+
+describe("pigeonholes: announcements, groups and direct messages", () => {
+  it("everyone reads announcements, but only owners and admins post", async () => {
+    const charis = await addDevice(f.charis.id)
+    const achieng = await addDevice(f.achieng.id)
+    const ch = await announcements(charis)
+    await rotate(charis, ch)
+    expect((await send(charis, ch, "Office closed on Friday")).ok).toBe(true)
+    const r = await send(achieng, ch, "Can I post here?")
+    expect(r.ok).toBe(false)
+    expect(r.message).toMatch(/owners and admins/)
+    as(f.charis.id)
+    expect((await send(charis, ch, "Reminder: KEBS visit Monday")).ok).toBe(true)
+    expect(await readAll(achieng, ch)).toEqual(["Office closed on Friday", "Reminder: KEBS visit Monday"])
+  })
+
+  it("a group is only for its members; someone added later cannot read what came before", async () => {
+    const charis = await addDevice(f.charis.id)
+    const wanjiru = await addDevice(f.wanjiru.id)
+    const achieng = await addDevice(f.achieng.id)
+    const otieno = await addDevice(f.otieno.id)
+
+    as(f.charis.id)
+    const made = await actions.createGroup("PPE logistics", [f.wanjiru.id])
+    expect(made.ok).toBe(true)
+    const g = made.id!
+    await rotate(charis, g)
+    expect((await send(charis, g, "Truck booked for Tuesday")).ok).toBe(true)
+
+    // Otieno is not in it: it is not in his list and will not open.
+    as(f.otieno.id)
+    expect((await actions.loadChannels(otieno.deviceId)).channels.some((c) => c.id === g)).toBe(false)
+    expect((await actions.loadChannel(g, otieno.deviceId)).ok).toBe(false)
+
+    // Wanjiru adds Achieng; the key is made again before anyone can send.
+    as(f.wanjiru.id)
+    expect((await actions.addGroupMembers(g, [f.achieng.id])).ok).toBe(true)
+    expect((await send(wanjiru, g, "Welcome Achieng")).ok).toBe(false)
+    await rotate(wanjiru, g)
+    expect((await send(wanjiru, g, "Welcome Achieng")).ok).toBe(true)
+    expect(await readAll(achieng, g)).toEqual(["Welcome Achieng"])
+    expect(await readAll(wanjiru, g)).toEqual(["Truck booked for Tuesday", "Welcome Achieng"])
+  })
+
+  it("you can leave a group; only its starter or an owner or admin removes someone else", async () => {
+    await addDevice(f.charis.id)
+    as(f.achieng.id)
+    const g = (await actions.createGroup("Procurement", [f.otieno.id, f.charis.id])).id!
+    as(f.otieno.id)
+    expect((await actions.removeGroupMember(g, f.achieng.id)).ok).toBe(false)
+    expect((await actions.removeGroupMember(g, f.otieno.id)).ok).toBe(true)
+    as(f.charis.id)
+    expect((await actions.removeGroupMember(g, f.achieng.id)).ok).toBe(true)
+    const db = await readDb()
+    expect(db.channel_members.filter((m) => m.channel_id === g).map((m) => m.user_id)).toEqual([f.charis.id])
+  })
+
+  it("groups take only people from this workspace, and viewers cannot start one", async () => {
+    as(f.charis.id)
+    expect((await actions.createGroup("Mixed", [f.zawadi.id])).ok).toBe(false)
+    expect((await actions.createGroup("Alone", [])).ok).toBe(false)
+    as(f.brian.id)
+    expect((await actions.createGroup("Accounts", [f.charis.id])).ok).toBe(false)
+  })
+
+  it("a direct message is for two people only, and starting it again opens the same one", async () => {
+    const charis = await addDevice(f.charis.id)
+    const wanjiru = await addDevice(f.wanjiru.id)
+    const otieno = await addDevice(f.otieno.id)
+    as(f.charis.id)
+    const dm = (await actions.startDirectMessage(f.wanjiru.id)).id!
+    expect((await actions.startDirectMessage(f.wanjiru.id)).id).toBe(dm)
+    as(f.wanjiru.id)
+    expect((await actions.startDirectMessage(f.charis.id)).id).toBe(dm)
+
+    await rotate(charis, dm)
+    expect((await send(charis, dm, "Private: the price we can go to is KSh 400")).ok).toBe(true)
+    expect(await readAll(wanjiru, dm)).toEqual(["Private: the price we can go to is KSh 400"])
+
+    // Otieno cannot open it, and an owner is not let in either.
+    as(f.otieno.id)
+    expect((await actions.loadChannel(dm, otieno.deviceId)).ok).toBe(false)
+    as(f.wanjiru.id)
+    const wanjiruDm = (await actions.loadChannels(wanjiru.deviceId)).channels.find((c) => c.id === dm)!
+    expect(wanjiruDm.name).toBe("Charis N.")
+    as(f.charis.id)
+    expect((await actions.startDirectMessage(f.charis.id)).ok).toBe(false)
+    expect((await actions.startDirectMessage(f.zawadi.id)).ok).toBe(false)
+  })
+
+  it("owners and admins do not see groups or messages they are not in", async () => {
+    await addDevice(f.charis.id)
+    const wanjiru = await addDevice(f.wanjiru.id)
+    as(f.achieng.id)
+    const dm = (await actions.startDirectMessage(f.otieno.id)).id!
+    const g = (await actions.createGroup("Sales", [f.otieno.id])).id!
+    as(f.wanjiru.id)
+    const mine = (await actions.loadChannels(wanjiru.deviceId)).channels.map((c) => c.id)
+    expect(mine).not.toContain(dm)
+    expect(mine).not.toContain(g)
+    expect((await actions.loadChannel(g, wanjiru.deviceId)).ok).toBe(false)
+  })
+})
+
+describe("unread counts", () => {
+  it("only count messages this device can open", async () => {
+    const charis = await addDevice(f.charis.id)
+    const ch = await announcements(charis)
+    await rotate(charis, ch)
+    await send(charis, ch, "Sent before Achieng had a device")
+    const achieng = await addDevice(f.achieng.id)
+    as(f.achieng.id)
+    expect((await actions.loadChannels(achieng.deviceId)).channels.find((c) => c.id === ch)!.unread).toBe(0)
+    await rotate(charis, ch)
+    await send(charis, ch, "Sent after")
+    as(f.achieng.id)
+    expect((await actions.loadChannels(achieng.deviceId)).channels.find((c) => c.id === ch)!.unread).toBe(1)
   })
 })

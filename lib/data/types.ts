@@ -546,8 +546,17 @@ export type Device = {
   revoked_at?: string
 }
 
-/** "general" includes everyone in the workspace; it is made with the workspace. */
-export type ChannelKind = "general"
+/**
+ * Announcements: the whole workspace reads, owners and admins post.
+ * Group: named, with chosen members. DM: exactly two people.
+ */
+export type ChannelKind = "announcements" | "group" | "dm"
+
+export const CHANNEL_KIND_LABEL: Record<ChannelKind, string> = {
+  announcements: "Announcements",
+  group: "Group",
+  dm: "Direct message",
+}
 
 export type Channel = {
   id: string
@@ -558,6 +567,15 @@ export type Channel = {
   created_at: string
   /** The current key epoch. 0 means no key yet; the first member to open it makes one. */
   epoch: number
+}
+
+/** Who is in a group or a direct message. Announcements need no rows: it is everyone. */
+export type ChannelMember = {
+  workspace_id: string
+  channel_id: string
+  user_id: string
+  added_by: string
+  added_at: string
 }
 
 /** A channel key for one epoch, wrapped so only one device can open it. */
@@ -617,6 +635,7 @@ export type Database = {
   notification_prefs: NotificationPrefs[]
   devices: Device[]
   channels: Channel[]
+  channel_members: ChannelMember[]
   channel_keys: ChannelKey[]
   messages: Message[]
   channel_reads: ChannelRead[]
@@ -632,6 +651,10 @@ export const can = {
   /** Viewers read everything they can see, and change nothing. */
   edit: (r: Role) => r !== "viewer",
   seeFlags: (r: Role) => r === "owner" || r === "admin",
+  /** Posting in Announcements. Everyone reads it. */
+  announce: (r: Role) => r === "owner" || r === "admin",
+  /** Starting a team group. Viewers can be added, and can message, but do not start groups. */
+  createGroup: (r: Role) => r !== "viewer",
   /**
    * A private flag: the person who raised it, and owners and admins — but never
    * the person it is about, whatever their role.

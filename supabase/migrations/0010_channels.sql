@@ -1,4 +1,6 @@
--- Phase 5b: encrypted channels. Adds five tables; changes nothing that exists.
+-- Phase 5b: encrypted chat. Adds six tables; changes nothing that exists.
+-- Three kinds: announcements (everyone reads, owners and admins post),
+-- groups (named, chosen members) and direct messages (two people).
 -- Design: docs/phase-5-messaging-and-notifications.md, Part B.
 -- The server stores public keys, wrapped keys and sealed messages only.
 
@@ -18,12 +20,35 @@ create table public.channels (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces on delete cascade,
   name text not null,
-  kind text not null check (kind in ('general')),
+  kind text not null check (kind in ('announcements', 'group', 'dm')),
   created_by uuid references public.profiles (id),
   created_at timestamptz not null default now(),
   epoch integer not null default 0
 );
-create unique index channels_one_general on public.channels (workspace_id) where kind = 'general';
+create unique index channels_one_announcements on public.channels (workspace_id) where kind = 'announcements';
+
+-- Who is in a group or a direct message. Announcements needs no rows: it is everyone.
+create table public.channel_members (
+  workspace_id uuid not null references public.workspaces on delete cascade,
+  channel_id uuid not null references public.channels on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  added_by uuid references public.profiles (id),
+  added_at timestamptz not null default now(),
+  primary key (channel_id, user_id)
+);
+
+-- In a chat right now: everyone for announcements, listed members (still in
+-- the workspace) for groups and direct messages.
+create function public.in_channel(target uuid)
+returns boolean language sql security definer stable set search_path = '' as $$
+  select exists (
+    select 1 from public.channels c
+    where c.id = target and public.is_member(c.workspace_id)
+      and (c.kind = 'announcements'
+           or exists (select 1 from public.channel_members m
+                      where m.channel_id = c.id and m.user_id = (select auth.uid())))
+  )
+$$;
 
 create table public.channel_keys (
   workspace_id uuid not null references public.workspaces on delete cascade,
@@ -59,6 +84,7 @@ create table public.channel_reads (
 
 alter table public.devices enable row level security;
 alter table public.channels enable row level security;
+alter table public.channel_members enable row level security;
 alter table public.channel_keys enable row level security;
 alter table public.messages enable row level security;
 alter table public.channel_reads enable row level security;
@@ -78,9 +104,11 @@ create policy "add your own device" on public.devices
 create policy "remove your own device" on public.devices
   for update using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
--- #general is every member of the workspace.
-create policy "members read their channels" on public.channels
-  for select using (public.is_member(workspace_id));
+-- Owners and admins do not see groups or direct messages they are not in.
+create policy "members read their chats" on public.channels
+  for select using (public.in_channel(id));
+create policy "members see who is in their chats" on public.channel_members
+  for select using (public.in_channel(channel_id));
 
 -- A wrapped key is readable only by the device it was wrapped for.
 create policy "device reads its own wrapped keys" on public.channel_keys
@@ -89,13 +117,16 @@ create policy "device reads its own wrapped keys" on public.channel_keys
   );
 
 create policy "members read sealed messages" on public.messages
-  for select using (public.is_member(workspace_id));
+  for select using (public.in_channel(channel_id));
 
 create policy "own read markers" on public.channel_reads
   for all using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()) and public.is_member(workspace_id));
 
--- Rotating a key and posting a message are each one security-definer function
--- (rotate_channel, post_message) that repeats the checks in lib/data/actions.ts:
--- the new key covers exactly the active devices of current members, and nothing
--- is posted while the key is out of date. So there are deliberately no insert
--- policies on channel_keys or messages for ordinary users.
+-- Rotating a key, posting a message, and starting or changing a group are each
+-- a security-definer function (rotate_channel, post_message, create_group,
+-- start_direct_message, add_group_members, remove_group_member) repeating the
+-- checks in lib/data/actions.ts: a new key covers exactly the active devices of
+-- current members, nothing is posted while the key is out of date, only owners
+-- and admins post announcements, and only a group's starter or an owner or
+-- admin removes someone else. So there are deliberately no insert policies on
+-- channels, channel_members, channel_keys or messages for ordinary users.

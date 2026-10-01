@@ -333,6 +333,7 @@ export function seed(): Database {
     notification_prefs: [],
     devices: [],
     channels: [],
+    channel_members: [],
     channel_keys: [],
     messages: [],
     channel_reads: [],
@@ -405,6 +406,11 @@ export async function readDb(): Promise<Database> {
     parsed.notification_prefs ??= []
     parsed.devices ??= []
     parsed.channels ??= []
+    parsed.channel_members ??= []
+    // #general became Announcements; its messages and keys carry over unchanged.
+    for (const c of parsed.channels as { kind: string; name: string }[]) {
+      if (c.kind === "general") Object.assign(c, { kind: "announcements", name: "Announcements" })
+    }
     parsed.channel_keys ??= []
     parsed.messages ??= []
     parsed.channel_reads ??= []
