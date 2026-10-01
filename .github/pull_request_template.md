@@ -16,7 +16,7 @@
 
 ## Checks
 
-- [ ] Type-check and lint are clean
+- [ ] Type-check, lint and `npm test` are clean (GitHub runs them too)
 - [ ] Tried in the browser, on a phone width too
 - [ ] Viewers cannot change anything new; owners and admins only where it matters
 - [ ] HANDOFF.md says where things stand

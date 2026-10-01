@@ -16,6 +16,12 @@ http://localhost:3000 — sign in with **Continue as Charis (demo)**, or any ema
 
 There is **no database on purpose**. Everything lives in `.data/agency.json`, written by `lib/data/store.ts`, behind the same shapes as `supabase/migrations/0001_foundation.sql`. Screens and actions never touch the file: they go through `lib/data/queries.ts` (reads) and `lib/data/actions.ts` (writes). When Supabase goes in, those files change and the screens should not. Settings → Reset demo data puts the demo back.
 
+## Checks
+
+`npm test` runs the privacy tests in `tests/privacy.test.ts` (CLAUDE.md rules 1 and 2): a second workspace, Elsewhere, gets a copy of every Kilima Labs record, and the tests prove none of it shows in Kilima Labs lists or pages, that asking for a workspace you are not in does not let you in, that changes aimed at another workspace are refused, that private flags reach only the raiser and owners/admins who are not the subject, and that notifications are yours alone. They use a throwaway data folder (`AGENCY_DATA_DIR`), never `.data/`. Add a check here whenever a new kind of record or a new private thing appears. When Supabase goes in, the same tests must pass against Postgres with Row-Level Security.
+
+`npm run typecheck`, `npm run lint` and `npm test` also run on GitHub for every pull request (`.github/workflows/checks.yml`).
+
 ## What works today
 
 **Foundation** — sign in, sign out, guarded routes (`proxy.ts`), workspaces, workspace switcher, invites with roles and 7-day links, `/join/[token]` (handles used, expired and unknown), role changes, member removal with last-owner protection, viewer read-only everywhere, PWA manifest and icons, the landing page with the logo sequence.
