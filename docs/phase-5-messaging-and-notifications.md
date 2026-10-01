@@ -73,7 +73,7 @@ devices    id, user_id, name, public_key jsonb, created_at, last_seen_at, revoke
 channels        id, workspace_id, name, kind (channel|dm), created_by, created_at,
                 archive_enabled bool, created_epoch
 channel_members channel_id, user_id, added_by, added_at, removed_at
-channel_keys    channel_id, epoch, device_id, wrapped_key bytea, created_at
+channel_keys    channel_id, epoch, device_id, wrapped_by_device_id, wrapped_key, created_at
 ```
 
 **Rotation.** A new epoch is generated when someone joins, someone leaves, or a device is revoked. New messages use the new epoch; old messages stay readable only by devices that held the old one. So:
@@ -123,8 +123,39 @@ create policy "device reads its own wrapped keys" on public.channel_keys
 
 1. **5a — Notification centre.** Bell, page, preferences, quiet hours, email digest. No crypto. About a week.
 2. **5b — Channels, encrypted.** Devices, keys, epochs, the drawer, `#general`, unread state. Two to three weeks, most of it key handling and the edge cases around joining and leaving.
+   **Built (first cut, on local data):** `lib/crypto/e2ee.ts` (keys, wrapping, sealing), `lib/crypto/device-store.ts` (the device key in IndexedDB), the actions at the end of `lib/data/actions.ts`, the drawer in `components/app/chat.tsx`, devices in Settings, migration `0010_channels.sql`, and tests in `tests/e2ee.test.ts` and `tests/channels.test.ts`. A key is re-made whenever the set of member devices changes (join, leave, new or removed device); the server refuses a new key that does not cover exactly those devices, and refuses messages while the key is out of date. Still to do in 5b: channels beyond `#general` (one per project), and moving to Supabase Realtime instead of checking every few seconds.
 3. **5c — DMs, attachments, recovery key, safety numbers.** About two weeks.
 4. **5d — Optional archive key**, only if a real need appears. Do not build it speculatively.
+
+### How chat is laid out (settled 1 Oct 2026)
+
+Pigeonholes, not one big room:
+
+- **Announcements**: the whole workspace reads; owners and admins post. Replies go to a direct message. (The first cut's `#general` became this, history kept.)
+- **Groups**: any member but a viewer starts one, names it and picks people. Anyone in a group adds people; you can leave; whoever started it, or an owner or admin in it, removes someone.
+- **Direct messages**: any two people in the workspace.
+- Owners and admins do not see groups or direct messages they are not in. With encryption they could not read them anyway, and the app does not pretend otherwise.
+
+### Reviewed 1 Oct 2026 (security reviewer and silent-failure hunter)
+
+Fixed before merge: key renewals are checked as exact sets of real device ids; device keys must be real P-256 points; removing someone from a workspace removes them from its groups and DMs; keys are only renewed when needed, and only owners and admins renew the Announcements key; a device that cannot open its key can ask for a new one; the device key is confirmed saved before the device is registered; a removed device stops and asks instead of re-adding itself; messages that fail to open show as an error, not as "sent before this device"; refresh failures show "not updating"; no double sends.
+
+**Known limits, still open:**
+
+- **Messages do not prove who sent them.** Anyone holding a chat's key could seal a message naming another device; only the server's record of the sender stops it. Fix with a signing key per device (ECDSA P-256) before calling Announcements tamper-proof.
+- **Removing a device does not sign that browser out.** A stolen laptop still signed in could press "Add this device again". Fix when Supabase auth goes in: removing a device ends its session, and other members see "new device added".
+- **A member can still jam a chat at the moment a key is genuinely due**, by wrapping a useless key; the affected devices then ask for a new one. Safety numbers (5c) and signed key renewals close this.
+
+### Chat as a work tool (later, not built yet)
+
+Chat is for record keeping and handing out work now, and may become the main way to issue tasks and flag people. Encryption shapes how: the server cannot read chat, so **nothing leaves a chat for the records without a person choosing it, and the app says so at that moment.**
+
+- **Make a task from a message.** Prefills the normal New task form (title from the message, assignee from a mention). Saved as an ordinary task — readable by the workspace like every task, outside the encryption — and a small encrypted card in the chat links to it. Never automatic: a mention can *suggest* "Make this a task for Achieng?", accepted or dismissed (CLAUDE.md rule 8).
+- **Raise a flag from a message.** Opens the private flag form with the message quoted only if the raiser keeps the quote. The flag goes to the raiser and owners and admins as today (rule 2). **A flag is never posted into a chat**, and the person it is about is not told there.
+- **Save to record.** Pins a message to an organisation, deal or project timeline. Leaves the encryption, said in the button's confirm.
+- **A group per project.** When a project starts, offer a group with its members; closing the project offers to archive the group.
+- **Records owners can read.** If a business needs owners to read a group's history, that is the archive key (5d): chosen when the group is made, shown in its header for good, never switched on silently.
+- Messages carry `{ text, mentions }` inside the ciphertext already, so task and flag cards are new body types (`{ kind: "task-card", taskId }`), not a new storage shape.
 
 ### The risks worth stating before starting
 

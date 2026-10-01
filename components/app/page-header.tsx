@@ -1,3 +1,4 @@
+import { ChatButton } from "@/components/app/chat"
 import { NotificationBell } from "@/components/app/notification-bell"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -23,6 +24,7 @@ export function PageHeader({
         )}
       </div>
       {children}
+      <ChatButton />
       <NotificationBell />
     </header>
   )

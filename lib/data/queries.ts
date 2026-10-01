@@ -1203,3 +1203,14 @@ export async function getMutedNotifications(workspaceId: string, userId: string)
   const db = await readDb()
   return db.notification_prefs.find((p) => p.workspace_id === workspaceId && p.user_id === userId)?.muted ?? []
 }
+
+/* ---------------------------------------------------- encrypted channels */
+
+/** Your devices that can read your channels. Public keys only; nothing secret. */
+export async function listMyDevices(userId: string) {
+  const db = await readDb()
+  return db.devices
+    .filter((d) => d.user_id === userId && !d.revoked_at)
+    .sort((a, b) => b.last_seen_at.localeCompare(a.last_seen_at))
+    .map((d) => ({ id: d.id, name: d.name, added: d.created_at, lastSeen: d.last_seen_at }))
+}

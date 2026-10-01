@@ -530,6 +530,92 @@ export function periodEnd(period: ObjectivePeriod, start: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+/* ------------------------------------------------- encrypted channels (5b) */
+// The server stores public keys, wrapped keys and sealed messages only.
+// Nothing here can be read without a member's device. See lib/crypto/e2ee.ts.
+
+/** One browser or phone a person uses. The private key never leaves it. */
+export type Device = {
+  id: string
+  user_id: string
+  /** e.g. "Windows · Chrome", so people can tell their devices apart. */
+  name: string
+  public_key: { kty: "EC"; crv: "P-256"; x: string; y: string }
+  created_at: string
+  last_seen_at: string
+  revoked_at?: string
+}
+
+/**
+ * Announcements: the whole workspace reads, owners and admins post.
+ * Group: named, with chosen members. DM: exactly two people.
+ */
+export type ChannelKind = "announcements" | "group" | "dm"
+
+export const CHANNEL_KIND_LABEL: Record<ChannelKind, string> = {
+  announcements: "Announcements",
+  group: "Group",
+  dm: "Direct message",
+}
+
+export type Channel = {
+  id: string
+  workspace_id: string
+  name: string
+  kind: ChannelKind
+  created_by: string
+  created_at: string
+  /** The current key epoch. 0 means no key yet; the first member to open it makes one. */
+  epoch: number
+  /**
+   * Set when a member's device was given the current key but could not open
+   * it (a broken or tampered key). The next member who can makes a new one.
+   */
+  rekey_epoch?: number
+}
+
+/** Who is in a group or a direct message. Announcements need no rows: it is everyone. */
+export type ChannelMember = {
+  workspace_id: string
+  channel_id: string
+  user_id: string
+  added_by: string
+  added_at: string
+}
+
+/** A channel key for one epoch, wrapped so only one device can open it. */
+export type ChannelKey = {
+  workspace_id: string
+  channel_id: string
+  epoch: number
+  device_id: string
+  /** The device that wrapped it; its public key is needed to open it. */
+  wrapped_by_device_id: string
+  wrapped_key: string
+  created_at: string
+}
+
+/** A sealed message. Text and mentions are inside the ciphertext. */
+export type Message = {
+  id: string
+  workspace_id: string
+  channel_id: string
+  sender_id: string
+  sender_device_id: string
+  epoch: number
+  iv: string
+  ciphertext: string
+  created_at: string
+}
+
+/** When someone last read a channel, for unread counts. */
+export type ChannelRead = {
+  workspace_id: string
+  channel_id: string
+  user_id: string
+  read_at: string
+}
+
 export type Database = {
   profiles: Profile[]
   workspaces: Workspace[]
@@ -552,6 +638,12 @@ export type Database = {
   custom_values: CustomValue[]
   notifications: Notification[]
   notification_prefs: NotificationPrefs[]
+  devices: Device[]
+  channels: Channel[]
+  channel_members: ChannelMember[]
+  channel_keys: ChannelKey[]
+  messages: Message[]
+  channel_reads: ChannelRead[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */
@@ -564,6 +656,10 @@ export const can = {
   /** Viewers read everything they can see, and change nothing. */
   edit: (r: Role) => r !== "viewer",
   seeFlags: (r: Role) => r === "owner" || r === "admin",
+  /** Posting in Announcements. Everyone reads it. */
+  announce: (r: Role) => r === "owner" || r === "admin",
+  /** Starting a team group. Viewers can be added, and can message, but do not start groups. */
+  createGroup: (r: Role) => r !== "viewer",
   /**
    * A private flag: the person who raised it, and owners and admins — but never
    * the person it is about, whatever their role.
