@@ -567,6 +567,11 @@ export type Channel = {
   created_at: string
   /** The current key epoch. 0 means no key yet; the first member to open it makes one. */
   epoch: number
+  /**
+   * Set when a member's device was given the current key but could not open
+   * it (a broken or tampered key). The next member who can makes a new one.
+   */
+  rekey_epoch?: number
 }
 
 /** Who is in a group or a direct message. Announcements need no rows: it is everyone. */

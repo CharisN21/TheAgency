@@ -67,6 +67,21 @@ export function isPublicKeyJwk(value: unknown): value is PublicKeyJwk {
   )
 }
 
+/**
+ * The shape check plus the real test: the key must load as a point on the
+ * P-256 curve. A key that passes the shape check but is not a real point
+ * would make every key-wrap for its owner fail, freezing their chats.
+ */
+export async function isUsablePublicKey(value: unknown): Promise<boolean> {
+  if (!isPublicKeyJwk(value)) return false
+  try {
+    await importPublicKey(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function importPublicKey(jwk: PublicKeyJwk): Promise<CryptoKey> {
   return subtle().importKey("jwk", { ...jwk, ext: true }, { name: "ECDH", namedCurve: "P-256" }, false, [])
 }

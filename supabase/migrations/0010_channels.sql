@@ -23,7 +23,9 @@ create table public.channels (
   kind text not null check (kind in ('announcements', 'group', 'dm')),
   created_by uuid references public.profiles (id),
   created_at timestamptz not null default now(),
-  epoch integer not null default 0
+  epoch integer not null default 0,
+  -- A member's device could not open this epoch's key; the next member who can makes a new one.
+  rekey_epoch integer
 );
 create unique index channels_one_announcements on public.channels (workspace_id) where kind = 'announcements';
 
@@ -99,10 +101,10 @@ create policy "see devices of people you work with" on public.devices
       where a.user_id = (select auth.uid()) and b.user_id = devices.user_id
     )
   );
-create policy "add your own device" on public.devices
-  for insert with check (user_id = (select auth.uid()));
-create policy "remove your own device" on public.devices
-  for update using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+-- No insert or update policies on devices: adding and removing go through
+-- register_device and revoke_device (security definer), which check the key
+-- is a real P-256 point, enforce the limit of 10, and only ever set
+-- revoked_at from null to now(). A direct insert or update would skip them.
 
 -- Owners and admins do not see groups or direct messages they are not in.
 create policy "members read their chats" on public.channels
@@ -122,11 +124,17 @@ create policy "members read sealed messages" on public.messages
 create policy "own read markers" on public.channel_reads
   for all using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()) and public.is_member(workspace_id));
 
+-- Removing someone from a workspace also deletes their channel_members and
+-- channel_reads rows there (in remove_member), so a later re-invite does not
+-- restore them to private chats.
+--
 -- Rotating a key, posting a message, and starting or changing a group are each
 -- a security-definer function (rotate_channel, post_message, create_group,
 -- start_direct_message, add_group_members, remove_group_member) repeating the
 -- checks in lib/data/actions.ts: a new key covers exactly the active devices of
--- current members, nothing is posted while the key is out of date, only owners
+-- current members (compared as sets of uuid, never as text), a key is only
+-- renewed when one is needed, only owners and admins renew the Announcements
+-- key, nothing is posted while the key is out of date, only owners
 -- and admins post announcements, and only a group's starter or an owner or
 -- admin removes someone else. So there are deliberately no insert policies on
 -- channels, channel_members, channel_keys or messages for ordinary users.

@@ -26,7 +26,7 @@ import {
 import { z } from "zod"
 
 import { askForJson } from "@/lib/ai/claude"
-import { isPublicKeyJwk } from "@/lib/crypto/e2ee"
+import { isUsablePublicKey, type PublicKeyJwk } from "@/lib/crypto/e2ee"
 import { actorName, notify } from "./notify"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
@@ -379,6 +379,14 @@ export async function removeMember(userId: string): Promise<Result> {
   await mutate((d) => {
     d.memberships = d.memberships.filter(
       (m) => !(m.workspace_id === ctx.workspace.id && m.user_id === userId)
+    )
+    // Out of every group and direct message as well, so being invited back
+    // later does not quietly restore them to private chats.
+    d.channel_members = d.channel_members.filter(
+      (m) => !(m.workspace_id === ctx.workspace.id && m.user_id === userId)
+    )
+    d.channel_reads = d.channel_reads.filter(
+      (r) => !(r.workspace_id === ctx.workspace.id && r.user_id === userId)
     )
     log(d, ctx.workspace.id, ctx.user.id, `removed ${name}`)
   })
@@ -3105,13 +3113,24 @@ function expectedDeviceIds(db: Database, ch: Channel): string[] {
  * a new one, so nobody who has left ever receives a new message.
  */
 function needsRotation(db: Database, ch: Channel): boolean {
-  if (ch.epoch === 0) return true
+  if (ch.epoch === 0 || ch.rekey_epoch === ch.epoch) return true
   const holders = db.channel_keys
     .filter((k) => k.channel_id === ch.id && k.epoch === ch.epoch)
     .map((k) => k.device_id)
-    .sort()
-  return holders.join() !== expectedDeviceIds(db, ch).join()
+  return !sameSet(holders, expectedDeviceIds(db, ch))
 }
+
+/** Exactly the same ids: no missing, no extra, no repeats. Never compare joined strings. */
+function sameSet(given: string[], expected: string[]) {
+  const want = new Set(expected)
+  return given.length === want.size && new Set(given).size === given.length && given.every((id) => want.has(id))
+}
+
+/**
+ * Who may make a new key: anyone in a group or direct message; for
+ * Announcements, only those who may post there.
+ */
+const canRotate = (ch: Channel, role: Role) => ch.kind !== "announcements" || can.announce(role)
 
 /** The chat, only if this person is in it and it is in this workspace. */
 function channelFor(db: Database, channelId: string, workspaceId: string, userId: string) {
@@ -3150,7 +3169,7 @@ export async function registerDevice(
   publicKey: unknown
 ): Promise<Result & { deviceId?: string }> {
   const { user } = await requireContext()
-  if (!isPublicKeyJwk(publicKey)) return { ok: false, message: "That is not a device key" }
+  if (!(await isUsablePublicKey(publicKey))) return { ok: false, message: "That is not a device key" }
   const label = String(name ?? "").trim().slice(0, 60) || "This device"
 
   const db = await readDb()
@@ -3160,7 +3179,7 @@ export async function registerDevice(
   }
 
   const id = newId()
-  const { kty, crv, x, y } = publicKey
+  const { kty, crv, x, y } = publicKey as PublicKeyJwk
   await mutate((d) => {
     d.devices.push({
       id,
@@ -3374,6 +3393,10 @@ export type ChannelState = {
   canPost: boolean
   canManage: boolean
   rotationNeeded: boolean
+  /** Whether this person may make the new key when one is needed. */
+  canRotate: boolean
+  /** True when older messages exist than the ones sent here. */
+  truncated: boolean
   /** The devices the next key must be wrapped for, with their public keys. */
   devices: { id: string; user_id: string; public_key: PublicKey }[]
   /** Keys wrapped for this device, one per epoch it was given, with the wrapping device's public key. */
@@ -3393,10 +3416,10 @@ export async function loadChannel(
   if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
 
   const memberIds = channelMemberIds(db, ch)
-  const messages = db.messages
+  const all = db.messages
     .filter((m) => m.channel_id === ch.id)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
-    .slice(-200)
+  const messages = all.slice(-200)
   const name = (id: string) => db.profiles.find((p) => p.id === id)?.full_name ?? "Someone"
   const peopleIds = new Set([...memberIds, ...messages.map((m) => m.sender_id)])
   const expected = new Set(expectedDeviceIds(db, ch))
@@ -3410,6 +3433,8 @@ export async function loadChannel(
       canPost: canPost(ch, role),
       canManage: canManage(ch, role, user.id),
       rotationNeeded: needsRotation(db, ch),
+      canRotate: canRotate(ch, role),
+      truncated: all.length > messages.length,
       devices: db.devices
         .filter((d) => expected.has(d.id))
         .map((d) => ({ id: d.id, user_id: d.user_id, public_key: d.public_key })),
@@ -3442,16 +3467,19 @@ export async function rotateChannel(
   epoch: number,
   wrapped: { device_id: string; wrapped_key: string }[]
 ): Promise<Result> {
-  const { user, workspace } = await requireContext()
+  const { user, workspace, role } = await requireContext()
   const db = await readDb()
   const ch = channelFor(db, channelId, workspace.id, user.id)
   if (!ch) return { ok: false, message: "That chat is not here" }
   if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
+  if (!canRotate(ch, role)) return { ok: false, message: "Only owners and admins renew the Announcements key" }
   if (epoch !== ch.epoch + 1) return { ok: false, message: "Someone else just changed the chat key. Opening it again." }
-  if (!Array.isArray(wrapped)) return { ok: false, message: "That key is not in the right shape" }
-
-  const given = wrapped.map((w) => w?.device_id).sort()
-  if (given.join() !== expectedDeviceIds(db, ch).join()) {
+  // A new key only when one is needed, so nobody can churn a working chat.
+  if (!needsRotation(db, ch)) return { ok: false, message: "The chat key is already up to date" }
+  if (!Array.isArray(wrapped) || !wrapped.every((w) => w && typeof w.device_id === "string")) {
+    return { ok: false, message: "That key is not in the right shape" }
+  }
+  if (!sameSet(wrapped.map((w) => w.device_id), expectedDeviceIds(db, ch))) {
     return { ok: false, message: "The people in the chat changed. Opening it again." }
   }
   // AES-KW of a 256-bit key is 40 bytes: 56 characters of base64.
@@ -3461,7 +3489,7 @@ export async function rotateChannel(
 
   const saved = await mutate((d) => {
     const c = d.channels.find((x) => x.id === ch.id)!
-    if (c.epoch !== epoch - 1) return false
+    if (c.epoch !== epoch - 1 || !needsRotation(d, c)) return false
     for (const w of wrapped) {
       d.channel_keys.push({
         workspace_id: c.workspace_id,
@@ -3474,6 +3502,7 @@ export async function rotateChannel(
       })
     }
     c.epoch = epoch
+    c.rekey_epoch = undefined
     return true
   })
   return saved
@@ -3495,7 +3524,7 @@ export async function postMessage(
   if (!canPost(ch, role)) return { ok: false, message: "Only owners and admins post announcements" }
   if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
   if (epoch !== ch.epoch || needsRotation(db, ch)) {
-    return { ok: false, message: "The chat key changed. Sending again." }
+    return { ok: false, message: "This chat's key needs renewing before anyone can send" }
   }
   const { iv, ciphertext } = sealed ?? {}
   if (typeof iv !== "string" || iv.length !== 16 || !B64.test(iv)) {
@@ -3521,6 +3550,28 @@ export async function postMessage(
     markRead(d, ch, user.id)
   })
   return { ok: true, message: "Sent", id }
+}
+
+/**
+ * A device was given the current key but cannot open it: a broken or
+ * tampered key. Asks for a new key, which the next member who can will make.
+ * Only a device that was given this epoch's key may ask, once per epoch.
+ */
+export async function reportUnreadableKey(channelId: string, deviceId: string, epoch: number): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const db = await readDb()
+  const ch = channelFor(db, channelId, workspace.id, user.id)
+  if (!ch) return { ok: false, message: "That chat is not here" }
+  if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
+  if (epoch !== ch.epoch) return { ok: false, message: "That key has already been replaced" }
+  if (!db.channel_keys.some((k) => k.channel_id === ch.id && k.epoch === epoch && k.device_id === deviceId)) {
+    return { ok: false, message: "This device was not given that key" }
+  }
+  await mutate((d) => {
+    const c = d.channels.find((x) => x.id === ch.id)!
+    if (c.epoch === epoch) c.rekey_epoch = epoch
+  })
+  return { ok: true, message: "Asked for a new chat key" }
 }
 
 export async function markChannelRead(channelId: string): Promise<Result> {
