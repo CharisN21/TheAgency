@@ -73,7 +73,7 @@ devices    id, user_id, name, public_key jsonb, created_at, last_seen_at, revoke
 channels        id, workspace_id, name, kind (channel|dm), created_by, created_at,
                 archive_enabled bool, created_epoch
 channel_members channel_id, user_id, added_by, added_at, removed_at
-channel_keys    channel_id, epoch, device_id, wrapped_key bytea, created_at
+channel_keys    channel_id, epoch, device_id, wrapped_by_device_id, wrapped_key, created_at
 ```
 
 **Rotation.** A new epoch is generated when someone joins, someone leaves, or a device is revoked. New messages use the new epoch; old messages stay readable only by devices that held the old one. So:
@@ -123,6 +123,7 @@ create policy "device reads its own wrapped keys" on public.channel_keys
 
 1. **5a — Notification centre.** Bell, page, preferences, quiet hours, email digest. No crypto. About a week.
 2. **5b — Channels, encrypted.** Devices, keys, epochs, the drawer, `#general`, unread state. Two to three weeks, most of it key handling and the edge cases around joining and leaving.
+   **Built (first cut, on local data):** `lib/crypto/e2ee.ts` (keys, wrapping, sealing), `lib/crypto/device-store.ts` (the device key in IndexedDB), the actions at the end of `lib/data/actions.ts`, the drawer in `components/app/chat.tsx`, devices in Settings, migration `0010_channels.sql`, and tests in `tests/e2ee.test.ts` and `tests/channels.test.ts`. A key is re-made whenever the set of member devices changes (join, leave, new or removed device); the server refuses a new key that does not cover exactly those devices, and refuses messages while the key is out of date. Still to do in 5b: channels beyond `#general` (one per project), and moving to Supabase Realtime instead of checking every few seconds.
 3. **5c — DMs, attachments, recovery key, safety numbers.** About two weeks.
 4. **5d — Optional archive key**, only if a real need appears. Do not build it speculatively.
 

@@ -59,13 +59,15 @@ There is **no database on purpose**. Everything lives in `.data/agency.json`, wr
 
 **Progressive disclosure** — secondary sections fold away behind their title and a one-line summary (`Band` `fold` prop, the browser's own details element): a project's About and History, a member page's organisations and recent activity, Settings' iPhone install, custom fields and Claude-and-data. Long lists show the first few (`components/app/show-more.tsx`): timelines the latest 6, a project its latest check-in; task lists show open tasks with finished ones behind "Show N finished".
 
+**Team chat, encrypted (Phase 5b, first cut)** — the speech bubble in the top bar, or Ctrl J, opens `#general`, which every member of the workspace is in. Messages are sealed in the browser (`lib/crypto/e2ee.ts`) and the server only stores sealed text. Each browser or phone is a device with its own key, kept in IndexedDB and impossible to export; Settings → Your devices lists and removes them. Whenever someone joins or leaves or a device is added or removed, the next member to open chat makes a new channel key for exactly the current devices, and nothing can be sent until then. A new device cannot read messages from before it was added (by design; recovery keys come in 5c). The drawer checks for new messages every 4 seconds while open and for unread ones every 30 seconds while shut.
+
 Every action returns a result and raises a toast. Lists have skeletons and empty states. `app/(app)/error.tsx` catches the rest.
 
 ## What is next, in order
 
 1. **Try the import on the real supplier and Safaricom sheets**, then run the duplicates review on what came in.
 2. **Publish the design system** so it picks up the new `Layout-01-Bands` board (source regenerated with `python design-system/gen_bands.py`; tokens and build rules updated).
-3. **Phase 5 — notification centre part 2 (email digests, quiet hours; needs Resend), then encrypted messaging (5b).** Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
+3. **Phase 5 — 5b has a first cut (`#general`).** Next: a channel per project, then 5c (DMs, attachments, recovery key, safety numbers). Notification centre part 2 (email digests, quiet hours) needs Resend. Designed in full: `docs/phase-5-messaging-and-notifications.md`. Build 5a (notification centre, no crypto) before 5b (channels with E2EE).
 4. **Phase 1 is built.** Next: add a Claude API key and try the three Claude features for real; then use Phase 1 on a real project before Phase 2 (a CLAUDE.md rule).
 5. **Supabase**, once the flows and the feel are settled. Rewrite `store.ts` as a Postgres adapter, run the migrations (`0001`, then `0002_not_duplicates`), enable Google and magic-link auth, then delete the local store. Merging must become one database function (one transaction) — see the note at the end of `0002`.
 

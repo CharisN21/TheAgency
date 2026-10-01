@@ -1,12 +1,13 @@
-import { Database, Share, Sparkles, SquarePlus, Smartphone } from "lucide-react"
+import { Database, Share, Sparkles, SquarePlus } from "lucide-react"
 
 import { Band } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { aiAvailable } from "@/lib/ai/claude"
 import { FieldManager } from "@/components/app/custom-fields"
+import { DeviceList } from "@/components/app/devices"
 import { NotificationSwitches } from "@/components/app/notifications"
-import { getMutedNotifications, listCustomFields } from "@/lib/data/queries"
+import { getMutedNotifications, listCustomFields, listMyDevices } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can, ROLE_HELP, ROLE_LABEL } from "@/lib/data/types"
 import { WorkspaceNameForm, ResetDemo } from "./forms"
@@ -20,6 +21,7 @@ const INSTALL = [
 
 export default async function SettingsPage() {
   const { user, workspace, role } = await requireContext()
+  const devices = await listMyDevices(user.id)
   const fields = can.editWorkspace(role) ? await listCustomFields(workspace.id) : []
   const fieldCount = fields.length
 
@@ -73,6 +75,27 @@ export default async function SettingsPage() {
         <Band
           index={3}
           narrow
+          label="Your devices"
+          fold={{
+            title: "Your devices",
+            summary: `${devices.length} can read your team chat`,
+          }}
+        >
+          <Card id="devices" className="scroll-mt-20 pt-6">
+            <CardContent className="flex flex-col gap-3 p-0">
+              <p className="text-muted-foreground px-6 text-sm">
+                Team chat is encrypted on each device. These are the ones that can read it. Remove any
+                you no longer use, such as an old phone.
+              </p>
+              <DeviceList devices={devices} />
+            </CardContent>
+          </Card>
+        </Band>
+
+        <Band
+          tone="soft"
+          index={4}
+          narrow
           label="Install on your iPhone"
           fold={{ title: "Install on your iPhone", summary: "four taps in Safari" }}
         >
@@ -98,8 +121,7 @@ export default async function SettingsPage() {
 
         {can.editWorkspace(role) && (
           <Band
-            tone="soft"
-            index={4}
+            index={5}
             narrow
             label="Custom fields"
             fold={{ title: "Custom fields", summary: `${fieldCount} set up` }}
@@ -119,7 +141,7 @@ export default async function SettingsPage() {
 
         <Band
           tone={can.editWorkspace(role) ? "soft" : "plain"}
-          index={4}
+          index={6}
           narrow
           label="Data"
           className="pb-10"
