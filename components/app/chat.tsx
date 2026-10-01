@@ -278,7 +278,7 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
                 the channel, so {unreadable === 1 ? "it stays" : "they stay"} closed here.
               </p>
             )}
-            {status === "ready" && lines.every((l) => l.text === undefined) && (
+            {status === "ready" && lines.length === 0 && (
               <p className="text-muted-foreground rounded-xl border border-dashed px-4 py-10 text-center text-sm">
                 No messages yet. Say hello to the team.
               </p>
