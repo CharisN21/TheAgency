@@ -136,6 +136,16 @@ Pigeonholes, not one big room:
 - **Direct messages**: any two people in the workspace.
 - Owners and admins do not see groups or direct messages they are not in. With encryption they could not read them anyway, and the app does not pretend otherwise.
 
+### Reviewed 1 Oct 2026 (security reviewer and silent-failure hunter)
+
+Fixed before merge: key renewals are checked as exact sets of real device ids; device keys must be real P-256 points; removing someone from a workspace removes them from its groups and DMs; keys are only renewed when needed, and only owners and admins renew the Announcements key; a device that cannot open its key can ask for a new one; the device key is confirmed saved before the device is registered; a removed device stops and asks instead of re-adding itself; messages that fail to open show as an error, not as "sent before this device"; refresh failures show "not updating"; no double sends.
+
+**Known limits, still open:**
+
+- **Messages do not prove who sent them.** Anyone holding a chat's key could seal a message naming another device; only the server's record of the sender stops it. Fix with a signing key per device (ECDSA P-256) before calling Announcements tamper-proof.
+- **Removing a device does not sign that browser out.** A stolen laptop still signed in could press "Add this device again". Fix when Supabase auth goes in: removing a device ends its session, and other members see "new device added".
+- **A member can still jam a chat at the moment a key is genuinely due**, by wrapping a useless key; the affected devices then ask for a new one. Safety numbers (5c) and signed key renewals close this.
+
 ### Chat as a work tool (later, not built yet)
 
 Chat is for record keeping and handing out work now, and may become the main way to issue tasks and flag people. Encryption shapes how: the server cannot read chat, so **nothing leaves a chat for the records without a person choosing it, and the app says so at that moment.**

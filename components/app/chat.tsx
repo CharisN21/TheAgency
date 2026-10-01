@@ -19,7 +19,13 @@ import {
   unwrapChannelKey,
   wrapChannelKey,
 } from "@/lib/crypto/e2ee"
-import { deviceName, getStoredDevice, storeDevice, type StoredDevice } from "@/lib/crypto/device-store"
+import {
+  deviceName,
+  getStoredDevice,
+  requestPersistentStorage,
+  storeDevice,
+  type StoredDevice,
+} from "@/lib/crypto/device-store"
 import {
   addGroupMembers,
   createGroup,
@@ -29,6 +35,7 @@ import {
   postMessage,
   registerDevice,
   removeGroupMember,
+  reportUnreadableKey,
   rotateChannel,
   startDirectMessage,
   type ChannelState,
@@ -58,13 +65,25 @@ export function ChatButton() {
 
 /* -------------------------------------------------------------- drawer */
 
-type Line = { id: string; sender: string; mine: boolean; at: string; text?: string }
+/**
+ * One message as this device sees it. "before": no key for it, because it was
+ * sent before this device could read the chat — expected. "failed": a key was
+ * given but did not open, or the message did not open — never expected.
+ */
+type Line = { id: string; sender: string; mine: boolean; at: string; text?: string; problem?: "before" | "failed" }
 type View = "list" | "thread" | "new-group" | "members"
 
 const time = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })
 
+const clock = (d: Date) => d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+
 const first = (name: string) => name.split(" ")[0]
+
+const message = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
+
+/** Rotation refusals that mean "someone else got there first": load again and retry. */
+const RACE = /Someone else just changed|people in the chat changed|already up to date/
 
 /**
  * Team chat, end-to-end encrypted, laid out like pigeonholes: Announcements
@@ -75,9 +94,10 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
   const [isOpen, setOpen] = useState(false)
   const [view, setView] = useState<View>("list")
   const [unread, setUnread] = useState(0)
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle")
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const [deviceRemoved, setDeviceRemoved] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [syncProblem, setSyncProblem] = useState<{ message: string; lastOk: Date | null } | null>(null)
   const [directory, setDirectory] = useState<ChatDirectory | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [state, setState] = useState<ChannelState | null>(null)
@@ -85,6 +105,16 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
 
   const device = useRef<StoredDevice | null>(null)
   const keys = useRef(new Map<string, CryptoKey>())
+  const brokenKeys = useRef(new Set<string>())
+  const reported = useRef(new Set<string>())
+  const adding = useRef<Promise<StoredDevice> | null>(null)
+  const activeRef = useRef<string | null>(null)
+  const busy = useRef(false)
+  const lastOk = useRef<Date | null>(null)
+
+  useEffect(() => {
+    activeRef.current = activeId
+  }, [activeId])
 
   // Ctrl J (Cmd J on a Mac) opens and closes the drawer from anywhere.
   useEffect(() => {
@@ -99,13 +129,19 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
   }, [])
 
   // The unread count for the bubble, checked every half minute while the drawer is shut.
+  // A failed check keeps the last count rather than showing a false zero.
   useEffect(() => {
     if (isOpen) return
     let stop = false
     const check = async () => {
-      const stored = await getStoredDevice(userId).catch(() => undefined)
-      const r = await loadChannels(stored?.deviceId ?? "")
-      if (!stop) setUnread(r.channels.reduce((n, c) => n + c.unread, 0))
+      try {
+        const stored = await getStoredDevice(userId)
+        if (!stored?.deviceId) return
+        const r = await loadChannels(stored.deviceId)
+        if (!stop && r.deviceKnown) setUnread(r.channels.reduce((n, c) => n + c.unread, 0))
+      } catch {
+        // Offline or storage unavailable: keep the last count; the drawer explains when opened.
+      }
     }
     void check()
     const t = setInterval(check, 30_000)
@@ -115,26 +151,62 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
     }
   }, [isOpen, userId])
 
-  /** The list of chats, and this browser's device: found in IndexedDB, or made and added now. */
+  /**
+   * Makes this browser a device. The key is saved — and confirmed saved —
+   * before the server hears of it, so a device never exists on the server
+   * without its key being kept here. Only one setup runs at a time.
+   */
+  const addThisDevice = useCallback(
+    (existing?: StoredDevice) => {
+      if (adding.current) return adding.current
+      adding.current = (async () => {
+        const pair = existing?.keys ?? (await createDeviceKeys())
+        if (!existing) await storeDevice(userId, { deviceId: "", keys: pair })
+        await requestPersistentStorage()
+        const added = await registerDevice(deviceName(), await exportPublicKey(pair.publicKey))
+        if (!added.ok || !added.deviceId) throw new Error(added.message)
+        const dev = { deviceId: added.deviceId, keys: pair }
+        await storeDevice(userId, dev)
+        device.current = dev
+        keys.current.clear()
+        brokenKeys.current.clear()
+        setDeviceRemoved(false)
+        setNotice("This device was added to your chat. Messages sent before now cannot be read here.")
+        return dev
+      })()
+      adding.current.finally(() => {
+        adding.current = null
+      })
+      return adding.current
+    },
+    [userId],
+  )
+
+  /** The list of chats, after making sure this browser's device is ready. */
   const loadDirectory = useCallback(async () => {
     const stored = device.current ?? (await getStoredDevice(userId))
-    let r = await loadChannels(stored?.deviceId ?? "")
-    if (stored && r.deviceKnown) {
-      device.current = stored
+    if (!stored) {
+      await addThisDevice()
+    } else if (!stored.deviceId) {
+      // A setup that stopped part way: finish it with the key already saved.
+      await addThisDevice(stored)
     } else {
-      const pair = await createDeviceKeys()
-      const added = await registerDevice(deviceName(), await exportPublicKey(pair.publicKey))
-      if (!added.ok || !added.deviceId) throw new Error(added.message)
-      device.current = { deviceId: added.deviceId, keys: pair }
-      await storeDevice(userId, device.current)
-      keys.current.clear()
-      setNotice("This device was added to your chat. Messages sent before now cannot be read here.")
-      r = await loadChannels(added.deviceId)
+      const check = await loadChannels(stored.deviceId)
+      if (!check.deviceKnown) {
+        // Removed in Settings (or by a reset). Never add it back on its own:
+        // that would let a lost device back in and overwrite its old key.
+        device.current = null
+        setDeviceRemoved(true)
+        setDirectory(null)
+        return null
+      }
+      device.current = stored
     }
+    const r = await loadChannels(device.current!.deviceId)
     setDirectory(r)
     setUnread(r.channels.reduce((n, c) => n + c.unread, 0))
     return r
-  }, [userId])
+  }, [addThisDevice, userId])
 
   /** Makes a new key for a chat and wraps it for every device that should hold it. */
   const rotate = useCallback(async (s: ChannelState) => {
@@ -142,33 +214,45 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
     const epoch = s.channel.epoch + 1
     const key = await createChannelKey()
     const wrapped = await Promise.all(
-      s.devices.map(async (d) => ({
-        device_id: d.id,
-        wrapped_key: await wrapChannelKey(key, me.keys.privateKey, { deviceId: d.id, publicKey: d.public_key }, {
-          channelId: s.channel.id,
-          epoch,
-        }),
-      })),
+      s.devices.map(async (d) => {
+        try {
+          return {
+            device_id: d.id,
+            wrapped_key: await wrapChannelKey(key, me.keys.privateKey, { deviceId: d.id, publicKey: d.public_key }, {
+              channelId: s.channel.id,
+              epoch,
+            }),
+          }
+        } catch {
+          throw new Error("One device in this chat has a key that does not work, so the chat key cannot be renewed. Tell an admin.")
+        }
+      }),
     )
     return rotateChannel(s.channel.id, me.deviceId, epoch, wrapped)
   }, [])
 
-  /** Loads one chat, refreshes its key if people or devices changed, and opens every message it can. */
+  /** Loads one chat, renews its key if people or devices changed, and opens every message it can. */
   const refreshThread = useCallback(
     async (id: string): Promise<ChannelState | null> => {
       const me = device.current
       if (!me) return null
       let r = await loadChannel(id, me.deviceId)
-      for (let tries = 0; r.ok && r.state.rotationNeeded && tries < 3; tries++) {
-        await rotate(r.state)
+      for (let tries = 0; r.ok && r.state.rotationNeeded && r.state.canRotate; tries++) {
+        const rotated = await rotate(r.state)
+        if (!rotated.ok && !RACE.test(rotated.message)) {
+          throw new Error(`This chat's key could not be renewed: ${rotated.message}`)
+        }
         r = await loadChannel(id, me.deviceId)
+        if (tries >= 2 && r.ok && r.state.rotationNeeded) {
+          throw new Error("This chat's key could not be renewed after three tries. Close the chat and open it again.")
+        }
       }
       if (!r.ok) throw new Error(r.message)
       const s = r.state
 
       for (const k of s.keys) {
         const cacheKey = `${id}:${k.epoch}`
-        if (keys.current.has(cacheKey)) continue
+        if (keys.current.has(cacheKey) || brokenKeys.current.has(cacheKey)) continue
         try {
           keys.current.set(
             cacheKey,
@@ -177,8 +261,14 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
               epoch: k.epoch,
             }),
           )
-        } catch {
-          // A key that does not open is skipped; its messages show as closed.
+        } catch (e) {
+          // A key wrapped for this device that will not open: broken or tampered.
+          brokenKeys.current.add(cacheKey)
+          console.error("Chat key would not open", { channel: id, epoch: k.epoch, error: e })
+          if (k.epoch === s.channel.epoch && !reported.current.has(cacheKey)) {
+            reported.current.add(cacheKey)
+            void reportUnreadableKey(id, me.deviceId, k.epoch)
+          }
         }
       }
 
@@ -186,66 +276,108 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
       const opened = await Promise.all(
         s.messages.map(async (m): Promise<Line> => {
           const line = { id: m.id, sender: names.get(m.sender_id) ?? "Someone", mine: m.sender_id === userId, at: m.created_at }
-          const key = keys.current.get(`${id}:${m.epoch}`)
-          if (!key) return line
+          const cacheKey = `${id}:${m.epoch}`
+          if (brokenKeys.current.has(cacheKey)) return { ...line, problem: "failed" }
+          const key = keys.current.get(cacheKey)
+          if (!key) return { ...line, problem: "before" }
           try {
             const body = await openMessage(key, m, { channelId: id, epoch: m.epoch, senderDeviceId: m.sender_device_id })
             return { ...line, text: body.text }
-          } catch {
-            return line
+          } catch (e) {
+            console.error("Chat message would not open", { channel: id, message: m.id, epoch: m.epoch, error: e })
+            return { ...line, problem: "failed" }
           }
         }),
       )
+      // The person may have moved to another chat while this one loaded.
+      if (activeRef.current !== id) return s
       setState(s)
       setLines(opened)
-      void markChannelRead(id)
+      void markChannelRead(id).catch(() => {
+        // Only the unread count depends on this; the next refresh tries again.
+      })
       return s
     },
     [rotate, userId],
   )
 
-  // While open: the list refreshes every 5 seconds, an open chat every 4.
+  /** One refresh, never two at once, with any failure shown rather than swallowed. */
+  const tick = useCallback(
+    async (initial: boolean) => {
+      if (busy.current) return
+      busy.current = true
+      try {
+        const dir = await loadDirectory()
+        const id = activeRef.current
+        if (dir && id) await refreshThread(id)
+        setSetupError(null)
+        lastOk.current = new Date()
+        setSyncProblem(null)
+      } catch (e) {
+        const text = message(e, "Chat could not be reached")
+        if (/That chat is not here/.test(text) && activeRef.current) {
+          toast.error("You are no longer in that chat")
+          setActiveId(null)
+          setState(null)
+          setView("list")
+        } else if (initial && !device.current) {
+          setSetupError(text)
+        } else {
+          setSyncProblem({ message: text, lastOk: lastOk.current })
+        }
+      } finally {
+        busy.current = false
+      }
+    },
+    [loadDirectory, refreshThread],
+  )
+
+  // While open: refresh at once, then every 4 seconds in a chat and every 5 on the list.
   useEffect(() => {
     if (!isOpen) return
-    let stop = false
-    const start = async () => {
-      setStatus("loading")
-      setError(null)
-      try {
-        await loadDirectory()
-        if (activeId) await refreshThread(activeId)
-        if (!stop) setStatus("ready")
-      } catch (e) {
-        if (!stop) {
-          setStatus("error")
-          setError(e instanceof Error ? e.message : "Chat could not open")
-        }
-      }
-    }
-    void start()
-    const t = setInterval(() => {
-      const work = activeId && view !== "list" ? refreshThread(activeId) : loadDirectory()
-      void work.catch(() => {})
-    }, activeId && view !== "list" ? 4_000 : 5_000)
+    const now = setTimeout(() => void tick(true), 0)
+    const t = setInterval(() => void tick(false), activeId && view !== "list" ? 4_000 : 5_000)
     return () => {
-      stop = true
+      clearTimeout(now)
       clearInterval(t)
     }
-  }, [isOpen, activeId, view, loadDirectory, refreshThread])
+  }, [isOpen, activeId, view, tick])
 
   const openChat = (id: string) => {
     setState(null)
     setLines([])
-    setError(null)
+    activeRef.current = id
     setActiveId(id)
     setView("thread")
   }
 
   const backToList = () => {
+    activeRef.current = null
     setActiveId(null)
     setState(null)
     setView("list")
-    void loadDirectory().catch(() => {})
+    void tick(false)
+  }
+
+  const send = async (text: string) => {
+    const me = device.current
+    const id = activeRef.current
+    if (!me || !id) throw new Error("Chat is not ready on this device yet. Try again in a moment.")
+    for (let tries = 0; tries < 2; tries++) {
+      const s = await refreshThread(id)
+      if (!s) throw new Error("Chat is not ready on this device yet. Try again in a moment.")
+      if (s.rotationNeeded) throw new Error("This chat's key is being renewed. Try again in a moment.")
+      const key = keys.current.get(`${id}:${s.channel.epoch}`)
+      if (!key) throw new Error("This device cannot open the current chat key. A new one has been asked for; try again shortly.")
+      const sealed = await sealMessage(key, { text }, { channelId: id, epoch: s.channel.epoch, senderDeviceId: me.deviceId })
+      const r = await postMessage(id, me.deviceId, s.channel.epoch, sealed)
+      if (r.ok) {
+        // Sent. Refreshing is a nicety; a failure here must not look like the send failed.
+        void refreshThread(id).catch(() => {})
+        return
+      }
+      if (!/needs renewing/.test(r.message) || tries === 1) throw new Error(r.message)
+    }
   }
 
   const title =
@@ -277,7 +409,13 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
               )}
               <SheetTitle className="min-w-0 flex-1 truncate">{title}</SheetTitle>
               {view === "thread" && state?.channel.kind === "group" && (
-                <Button variant="ghost" size="sm" className="mr-6" onClick={() => setView("members")} aria-label={`People in this group: ${state.members.length}`}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mr-6"
+                  onClick={() => setView("members")}
+                  aria-label={`People in this group: ${state.members.length}`}
+                >
                   <Users /> {state.members.length}
                 </Button>
               )}
@@ -286,63 +424,64 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
               <Lock className="size-3.5 shrink-0" />
               {lockLine(view, state)}
             </SheetDescription>
+            {syncProblem && (
+              <p className="text-warn text-xs" role="status">
+                Warning: not updating ({syncProblem.message}).
+                {syncProblem.lastOk ? ` Last checked ${clock(syncProblem.lastOk)}.` : ""}
+              </p>
+            )}
           </SheetHeader>
 
-          {status === "loading" && !directory && (
+          {setupError && !directory && !deviceRemoved && (
+            <p className="text-destructive px-4 py-8 text-sm" role="alert">
+              Error: {setupError}
+            </p>
+          )}
+          {!setupError && !directory && !deviceRemoved && (
             <p className="text-muted-foreground flex items-center gap-2 px-4 py-8 text-sm">
               <Loader2 className="size-4 animate-spin" /> Opening chat on this device
             </p>
           )}
-          {status === "error" && !directory && <p className="text-destructive px-4 py-8 text-sm">Error: {error}</p>}
 
-          {directory && view === "list" && (
+          {deviceRemoved && (
+            <DeviceRemoved
+              onAddAgain={async () => {
+                try {
+                  await addThisDevice()
+                  await tick(true)
+                } catch (e) {
+                  toast.error(message(e, "This device could not be added"))
+                }
+              }}
+            />
+          )}
+
+          {directory && !deviceRemoved && view === "list" && (
             <Pigeonholes
               directory={directory}
               notice={notice}
               onOpen={openChat}
               onNewGroup={() => setView("new-group")}
               onMessage={async (personId) => {
-                const r = await startDirectMessage(personId)
-                if (r.ok && r.id) openChat(r.id)
-                else toast.error(r.message)
+                try {
+                  const r = await startDirectMessage(personId)
+                  if (r.ok && r.id) openChat(r.id)
+                  else toast.error(r.message)
+                } catch (e) {
+                  toast.error(message(e, "That conversation could not be opened"))
+                }
               }}
             />
           )}
 
-          {view === "thread" && (
-            <Thread
-              state={state}
-              lines={lines}
-              notice={notice}
-              error={error}
-              onSend={async (text) => {
-                const me = device.current
-                if (!me || !activeId) return false
-                for (let tries = 0; tries < 2; tries++) {
-                  const s = await refreshThread(activeId)
-                  if (!s) throw new Error("Chat could not open")
-                  const epoch = s.channel.epoch
-                  const key = keys.current.get(`${activeId}:${epoch}`)
-                  if (!key) throw new Error("This device does not have the chat key yet. Try again in a moment.")
-                  const sealed = await sealMessage(key, { text }, { channelId: activeId, epoch, senderDeviceId: me.deviceId })
-                  const r = await postMessage(activeId, me.deviceId, epoch, sealed)
-                  if (r.ok) {
-                    await refreshThread(activeId)
-                    return true
-                  }
-                  if (tries === 1) throw new Error(r.message)
-                }
-                return false
-              }}
-            />
-          )}
+          {view === "thread" && !deviceRemoved && <Thread state={state} lines={lines} notice={notice} onSend={send} />}
 
           {view === "new-group" && directory && (
             <NewGroup
               people={directory.people}
-              onCreated={async (id) => {
-                await loadDirectory()
+              onCreated={(id) => {
                 openChat(id)
+                void tick(false)
               }}
             />
           )}
@@ -352,7 +491,7 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
               state={state}
               userId={userId}
               people={directory.people}
-              onChanged={() => void refreshThread(state.channel.id).catch(() => {})}
+              onChanged={() => void tick(false)}
               onLeft={backToList}
             />
           )}
@@ -368,6 +507,33 @@ function lockLine(view: View, state: ChannelState | null) {
   if (state.channel.kind === "dm") return `Encrypted. Only you and ${first(state.channel.name)} can read this.`
   if (state.channel.kind === "announcements") return `Encrypted. Only the ${n} people in this workspace can read it.`
   return `Encrypted. Only the ${n} ${n === 1 ? "person" : "people"} in this group can read it.`
+}
+
+function DeviceRemoved({ onAddAgain }: { onAddAgain: () => Promise<void> }) {
+  const [pending, setPending] = useState(false)
+  return (
+    <div className="flex flex-col gap-3 px-4 py-6 text-sm">
+      <p className="font-medium">This device was removed from your chats.</p>
+      <p className="text-muted-foreground">
+        It can no longer read new messages, and the messages it could read before stay closed. If you removed it
+        yourself and want to use chat here again, add it back. If you did not remove it, leave it and tell an owner.
+      </p>
+      <Button
+        className="h-11"
+        disabled={pending}
+        onClick={async () => {
+          setPending(true)
+          try {
+            await onAddAgain()
+          } finally {
+            setPending(false)
+          }
+        }}
+      >
+        {pending && <Loader2 className="animate-spin" />} Add this device again
+      </Button>
+    </div>
+  )
 }
 
 /* --------------------------------------------------------- pigeonholes */
@@ -501,14 +667,12 @@ function Thread({
   state,
   lines,
   notice,
-  error,
   onSend,
 }: {
   state: ChannelState | null
   lines: Line[]
   notice: string | null
-  error: string | null
-  onSend: (text: string) => Promise<boolean>
+  onSend: (text: string) => Promise<void>
 }) {
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
@@ -521,35 +685,48 @@ function Thread({
 
   const send = async () => {
     const text = draft.trim()
-    if (!text) return
+    if (!text || sending) return
     setSending(true)
     setSendError(null)
     try {
-      if (await onSend(text)) setDraft("")
+      await onSend(text)
+      setDraft("")
     } catch (e) {
-      setSendError(e instanceof Error ? e.message : "That did not send")
+      setSendError(message(e, "That did not send"))
     } finally {
       setSending(false)
     }
   }
 
-  const unreadable = lines.filter((l) => l.text === undefined).length
+  const before = lines.filter((l) => l.problem === "before").length
+  const failed = lines.filter((l) => l.problem === "failed").length
   const name = state?.channel.name ?? ""
 
   return (
     <>
       <div className="flex-1 overflow-y-auto px-4 py-3" aria-live="polite">
-        {!state && !error && (
+        {!state && (
           <p className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
             <Loader2 className="size-4 animate-spin" /> Opening the chat on this device
           </p>
         )}
-        {error && !state && <p className="text-destructive py-8 text-sm">Error: {error}</p>}
         {notice && state && <p className="bg-accent text-accent-foreground mb-3 rounded-lg px-3 py-2 text-sm">{notice}</p>}
-        {unreadable > 0 && (
+        {failed > 0 && (
+          <p className="text-destructive mb-3 text-sm" role="alert">
+            Error: {failed === 1 ? "1 message" : `${failed} messages`} could not be opened. They may have been changed,
+            or something has gone wrong. A new chat key has been asked for; tell an admin if this stays.
+          </p>
+        )}
+        {before > 0 && (
           <p className="text-muted-foreground mb-3 text-xs">
-            {unreadable === 1 ? "1 message was" : `${unreadable} messages were`} sent before this device could read the
-            chat, so {unreadable === 1 ? "it stays" : "they stay"} closed here.
+            {before === 1 ? "1 message was" : `${before} messages were`} sent before this device could read the chat, so{" "}
+            {before === 1 ? "it stays" : "they stay"} closed here.
+          </p>
+        )}
+        {state?.truncated && <p className="text-muted-foreground mb-3 text-xs">Only the latest 200 messages are shown here.</p>}
+        {state?.rotationNeeded && !state.canRotate && (
+          <p className="text-muted-foreground mb-3 text-xs">
+            Someone new can read Announcements now; new announcements open once an owner or admin next opens chat.
           </p>
         )}
         {state && lines.length === 0 && (
@@ -589,7 +766,11 @@ function Thread({
           }}
         >
           <div className="flex-1">
-            {sendError && <p className="text-destructive mb-1.5 text-xs">Error: {sendError}</p>}
+            {sendError && (
+              <p className="text-destructive mb-1.5 text-xs" role="alert">
+                Error: {sendError}
+              </p>
+            )}
             <label htmlFor="chat-draft" className="sr-only">
               Message {name}
             </label>
@@ -650,7 +831,7 @@ function PeoplePicker({
   )
 }
 
-function NewGroup({ people, onCreated }: { people: { id: string; name: string }[]; onCreated: (id: string) => Promise<void> }) {
+function NewGroup({ people, onCreated }: { people: { id: string; name: string }[]; onCreated: (id: string) => void }) {
   const [name, setName] = useState("")
   const [chosen, setChosen] = useState<string[]>([])
   const [pending, setPending] = useState(false)
@@ -660,13 +841,19 @@ function NewGroup({ people, onCreated }: { people: { id: string; name: string }[
       className="flex flex-1 flex-col overflow-y-auto"
       onSubmit={async (e) => {
         e.preventDefault()
+        if (pending) return
         setPending(true)
-        const r = await createGroup(name, chosen)
-        setPending(false)
-        if (r.ok && r.id) {
-          toast.success(r.message)
-          await onCreated(r.id)
-        } else toast.error(r.message)
+        try {
+          const r = await createGroup(name, chosen)
+          if (r.ok && r.id) {
+            toast.success(r.message)
+            onCreated(r.id)
+          } else toast.error(r.message)
+        } catch (err) {
+          toast.error(message(err, "The group could not be started. Check your list before trying again."))
+        } finally {
+          setPending(false)
+        }
       }}
     >
       <div className="flex flex-col gap-4 p-4">
@@ -718,12 +905,17 @@ function GroupMembers({
 
   const run = async (fn: () => Promise<{ ok: boolean; message: string }>, after?: () => void) => {
     setPending(true)
-    const r = await fn()
-    setPending(false)
-    if (r.ok) {
-      toast.success(r.message)
-      after?.()
-    } else toast.error(r.message)
+    try {
+      const r = await fn()
+      if (r.ok) {
+        toast.success(r.message)
+        after?.()
+      } else toast.error(r.message)
+    } catch (e) {
+      toast.error(message(e, "That did not go through"))
+    } finally {
+      setPending(false)
+    }
   }
 
   return (

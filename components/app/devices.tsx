@@ -61,9 +61,9 @@ function DeviceRow({ d }: { d: Device }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {d.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              It will not be able to read any new messages. What it already shows stays on it until it is cleared.
-              If this is the device you are on now, chat will add it again as a new device next time you open it,
-              and older messages will not open here.
+              It will not be able to read any new messages, and it will not add itself back: chat on that device
+              will say it was removed and ask before adding it again. If this is the device you are on now and you
+              add it back, older messages will not open here.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -411,6 +411,20 @@ export async function readDb(): Promise<Database> {
     for (const c of parsed.channels as { kind: string; name: string }[]) {
       if (c.kind === "general") Object.assign(c, { kind: "announcements", name: "Announcements" })
     }
+    // One Announcements per workspace. A restart during that rename once made a
+    // second, empty one; keep the one holding messages and drop only empties.
+    const msgs = (parsed.messages ?? []) as { channel_id: string }[]
+    const count = (id: string) => msgs.filter((m) => m.channel_id === id).length
+    const keeper = new Map<string, { id: string; n: number; at: string }>()
+    for (const c of parsed.channels as { id: string; kind: string; workspace_id: string; created_at: string }[]) {
+      if (c.kind !== "announcements") continue
+      const best = keeper.get(c.workspace_id)
+      const n = count(c.id)
+      if (!best || n > best.n || (n === best.n && c.created_at < best.at)) keeper.set(c.workspace_id, { id: c.id, n, at: c.created_at })
+    }
+    parsed.channels = (parsed.channels as { id: string; kind: string; workspace_id: string }[]).filter(
+      (c) => c.kind !== "announcements" || keeper.get(c.workspace_id)?.id === c.id || count(c.id) > 0
+    ) as typeof parsed.channels
     parsed.channel_keys ??= []
     parsed.messages ??= []
     parsed.channel_reads ??= []
