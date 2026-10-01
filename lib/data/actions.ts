@@ -26,6 +26,7 @@ import {
 import { z } from "zod"
 
 import { askForJson } from "@/lib/ai/claude"
+import { isPublicKeyJwk } from "@/lib/crypto/e2ee"
 import { actorName, notify } from "./notify"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
@@ -36,6 +37,7 @@ import {
   stageOf,
   type ActivityType,
   type Database,
+  type Channel,
   type OrgCategory,
   type Role,
   type StageId,
@@ -3057,4 +3059,305 @@ export async function refreshDailyReminders(): Promise<void> {
       })
     }
   })
+}
+
+/* ------------------------------------------------- encrypted channels (5b) */
+// The server never sees a message in the clear. It checks who may do what,
+// stores what devices send, and hands each device only the keys wrapped for it.
+
+const B64 = /^[A-Za-z0-9+/]+={0,2}$/
+const MAX_DEVICES = 10
+const MAX_SEALED = 64 * 1024
+
+type PublicKey = Database["devices"][number]["public_key"]
+
+/** Everyone who belongs in the channel right now. #general is the whole workspace. */
+function channelMemberIds(db: Database, ch: Channel): string[] {
+  return db.memberships.filter((m) => m.workspace_id === ch.workspace_id).map((m) => m.user_id)
+}
+
+/** The devices that must hold the current key: every active device of every member. */
+function expectedDeviceIds(db: Database, ch: Channel): string[] {
+  const members = new Set(channelMemberIds(db, ch))
+  return db.devices
+    .filter((d) => members.has(d.user_id) && !d.revoked_at)
+    .map((d) => d.id)
+    .sort()
+}
+
+/**
+ * True when someone joined or left, or a device was added or removed, since
+ * the current key was made. Nothing can be sent until a member's device makes
+ * a new one, so nobody who has left ever receives a new message.
+ */
+function needsRotation(db: Database, ch: Channel): boolean {
+  if (ch.epoch === 0) return true
+  const holders = db.channel_keys
+    .filter((k) => k.channel_id === ch.id && k.epoch === ch.epoch)
+    .map((k) => k.device_id)
+    .sort()
+  return holders.join() !== expectedDeviceIds(db, ch).join()
+}
+
+/** The channel, only if this person is in it and it is in this workspace. */
+function channelFor(db: Database, channelId: string, workspaceId: string, userId: string) {
+  const ch = db.channels.find((c) => c.id === channelId && c.workspace_id === workspaceId)
+  return ch && channelMemberIds(db, ch).includes(userId) ? ch : null
+}
+
+/** A device, only if it is this person's and has not been removed. */
+function myDevice(db: Database, deviceId: string, userId: string) {
+  return db.devices.find((d) => d.id === deviceId && d.user_id === userId && !d.revoked_at) ?? null
+}
+
+function markRead(d: Database, ch: Channel, userId: string) {
+  const r = d.channel_reads.find((x) => x.channel_id === ch.id && x.user_id === userId)
+  if (r) r.read_at = now()
+  else d.channel_reads.push({ workspace_id: ch.workspace_id, channel_id: ch.id, user_id: userId, read_at: now() })
+}
+
+/** Adds this browser or phone as one of your devices. Only its public key is sent. */
+export async function registerDevice(
+  name: string,
+  publicKey: unknown
+): Promise<Result & { deviceId?: string }> {
+  const { user } = await requireContext()
+  if (!isPublicKeyJwk(publicKey)) return { ok: false, message: "That is not a device key" }
+  const label = String(name ?? "").trim().slice(0, 60) || "This device"
+
+  const db = await readDb()
+  const active = db.devices.filter((d) => d.user_id === user.id && !d.revoked_at)
+  if (active.length >= MAX_DEVICES) {
+    return { ok: false, message: `You already have ${MAX_DEVICES} devices. Remove an old one in Settings first.` }
+  }
+
+  const id = newId()
+  const { kty, crv, x, y } = publicKey
+  await mutate((d) => {
+    d.devices.push({
+      id,
+      user_id: user.id,
+      name: label,
+      public_key: { kty, crv, x, y },
+      created_at: now(),
+      last_seen_at: now(),
+    })
+  })
+  return { ok: true, message: "This device can now read your channels", deviceId: id }
+}
+
+/** Stops one of your devices reading anything new. The next key is made without it. */
+export async function revokeDevice(deviceId: string): Promise<Result> {
+  const { user } = await requireContext()
+  if (!myDevice(await readDb(), deviceId, user.id)) {
+    return { ok: false, message: "That device is not yours, or is already removed" }
+  }
+  await mutate((d) => {
+    d.devices.find((x) => x.id === deviceId)!.revoked_at = now()
+  })
+  revalidatePath("/settings")
+  return { ok: true, message: "Device removed. It cannot read new messages." }
+}
+
+export type ChannelSummary = { id: string; name: string; unread: number }
+
+/** Your channels in this workspace, with unread counts. Makes #general the first time. */
+export async function loadChannels(
+  deviceId: string
+): Promise<{ ok: true; deviceKnown: boolean; channels: ChannelSummary[] }> {
+  const { user, workspace } = await requireContext()
+  const known = Boolean(myDevice(await readDb(), deviceId, user.id))
+
+  const channels = await mutate((d) => {
+    if (known) d.devices.find((x) => x.id === deviceId)!.last_seen_at = now()
+    if (!d.channels.some((c) => c.workspace_id === workspace.id && c.kind === "general")) {
+      d.channels.push({
+        id: newId(),
+        workspace_id: workspace.id,
+        name: "general",
+        kind: "general",
+        created_by: user.id,
+        created_at: now(),
+        epoch: 0,
+      })
+    }
+    return d.channels
+      .filter((c) => c.workspace_id === workspace.id && channelMemberIds(d, c).includes(user.id))
+      .map((c) => {
+        const read = d.channel_reads.find((r) => r.channel_id === c.id && r.user_id === user.id)?.read_at ?? ""
+        const unread = d.messages.filter(
+          (m) => m.channel_id === c.id && m.sender_id !== user.id && m.created_at > read
+        ).length
+        return { id: c.id, name: c.name, unread }
+      })
+  })
+  return { ok: true, deviceKnown: known, channels }
+}
+
+export type SealedMessage = {
+  id: string
+  sender_id: string
+  sender_device_id: string
+  epoch: number
+  iv: string
+  ciphertext: string
+  created_at: string
+}
+
+export type ChannelState = {
+  channel: { id: string; name: string; epoch: number }
+  people: { id: string; name: string }[]
+  memberCount: number
+  rotationNeeded: boolean
+  /** The devices the next key must be wrapped for, with their public keys. */
+  devices: { id: string; user_id: string; public_key: PublicKey }[]
+  /** Keys wrapped for this device, one per epoch it was given, with the wrapping device's public key. */
+  keys: { epoch: number; wrapped_key: string; wrapper_public_key: PublicKey }[]
+  messages: SealedMessage[]
+}
+
+/** Everything one device needs to open a channel. Only its own wrapped keys are included. */
+export async function loadChannel(
+  channelId: string,
+  deviceId: string
+): Promise<{ ok: true; state: ChannelState } | { ok: false; message: string }> {
+  const { user, workspace } = await requireContext()
+  const db = await readDb()
+  const ch = channelFor(db, channelId, workspace.id, user.id)
+  if (!ch) return { ok: false, message: "That channel is not here" }
+  if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
+
+  const memberIds = channelMemberIds(db, ch)
+  const messages = db.messages
+    .filter((m) => m.channel_id === ch.id)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .slice(-200)
+  const peopleIds = new Set([...memberIds, ...messages.map((m) => m.sender_id)])
+  const expected = new Set(expectedDeviceIds(db, ch))
+
+  return {
+    ok: true,
+    state: {
+      channel: { id: ch.id, name: ch.name, epoch: ch.epoch },
+      people: db.profiles.filter((p) => peopleIds.has(p.id)).map((p) => ({ id: p.id, name: p.full_name })),
+      memberCount: memberIds.length,
+      rotationNeeded: needsRotation(db, ch),
+      devices: db.devices
+        .filter((d) => expected.has(d.id))
+        .map((d) => ({ id: d.id, user_id: d.user_id, public_key: d.public_key })),
+      keys: db.channel_keys
+        .filter((k) => k.channel_id === ch.id && k.device_id === deviceId)
+        .flatMap((k) => {
+          const wrapper = db.devices.find((d) => d.id === k.wrapped_by_device_id)
+          return wrapper ? [{ epoch: k.epoch, wrapped_key: k.wrapped_key, wrapper_public_key: wrapper.public_key }] : []
+        }),
+      messages: messages.map((m) => ({
+        id: m.id,
+        sender_id: m.sender_id,
+        sender_device_id: m.sender_device_id,
+        epoch: m.epoch,
+        iv: m.iv,
+        ciphertext: m.ciphertext,
+        created_at: m.created_at,
+      })),
+    },
+  }
+}
+
+/**
+ * Stores a new channel key, wrapped by this device for exactly the devices that
+ * should hold it: no more (nobody who left), no fewer (nobody locked out).
+ */
+export async function rotateChannel(
+  channelId: string,
+  deviceId: string,
+  epoch: number,
+  wrapped: { device_id: string; wrapped_key: string }[]
+): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const db = await readDb()
+  const ch = channelFor(db, channelId, workspace.id, user.id)
+  if (!ch) return { ok: false, message: "That channel is not here" }
+  if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
+  if (epoch !== ch.epoch + 1) return { ok: false, message: "Someone else just changed the channel key. Opening it again." }
+  if (!Array.isArray(wrapped)) return { ok: false, message: "That key is not in the right shape" }
+
+  const given = wrapped.map((w) => w?.device_id).sort()
+  if (given.join() !== expectedDeviceIds(db, ch).join()) {
+    return { ok: false, message: "The people in the channel changed. Opening it again." }
+  }
+  // AES-KW of a 256-bit key is 40 bytes: 56 characters of base64.
+  if (!wrapped.every((w) => typeof w.wrapped_key === "string" && w.wrapped_key.length === 56 && B64.test(w.wrapped_key))) {
+    return { ok: false, message: "That key is not in the right shape" }
+  }
+
+  const saved = await mutate((d) => {
+    const c = d.channels.find((x) => x.id === ch.id)!
+    if (c.epoch !== epoch - 1) return false
+    for (const w of wrapped) {
+      d.channel_keys.push({
+        workspace_id: c.workspace_id,
+        channel_id: c.id,
+        epoch,
+        device_id: w.device_id,
+        wrapped_by_device_id: deviceId,
+        wrapped_key: w.wrapped_key,
+        created_at: now(),
+      })
+    }
+    c.epoch = epoch
+    return true
+  })
+  return saved
+    ? { ok: true, message: "New channel key made" }
+    : { ok: false, message: "Someone else just changed the channel key. Opening it again." }
+}
+
+/** Stores a sealed message. Refused if the key is out of date, so nobody who left can read it. */
+export async function postMessage(
+  channelId: string,
+  deviceId: string,
+  epoch: number,
+  sealed: { iv: string; ciphertext: string }
+): Promise<Result & { id?: string }> {
+  const { user, workspace } = await requireContext()
+  const db = await readDb()
+  const ch = channelFor(db, channelId, workspace.id, user.id)
+  if (!ch) return { ok: false, message: "That channel is not here" }
+  if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
+  if (epoch !== ch.epoch || needsRotation(db, ch)) {
+    return { ok: false, message: "The channel key changed. Sending again." }
+  }
+  const { iv, ciphertext } = sealed ?? {}
+  if (typeof iv !== "string" || iv.length !== 16 || !B64.test(iv)) {
+    return { ok: false, message: "That message is not sealed properly" }
+  }
+  if (typeof ciphertext !== "string" || !B64.test(ciphertext) || ciphertext.length > MAX_SEALED) {
+    return { ok: false, message: "That message is too long, or not sealed properly" }
+  }
+
+  const id = newId()
+  await mutate((d) => {
+    d.messages.push({
+      id,
+      workspace_id: ch.workspace_id,
+      channel_id: ch.id,
+      sender_id: user.id,
+      sender_device_id: deviceId,
+      epoch,
+      iv,
+      ciphertext,
+      created_at: now(),
+    })
+    markRead(d, ch, user.id)
+  })
+  return { ok: true, message: "Sent", id }
+}
+
+export async function markChannelRead(channelId: string): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const ch = channelFor(await readDb(), channelId, workspace.id, user.id)
+  if (!ch) return { ok: false, message: "That channel is not here" }
+  await mutate((d) => markRead(d, ch, user.id))
+  return { ok: true, message: "" }
 }

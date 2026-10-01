@@ -530,6 +530,69 @@ export function periodEnd(period: ObjectivePeriod, start: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+/* ------------------------------------------------- encrypted channels (5b) */
+// The server stores public keys, wrapped keys and sealed messages only.
+// Nothing here can be read without a member's device. See lib/crypto/e2ee.ts.
+
+/** One browser or phone a person uses. The private key never leaves it. */
+export type Device = {
+  id: string
+  user_id: string
+  /** e.g. "Windows · Chrome", so people can tell their devices apart. */
+  name: string
+  public_key: { kty: "EC"; crv: "P-256"; x: string; y: string }
+  created_at: string
+  last_seen_at: string
+  revoked_at?: string
+}
+
+/** "general" includes everyone in the workspace; it is made with the workspace. */
+export type ChannelKind = "general"
+
+export type Channel = {
+  id: string
+  workspace_id: string
+  name: string
+  kind: ChannelKind
+  created_by: string
+  created_at: string
+  /** The current key epoch. 0 means no key yet; the first member to open it makes one. */
+  epoch: number
+}
+
+/** A channel key for one epoch, wrapped so only one device can open it. */
+export type ChannelKey = {
+  workspace_id: string
+  channel_id: string
+  epoch: number
+  device_id: string
+  /** The device that wrapped it; its public key is needed to open it. */
+  wrapped_by_device_id: string
+  wrapped_key: string
+  created_at: string
+}
+
+/** A sealed message. Text and mentions are inside the ciphertext. */
+export type Message = {
+  id: string
+  workspace_id: string
+  channel_id: string
+  sender_id: string
+  sender_device_id: string
+  epoch: number
+  iv: string
+  ciphertext: string
+  created_at: string
+}
+
+/** When someone last read a channel, for unread counts. */
+export type ChannelRead = {
+  workspace_id: string
+  channel_id: string
+  user_id: string
+  read_at: string
+}
+
 export type Database = {
   profiles: Profile[]
   workspaces: Workspace[]
@@ -552,6 +615,11 @@ export type Database = {
   custom_values: CustomValue[]
   notifications: Notification[]
   notification_prefs: NotificationPrefs[]
+  devices: Device[]
+  channels: Channel[]
+  channel_keys: ChannelKey[]
+  messages: Message[]
+  channel_reads: ChannelRead[]
 }
 
 /** Who can do what. The screens and the actions both read this — never one or the other. */
