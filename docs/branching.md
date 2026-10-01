@@ -21,6 +21,7 @@ Names are lowercase words joined by hyphens, saying what the branch does.
 1. **Start a branch from the latest `main`** — `git switch main`, `git pull`, `git switch -c feature/<name>`.
 2. **Build in small steps**, committing after each working step, as before. Push the branch to GitHub as you go (`git push -u origin feature/<name>`), so nothing only lives on one laptop.
 3. **Open a pull request** into `main`. The template asks for what changed, what to click to test it, and whether any data changes.
+   GitHub then runs the **Checks**: type-check, lint and the privacy tests. A red cross means something broke; do not merge until it is green.
 4. **Charis tries it** by following the "what to click" steps (later, on the Vercel preview link GitHub shows on the pull request).
 5. **Merge with "Squash and merge"**, so `main` gets one tidy commit per piece of work, then delete the branch. The detailed step-by-step commits stay visible on the pull request.
 
@@ -44,4 +45,5 @@ These are in the repository's **Settings**, and are Charis's to change:
 
 - **Branches → Add branch ruleset for `main`**: require a pull request before merging, and block force pushes. Nobody, Claude included, can then change `main` without a pull request.
 - **General → Pull Requests**: allow squash merging (and turn off the others if you like), and tick "Automatically delete head branches".
+- **Branches → the `main` ruleset → Require status checks to pass**, choosing **checks**: then a pull request cannot be merged while the checks are red.
 - **Later, with Vercel connected**: every pull request gets its own preview link to click through before merging.

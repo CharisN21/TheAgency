@@ -13,7 +13,8 @@ import { periodStart, type Database } from "./types"
  * means rewriting this file and nothing else.
  */
 
-const DIR = path.join(process.cwd(), ".data")
+// Tests point this at a throwaway folder so they never touch your data.
+const DIR = process.env.AGENCY_DATA_DIR ?? path.join(process.cwd(), ".data")
 const FILE = path.join(DIR, "agency.json")
 
 const now = () => new Date().toISOString()
