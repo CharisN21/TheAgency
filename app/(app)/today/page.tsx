@@ -134,7 +134,7 @@ export default async function TodayPage() {
       </PageHeader>
 
       <main className="flex-1">
-        <Band tone="accent" index={0} narrow label="Your numbers">
+        <Band tone="ink" index={0} narrow label="Your numbers">
           <p className="text-muted-foreground text-sm">{today}</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">
             {greeting}, {firstName}

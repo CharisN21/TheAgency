@@ -55,7 +55,7 @@ export default async function OrganisationPage({ params }: { params: Promise<{ i
 
       <main className="flex-1">
         {/* The lead band: who they are and what they are worth to you. */}
-        <Band tone="accent" index={0} label="About them">
+        <Band tone="maroon" index={0} label="About them">
           <Link
             href="/organisations"
             className="text-muted-foreground hover:text-foreground mb-3 inline-flex min-h-11 items-center gap-1 text-sm"

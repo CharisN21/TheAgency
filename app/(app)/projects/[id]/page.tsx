@@ -93,7 +93,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </PageHeader>
 
       <main className="flex-1">
-        <Band tone="accent" index={0} label="Where the project stands">
+        <Band tone="ink" index={0} label="Where the project stands">
           <Link
             href="/projects"
             className="text-muted-foreground hover:text-foreground mb-3 inline-flex min-h-11 items-center gap-1 text-sm"

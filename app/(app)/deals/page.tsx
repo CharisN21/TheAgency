@@ -98,7 +98,7 @@ export default async function DealsPage({
       </PageHeader>
 
       <main className="flex-1">
-        <Band tone="accent" index={0} wide label="Pipeline numbers">
+        <Band tone="maroon" index={0} wide label="Pipeline numbers">
           <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
             {stats.map((s) => (
               <BandStat key={s.label} label={s.label} value={s.value} help={s.help} />

@@ -68,7 +68,7 @@ export default async function PeoplePage({
 
       <main className="flex-1">
         {everyone.length > 0 && (
-          <Band tone="accent" index={0} label="Who to speak to">
+          <Band tone="maroon" index={0} label="Who to speak to">
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <BandStat
                 label="Speak to today"

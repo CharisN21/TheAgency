@@ -29,6 +29,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { ROLE_LABEL, type Role } from "@/lib/data/types"
+import { LinkPending } from "./link-pending"
 import { WorkspaceSwitcher, type SwitcherWorkspace } from "./workspace-switcher"
 
 type Item = {
@@ -95,9 +96,10 @@ export function AppSidebar({
             <span>{n.label}</span>
           </>
         ) : (
-          <Link href={n.href}>
+          <Link href={n.href} className="relative">
             <n.icon />
             <span>{n.label}</span>
+            <LinkPending />
           </Link>
         )}
       </SidebarMenuButton>

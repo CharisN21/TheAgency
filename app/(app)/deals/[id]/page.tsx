@@ -73,7 +73,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
 
       <main className="flex-1">
         {/* The lead band: what it is worth and where it stands. */}
-        <Band tone="accent" index={0} label="Where this deal stands">
+        <Band tone="maroon" index={0} label="Where this deal stands">
           <Link
             href="/deals"
             className="text-muted-foreground hover:text-foreground mb-3 inline-flex min-h-11 items-center gap-1 text-sm"

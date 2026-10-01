@@ -8,7 +8,9 @@ import { cn } from "cn"
  *
  * - `plain`  — the page itself
  * - `soft`   — greige, with a hairline above and below
- * - `accent` — the soft maroon tint, for the one band that leads a page
+ * - `accent` — the soft maroon tint, leading the Workspace pages
+ * - `maroon` — deep maroon, leading the Relationships pages
+ * - `ink`    — near-black with a maroon glow, leading the Work pages
  *
  * `index` staggers the arrival: 0 first, then 60ms apart.
  */
@@ -28,7 +30,7 @@ export function Band({
    * before any script loads and is announced as expandable.
    */
   fold?: { title: string; summary?: string; open?: boolean }
-  tone?: "plain" | "soft" | "accent"
+  tone?: "plain" | "soft" | "accent" | "maroon" | "ink"
   index?: number
   /** A reading-width column, for pages like Today. */
   narrow?: boolean
@@ -47,6 +49,8 @@ export function Band({
         "band-in px-4 py-6 md:px-8 md:py-8",
         tone === "soft" && "bg-muted/60 border-border border-y",
         tone === "accent" && "bg-accent/70 border-primary/10 border-b",
+        tone === "maroon" && "band-dark band-maroon",
+        tone === "ink" && "band-dark band-ink",
         className,
       )}
     >

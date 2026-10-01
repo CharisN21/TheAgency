@@ -222,3 +222,67 @@
 @media (prefers-reduced-motion: reduce) {
   .band-in, .band-reveal { animation: none !important; }
 }
+
+/* ---- Lead bands: each part of the app opens in its own tone (components/app/band.tsx) ----
+   Relationships open in maroon, Work in ink, Workspace in the soft tint. Both
+   dark tones reuse existing values: maroon is --primary, ink is --foreground
+   (and the dark theme's card colour in dark mode). Inside a dark band the
+   shared roles are re-pointed locally: surfaces turn to translucent white and
+   status colours take the dark theme's values, which were made for dark
+   backgrounds. Nothing new is invented; every child just reads the roles. */
+:root {
+  --band-maroon: var(--primary);
+  --band-ink: #1b1719;
+}
+.dark {
+  --band-ink: #1c1a1b;
+}
+.band-dark {
+  --foreground: #ffffff;
+  --card: rgb(255 255 255 / 0.08);
+  --card-foreground: #ffffff;
+  --popover-foreground: #1b1719;
+  --muted: rgb(255 255 255 / 0.1);
+  --muted-foreground: rgb(255 255 255 / 0.82);
+  --secondary: rgb(255 255 255 / 0.12);
+  --secondary-foreground: #ffffff;
+  --border: rgb(255 255 255 / 0.18);
+  --accent: rgb(255 255 255 / 0.12);
+  --accent-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #7c1f35;
+  --ring: #ffffff;
+  --ink-3: rgb(255 255 255 / 0.68);
+  --fill-strong: rgb(255 255 255 / 0.16);
+  --ok: #3ddc68;
+  --ok-soft: #15301e;
+  --warn: #ff9a4d;
+  --warn-soft: #3a2410;
+  --info: #5aa9ff;
+  --info-soft: #14263d;
+  --destructive: #ff6b61;
+  --danger-soft: #3b1a18;
+  color: var(--foreground);
+}
+.band-maroon {
+  background-color: var(--band-maroon);
+  /* A soft light from the top left, so the band has depth rather than a flat fill. */
+  background-image: radial-gradient(120% 160% at 0% 0%, rgb(255 255 255 / 0.1), transparent 55%);
+}
+.band-ink {
+  background-color: var(--band-ink);
+  background-image: radial-gradient(120% 160% at 100% 0%, rgb(124 31 53 / 0.35), transparent 60%);
+}
+
+/* ---- Navigation: a page fades in on arrival (app/(app)/template.tsx), and the
+   link you clicked shows a sweeping line until it does (components/app/link-pending.tsx). */
+.page-in { animation: pageIn 200ms cubic-bezier(.16,1,.3,1) both; }
+@keyframes pageIn { from { opacity: 0; } to { opacity: 1; } }
+.link-pending { position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px; border-radius: 2px; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 150ms ease-out; }
+.link-pending.is-pending { opacity: 1; }
+.link-pending.is-pending::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: inherit; background: var(--primary); animation: linkSweep 900ms cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes linkSweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) {
+  .page-in { animation: none !important; }
+  .link-pending.is-pending::after { animation: none !important; width: 100%; opacity: 0.6; }
+}

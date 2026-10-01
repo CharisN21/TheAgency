@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { Building2, Ellipsis, HandCoins, Plus, Sun } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { LinkPending } from "./link-pending"
 
 const TABS = [
   { href: "/today", label: "Today", icon: Sun, center: false },
@@ -32,12 +33,13 @@ export function MobileTabBar() {
             key={t.href}
             href={t.href}
             className={cn(
-              "flex min-h-11 flex-col items-center gap-1 text-[10px] font-medium",
+              "relative flex min-h-11 flex-col items-center gap-1 text-[10px] font-medium",
               pathname.startsWith(t.href) ? "text-primary" : "text-muted-foreground"
             )}
           >
             <t.icon className="size-6" />
             {t.label === "Organisations" ? "Orgs" : t.label}
+            <LinkPending />
           </Link>
         )
       )}
