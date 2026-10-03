@@ -306,3 +306,27 @@
    so in dark mode maroon text uses the dark theme's soft pink instead. Inside
    a dark band that role is white, as before. Buttons keep the maroon fill. */
 .dark .text-primary, .dark .hover\:text-primary:hover { color: var(--accent-foreground); }
+
+/* ---- Accessibility (WCAG 2.2) ----
+   Links and disclosure summaries get the same clear focus ring as buttons.
+   Scroll padding keeps a focused item from hiding under the sticky header or
+   the phone tab bar. The skip link appears on the first Tab press. On touch
+   screens every button and checkbox gets a 44px tap area without changing
+   how it looks. */
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+html { scroll-padding-top: 4.5rem; scroll-padding-bottom: 6.5rem; }
+.skip-link {
+  position: fixed; left: 12px; top: 12px; z-index: 100; padding: 10px 14px; border-radius: 10px;
+  background: var(--primary); color: var(--primary-foreground); font-size: 14px; font-weight: 600;
+  transform: translateY(-160%); transition: transform 150ms ease-out;
+}
+.skip-link:focus { transform: none; }
+@layer base {
+  @media (pointer: coarse) {
+    [data-slot="button"], [data-slot="checkbox"] { position: relative; }
+    [data-slot="button"]::after, [data-slot="checkbox"]::after {
+      content: ""; position: absolute; left: 50%; top: 50%;
+      width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+    }
+  }
+}
