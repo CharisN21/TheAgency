@@ -301,3 +301,8 @@
 .dark .skeleton::after, .band-dark .skeleton::after { background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.1), transparent); }
 @keyframes shimmer { to { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .skeleton::after { display: none; } }
+
+/* ---- Dark mode: maroon text is too faint on dark backgrounds (about 2.4:1),
+   so in dark mode maroon text uses the dark theme's soft pink instead. Inside
+   a dark band that role is white, as before. Buttons keep the maroon fill. */
+.dark .text-primary, .dark .hover\:text-primary:hover { color: var(--accent-foreground); }

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/app/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { aiAvailable } from "@/lib/ai/claude"
 import { FieldManager } from "@/components/app/custom-fields"
+import { AppearancePicker } from "@/components/app/appearance"
 import { DeviceList } from "@/components/app/devices"
 import { NotificationSwitches } from "@/components/app/notifications"
 import { getMutedNotifications, listCustomFields, listMyDevices } from "@/lib/data/queries"
@@ -56,7 +57,18 @@ export default async function SettingsPage() {
           </Card>
         </Band>
 
-        <Band tone="soft" index={2} narrow label="Notifications">
+        <Band tone="soft" index={2} narrow label="Appearance and notifications">
+          <Card id="appearance" className="mb-4 scroll-mt-20">
+            <CardHeader>
+              <CardTitle>Appearance</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <p className="text-muted-foreground text-sm">
+                Light or dark. Kept on this device only, so your phone and laptop can differ.
+              </p>
+              <AppearancePicker />
+            </CardContent>
+          </Card>
           <Card id="notifications" className="scroll-mt-20">
             <CardHeader>
               <CardTitle>Notifications</CardTitle>
