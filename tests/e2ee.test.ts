@@ -139,3 +139,30 @@ describe("messages", () => {
     expect(sealed.iv).not.toBe((await sealMessage(key, { text: "secret supplier price" }, ctx)).iv)
   })
 })
+
+describe("task cards inside messages", () => {
+  const ctx = { channelId: "c", epoch: 1, senderDeviceId: "d" }
+  const card = { kind: "task" as const, taskId: "t1", title: "Get two glove quotes", assignee: "Achieng", href: "/projects/p1" }
+
+  it("a card travels sealed with the text and opens again", async () => {
+    const key = await createChannelKey()
+    const sealed = await sealMessage(key, { text: "New task for Achieng: Get two glove quotes", card }, ctx)
+    expect(JSON.stringify(sealed)).not.toContain("glove")
+    expect((await openMessage(key, sealed, ctx)).card).toEqual(card)
+  })
+
+  it("a card that links off the app, or is the wrong shape, is dropped and the text kept", async () => {
+    const key = await createChannelKey()
+    for (const bad of [
+      { ...card, href: "https://evil.example" },
+      { ...card, href: "//evil.example" },
+      { ...card, href: "javascript:alert(1)" },
+      { ...card, taskId: 7 },
+    ]) {
+      const sealed = await sealMessage(key, { text: "hello", card: bad as never }, ctx)
+      const body = await openMessage(key, sealed, ctx)
+      expect(body.text).toBe("hello")
+      expect(body.card).toBeUndefined()
+    }
+  })
+})

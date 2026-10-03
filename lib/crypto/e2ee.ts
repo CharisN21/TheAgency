@@ -152,8 +152,22 @@ export async function unwrapChannelKey(
 
 /* ------------------------------------------------------------ messages */
 
-/** What a message holds once opened. Mentions live inside, so the server never sees who was tagged. */
-export type MessageBody = { text: string; mentions?: string[] }
+/** A task made from a message, shown in the chat as a card that links to it. */
+export type TaskCard = { kind: "task"; taskId: string; title: string; assignee: string; href: string }
+
+/** What a message holds once opened. Mentions and cards live inside, so the server never sees them. */
+export type MessageBody = { text: string; mentions?: string[]; card?: TaskCard }
+
+const isTaskCard = (c: unknown): c is TaskCard => {
+  const v = c as Record<string, unknown> | null
+  return (
+    !!v &&
+    v.kind === "task" &&
+    ["taskId", "title", "assignee", "href"].every((k) => typeof v[k] === "string") &&
+    // An in-app path only: "/..." but never "//..." or "/\..." (which browsers treat as another site).
+    /^\/(?![/\\])/.test(String(v.href))
+  )
+}
 
 const aad = (ctx: KeyContext & { senderDeviceId: string }) =>
   enc.encode(`${ctx.channelId}|${ctx.epoch}|${ctx.senderDeviceId}`)
@@ -185,5 +199,7 @@ export async function openMessage(
   )
   const body = JSON.parse(dec.decode(plain)) as MessageBody
   if (typeof body?.text !== "string") throw new Error("Not a message")
+  // A card that is not exactly the expected shape (or links off-site) is dropped, keeping the text.
+  if (body.card !== undefined && !isTaskCard(body.card)) delete body.card
   return body
 }

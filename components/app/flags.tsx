@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { Flag, Loader2, Lock, MessageSquareText, RotateCcw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -65,15 +65,30 @@ export function RaiseFlag({
   aboutUserId,
   projectId,
   variant = "outline",
+  open: openProp,
+  onOpenChange,
+  situation,
+  quote,
 }: {
   people: Option[]
   projects: Option[]
   aboutUserId?: string
   projectId?: string
   variant?: "outline" | "default" | "ghost"
+  /** Opened from elsewhere (a chat message): no button of its own, and it stays put after raising. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** A starting line for the situation, e.g. "In the PPE logistics chat, 3 Oct". */
+  situation?: string
+  /** Words that can be quoted into "What happened" — only if the person chooses to. */
+  quote?: string
 }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const controlled = openProp !== undefined
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlled ? openProp : ownOpen
+  const setOpen = (o: boolean) => (controlled ? onOpenChange?.(o) : setOwnOpen(o))
+  const behaviourRef = useRef<HTMLTextAreaElement>(null)
   const [about, setAbout] = useState(aboutUserId ?? "none")
   const [project, setProject] = useState(projectId ?? "none")
   const [severity, setSeverity] = useState<FlagSeverity>("warning")
@@ -91,7 +106,7 @@ export function RaiseFlag({
       }
       setOpen(false)
       toast.success(result.message)
-      if (result.id) router.push(`/flags/${result.id}`)
+      if (result.id && !controlled) router.push(`/flags/${result.id}`)
     })
   }
 
@@ -107,11 +122,13 @@ export function RaiseFlag({
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button variant={variant} size="sm">
-          <Flag /> Raise a flag
-        </Button>
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          <Button variant={variant} size="sm">
+            <Flag /> Raise a flag
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
         <form
           onSubmit={(e) => {
@@ -196,6 +213,7 @@ export function RaiseFlag({
                 name="situation"
                 rows={2}
                 required
+                defaultValue={situation}
                 placeholder="The Safaricom quote last week"
               />
             </div>
@@ -203,6 +221,7 @@ export function RaiseFlag({
               <Label htmlFor="f-behaviour">What happened</Label>
               <Textarea
                 id="f-behaviour"
+                ref={behaviourRef}
                 name="behaviour"
                 rows={2}
                 required
@@ -211,6 +230,19 @@ export function RaiseFlag({
               <p className="text-muted-foreground text-xs">
                 What you saw or heard, not what you think of them.
               </p>
+              {quote && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => {
+                    if (behaviourRef.current) behaviourRef.current.value = `"${quote}"`
+                  }}
+                >
+                  Quote the message
+                </Button>
+              )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="f-impact">The effect</Label>
