@@ -425,3 +425,24 @@ describe("fixes from the security review", () => {
     expect(after.ok && after.state.rotationNeeded).toBe(false)
   })
 })
+
+describe("from a chat message", () => {
+  it("making a task hands back its id, so the chat card can link to it", async () => {
+    as(f.charis.id)
+    const fd = new FormData()
+    fd.set("title", "Get two glove quotes")
+    fd.set("assignee_id", f.achieng.id)
+    const r = await actions.createTask(fd)
+    expect(r.ok).toBe(true)
+    const db = await readDb()
+    expect(db.tasks.find((t) => t.id === r.id)?.assignee_id).toBe(f.achieng.id)
+  })
+
+  it("record options only list this workspace's records", async () => {
+    as(f.charis.id)
+    const o = await actions.loadChatRecordOptions()
+    const ids = [...o.projects, ...o.organisations, ...o.contacts, ...o.deals].map((x) => x.value)
+    expect(ids.length).toBeGreaterThan(0)
+    expect(ids.some((id) => f.elsewhereIds.includes(id))).toBe(false)
+  })
+})

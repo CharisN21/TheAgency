@@ -146,7 +146,11 @@ Fixed before merge: key renewals are checked as exact sets of real device ids; d
 - **Removing a device does not sign that browser out.** A stolen laptop still signed in could press "Add this device again". Fix when Supabase auth goes in: removing a device ends its session, and other members see "new device added".
 - **A member can still jam a chat at the moment a key is genuinely due**, by wrapping a useless key; the affected devices then ask for a new one. Safety numbers (5c) and signed key renewals close this.
 
-### Chat as a work tool (later, not built yet)
+### Chat as a work tool (built 3 Oct 2026: task, record note, private flag)
+
+Built in `components/app/chat-actions.tsx`: the "…" on any message offers **Make a task** (you pick who it is for; the task is an ordinary task and an encrypted card linking to it is posted in the chat — card links must be in-app paths, checked when a message opens), **Save to a record** (a note on an organisation, person or deal timeline, editable before saving) and **Raise a private flag** (the existing flag form, situation pre-filled, the message quoted only if you press Quote the message; nothing is posted in the chat). Every form says what leaves the encryption before anything is saved. Not built yet: mention-based task suggestions, a group per project.
+
+#### The original plan
 
 Chat is for record keeping and handing out work now, and may become the main way to issue tasks and flag people. Encryption shapes how: the server cannot read chat, so **nothing leaves a chat for the records without a person choosing it, and the app says so at that moment.**
 
