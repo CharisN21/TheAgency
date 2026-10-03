@@ -31,6 +31,6 @@ Rules to paste into `CLAUDE.md` before the Phase 0 kickoff prompt, so Claude Cod
 - Every list has an empty state; every action that hits the network has a loading state and a success or error result.
 - 44px minimum touch targets, visible focus rings, and `prefers-reduced-motion` respected.
 - Motion: 150–200ms for hover and press, 200–300ms for route and company switches, 800–1200ms skeleton pulse, all ease-out.
-- Pages are stacks of full-width bands: one lead band (accent-soft) first, then plain and soft alternating. Bands arrive with a 240ms rise, staggered 60ms, and rise again as they scroll into view; none of it under reduced motion. See `Layout-01-Bands`.
+- Pages are stacks of full-width bands: one lead band first, whose tone names the area (maroon for Relationships, ink for Work, the accent-soft tint for Workspace), then plain and soft alternating. The page's most important number leads in a solid tile of the opposite tone. Every page has a loading screen in its own shape and lead tone, with shimmering placeholders; pages fade in and the clicked link shows a sweeping line. Bands arrive with a 240ms rise, staggered 60ms, and rise again as they scroll into view; none of it under reduced motion. See `Layout-01-Bands`.
 
 *Source: [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) (MIT), `stacks/nextjs.csv`, `stacks/shadcn.csv`, `ux-guidelines.csv`, `motion.csv`. Rules verified against what Phase 0 builds; product rules are ours.*
