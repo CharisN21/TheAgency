@@ -286,3 +286,18 @@
   .page-in { animation: none !important; }
   .link-pending.is-pending::after { animation: none !important; width: 100%; opacity: 0.6; }
 }
+
+/* ---- Loading: a soft light sweeps across placeholders instead of blinking
+   (components/ui/skeleton.tsx). On dark bands and in dark mode the light is
+   fainter. With reduced motion the placeholder simply sits still. */
+@layer components {
+  .skeleton { position: relative; overflow: hidden; background-color: var(--muted); }
+}
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55), transparent);
+  animation: shimmer 1.5s cubic-bezier(.4,0,.2,1) infinite;
+}
+.dark .skeleton::after, .band-dark .skeleton::after { background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.1), transparent); }
+@keyframes shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .skeleton::after { display: none; } }
