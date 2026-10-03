@@ -37,7 +37,7 @@ export default function RootLayout({
       <body className="font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider>
           <TooltipProvider delayDuration={400}>{children}</TooltipProvider>
-          <Toaster position="bottom-center" />
+          <Toaster position="bottom-center" closeButton mobileOffset={{ bottom: "5.5rem" }} toastOptions={{ duration: 6000 }} />
         </ThemeProvider>
       </body>
     </html>

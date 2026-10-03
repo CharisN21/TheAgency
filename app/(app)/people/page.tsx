@@ -99,7 +99,7 @@ export default async function PeoplePage({
           {everyone.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
               <Contact className="text-ink-3 size-9" />
-              <h3 className="font-semibold">Nobody here yet</h3>
+              <h2 className="font-semibold">Nobody here yet</h2>
               <p className="text-muted-foreground max-w-sm text-sm">
                 People are added from the organisation they work for, so their history stays in one
                 place. Open an organisation and add someone.
@@ -157,7 +157,7 @@ export default async function PeoplePage({
 
               {shown.length === 0 ? (
                 <div className="mt-6 flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
-                  <h3 className="font-semibold">Nobody matches that</h3>
+                  <h2 className="font-semibold">Nobody matches that</h2>
                   <p className="text-muted-foreground text-sm">
                     {filtered
                       ? "Clear a filter, or try another saved view."

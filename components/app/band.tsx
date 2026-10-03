@@ -118,7 +118,7 @@ export function BandStat({
         {value}
       </p>
       {/* On a phone the figure is enough; the help line waits for a wider screen. */}
-      {help && <p className="text-muted-foreground mt-0.5 hidden text-xs sm:block">{help}</p>}
+      {help && <p className="text-muted-foreground sr-only mt-0.5 text-xs sm:not-sr-only sm:block">{help}</p>}
     </div>
   )
 }
@@ -132,9 +132,9 @@ export function BandTitle({
   action?: React.ReactNode
 }) {
   return (
-    <h2 className="text-muted-foreground mb-3 flex min-h-8 items-center justify-between gap-2 text-xs font-semibold tracking-wide uppercase">
-      {children}
+    <div className="mb-3 flex min-h-8 items-center justify-between gap-2">
+      <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{children}</h2>
       {action}
-    </h2>
+    </div>
   )
 }

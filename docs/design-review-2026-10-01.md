@@ -7,7 +7,11 @@ Charis: "the tabs need more theme contrast and better transitions and loading ef
 1. **Each part of the app opens in its own tone** (`Band` tones `maroon` and `ink`, `.band-dark` in `globals.css`). Relationships pages lead in maroon, Work pages in ink with a maroon glow, Workspace pages keep the soft tint. Only existing token values are used; inside a dark band the shared roles are re-pointed to white-on-dark and the dark theme's status colours.
 2. **Movement**: pages fade in on arrival (`app/(app)/template.tsx`), and the sidebar or tab-bar link you click shows a sweeping line until its page arrives (`components/app/link-pending.tsx`). Reduced motion turns both off.
 
-## Next, in order
+3. **Loading** (done 3 Oct): shared `PageSkeleton` in each page's lead tone and shape; every route has `loading.tsx`; shimmer placeholders.
+4. **Dark mode** (done 3 Oct): follows the device; Settings → Appearance (match device / light / dark, per device); maroon text uses the soft pink in dark.
+5. **Accessibility** (done 3 Oct, two batches): phone tab bar rebuilt (Today, People, Deals, Projects, More opens the menu); one main landmark; skip link; labelled sidebar nav with aria-current; link focus ring; scroll padding; 44px tap areas on touch; saved-view remove reachable; Move button always shown on deal cards; named board columns and owner chips; search and filter fields named; chips marked by outline and aria-current; one h1 per page; BandTitle no longer wraps its action; setup steps announced; "3 days late" instead of "3d late"; toasts with close button, 6 seconds, clear of the tab bar.
+
+## Original plan (kept for reference)
 
 3. **Loading**: shimmer instead of pulse in `components/ui/skeleton.tsx`; a shared page skeleton in the page's own lead tone; `loading.tsx` for the six routes that have none (organisations, organisations/[id], organisations/import, people, deals, settings).
 4. **Dark mode**: the design system's dark theme exists in `globals.css` but nothing applies `.dark`. Follow the system setting; first swap `text-primary` links for `text-accent-foreground` in dark (contrast).
@@ -26,6 +30,6 @@ Charis: "the tabs need more theme contrast and better transitions and loading ef
    - Error toasts vanish after ~4s with no close button and sit over the tab bar.
    - Abbreviations ("3d late") — write "3 days late".
    Checked and fine: text contrast on band tints, reduced motion, details bands, chat controls, task status words.
-6. Polish: group the "Soon" sidebar items; make the most important stat lead; count-up on stat tiles.
+Still open: group the "Soon" sidebar items; make the most important stat lead; count-up on stat tiles.
 
 Update the design system's Layout-01-Bands board with the new lead tones before publishing it.

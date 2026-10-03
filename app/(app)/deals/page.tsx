@@ -56,6 +56,7 @@ export default async function DealsPage({
     organisationName: d.organisation?.name,
     contactName: d.contact?.full_name,
     ownerInitials: initials(d.owner?.full_name),
+    ownerName: d.owner?.full_name,
     expected: d.expected_close,
     daysInStage: d.daysInStage,
   }))
@@ -110,10 +111,10 @@ export default async function DealsPage({
           {total === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
               <HandCoins className="text-ink-3 size-9" />
-              <h3 className="font-semibold">No deals yet</h3>
+              <h2 className="font-semibold">No deals yet</h2>
               <p className="text-muted-foreground max-w-sm text-sm">
                 A deal is anything with a number on it that you are trying to win or buy. Open one
-                and drag it across the board as it moves.
+                and drag it across the board as it moves, or use the Move button on its card.
               </p>
               {can.edit(role) && <NewDeal organisations={organisations} variant="empty" />}
             </div>

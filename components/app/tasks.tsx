@@ -64,10 +64,10 @@ const initials = (name?: string) =>
 function due(days: number | null, done: boolean) {
   if (days === null) return null
   if (done) return { text: "", tone: "" }
-  if (days < 0) return { text: `${Math.abs(days)}d late`, tone: "text-warn font-medium" }
+  if (days < 0) return { text: `${Math.abs(days)} ${Math.abs(days) === 1 ? "day" : "days"} late`, tone: "text-warn font-medium" }
   if (days === 0) return { text: "Due today", tone: "text-warn font-medium" }
   if (days === 1) return { text: "Due tomorrow", tone: "" }
-  return { text: `Due in ${days}d`, tone: "" }
+  return { text: `Due in ${days} days`, tone: "" }
 }
 
 /** The status as a word with its colour; tapping it offers the others. */
