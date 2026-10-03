@@ -16,7 +16,7 @@ export default async function ImportPage() {
     <div className="flex min-h-svh flex-col">
       <PageHeader title="Import organisations" meta={`into ${workspace.name}`} />
       <main className="flex-1">
-        <Band tone="accent" index={0} label="About importing">
+        <Band tone="maroon" index={0} label="About importing">
           <Link
             href="/organisations"
             className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 text-sm"

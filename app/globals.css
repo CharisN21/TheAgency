@@ -222,3 +222,111 @@
 @media (prefers-reduced-motion: reduce) {
   .band-in, .band-reveal { animation: none !important; }
 }
+
+/* ---- Lead bands: each part of the app opens in its own tone (components/app/band.tsx) ----
+   Relationships open in maroon, Work in ink, Workspace in the soft tint. Both
+   dark tones reuse existing values: maroon is --primary, ink is --foreground
+   (and the dark theme's card colour in dark mode). Inside a dark band the
+   shared roles are re-pointed locally: surfaces turn to translucent white and
+   status colours take the dark theme's values, which were made for dark
+   backgrounds. Nothing new is invented; every child just reads the roles. */
+:root {
+  --band-maroon: var(--primary);
+  --band-ink: #1b1719;
+}
+.dark {
+  --band-ink: #1c1a1b;
+}
+.band-dark {
+  --foreground: #ffffff;
+  --card: rgb(255 255 255 / 0.08);
+  --card-foreground: #ffffff;
+  --popover-foreground: #1b1719;
+  --muted: rgb(255 255 255 / 0.1);
+  --muted-foreground: rgb(255 255 255 / 0.82);
+  --secondary: rgb(255 255 255 / 0.12);
+  --secondary-foreground: #ffffff;
+  --border: rgb(255 255 255 / 0.18);
+  --accent: rgb(255 255 255 / 0.12);
+  --accent-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #7c1f35;
+  --ring: #ffffff;
+  --ink-3: rgb(255 255 255 / 0.68);
+  --fill-strong: rgb(255 255 255 / 0.16);
+  --ok: #3ddc68;
+  --ok-soft: #15301e;
+  --warn: #ff9a4d;
+  --warn-soft: #3a2410;
+  --info: #5aa9ff;
+  --info-soft: #14263d;
+  --destructive: #ff6b61;
+  --danger-soft: #3b1a18;
+  color: var(--foreground);
+}
+.band-maroon {
+  background-color: var(--band-maroon);
+  /* A soft light from the top left, so the band has depth rather than a flat fill. */
+  background-image: radial-gradient(120% 160% at 0% 0%, rgb(255 255 255 / 0.1), transparent 55%);
+}
+.band-ink {
+  background-color: var(--band-ink);
+  background-image: radial-gradient(120% 160% at 100% 0%, rgb(124 31 53 / 0.35), transparent 60%);
+}
+
+/* ---- Navigation: a page fades in on arrival (app/(app)/template.tsx), and the
+   link you clicked shows a sweeping line until it does (components/app/link-pending.tsx). */
+.page-in { animation: pageIn 200ms cubic-bezier(.16,1,.3,1) both; }
+@keyframes pageIn { from { opacity: 0; } to { opacity: 1; } }
+.link-pending { position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px; border-radius: 2px; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 150ms ease-out; }
+.link-pending.is-pending { opacity: 1; }
+.link-pending.is-pending::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: inherit; background: var(--primary); animation: linkSweep 900ms cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes linkSweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) {
+  .page-in { animation: none !important; }
+  .link-pending.is-pending::after { animation: none !important; width: 100%; opacity: 0.6; }
+}
+
+/* ---- Loading: a soft light sweeps across placeholders instead of blinking
+   (components/ui/skeleton.tsx). On dark bands and in dark mode the light is
+   fainter. With reduced motion the placeholder simply sits still. */
+@layer components {
+  .skeleton { position: relative; overflow: hidden; background-color: var(--muted); }
+}
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55), transparent);
+  animation: shimmer 1.5s cubic-bezier(.4,0,.2,1) infinite;
+}
+.dark .skeleton::after, .band-dark .skeleton::after { background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.1), transparent); }
+@keyframes shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .skeleton::after { display: none; } }
+
+/* ---- Dark mode: maroon text is too faint on dark backgrounds (about 2.4:1),
+   so in dark mode maroon text uses the dark theme's soft pink instead. Inside
+   a dark band that role is white, as before. Buttons keep the maroon fill. */
+.dark .text-primary, .dark .hover\:text-primary:hover { color: var(--accent-foreground); }
+
+/* ---- Accessibility (WCAG 2.2) ----
+   Links and disclosure summaries get the same clear focus ring as buttons.
+   Scroll padding keeps a focused item from hiding under the sticky header or
+   the phone tab bar. The skip link appears on the first Tab press. On touch
+   screens every button and checkbox gets a 44px tap area without changing
+   how it looks. */
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+html { scroll-padding-top: 4.5rem; scroll-padding-bottom: 6.5rem; }
+.skip-link {
+  position: fixed; left: 12px; top: 12px; z-index: 100; padding: 10px 14px; border-radius: 10px;
+  background: var(--primary); color: var(--primary-foreground); font-size: 14px; font-weight: 600;
+  transform: translateY(-160%); transition: transform 150ms ease-out;
+}
+.skip-link:focus { transform: none; }
+@layer base {
+  @media (pointer: coarse) {
+    [data-slot="button"], [data-slot="checkbox"] { position: relative; }
+    [data-slot="button"]::after, [data-slot="checkbox"]::after {
+      content: ""; position: absolute; left: 50%; top: 50%;
+      width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+    }
+  }
+}

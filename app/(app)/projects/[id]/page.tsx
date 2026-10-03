@@ -93,7 +93,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </PageHeader>
 
       <main className="flex-1">
-        <Band tone="accent" index={0} label="Where the project stands">
+        <Band tone="ink" index={0} label="Where the project stands">
           <Link
             href="/projects"
             className="text-muted-foreground hover:text-foreground mb-3 inline-flex min-h-11 items-center gap-1 text-sm"
@@ -113,7 +113,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                     <Building2 className="size-4" /> {p.organisation.name}
                   </Link>
                 )}
-                <h1 className="truncate text-2xl font-bold tracking-tight md:text-3xl">{p.name}</h1>
+                <h2 className="truncate text-2xl font-bold tracking-tight md:text-3xl">{p.name}</h2>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                   <HealthPill projectId={p.id} health={p.health} canEdit={editable} />
                   <span className="text-muted-foreground">

@@ -29,6 +29,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { ROLE_LABEL, type Role } from "@/lib/data/types"
+import { LinkPending } from "./link-pending"
 import { WorkspaceSwitcher, type SwitcherWorkspace } from "./workspace-switcher"
 
 type Item = {
@@ -80,11 +81,13 @@ export function AppSidebar({
     { href: "/settings", label: "Settings", icon: SlidersHorizontal },
   ]
 
+  const isCurrent = (href: string) => pathname === href || pathname.startsWith(href + "/")
+
   const item = (n: Item) => (
     <SidebarMenuItem key={n.href}>
       <SidebarMenuButton
         asChild={!n.soon}
-        isActive={pathname === n.href || pathname.startsWith(n.href + "/")}
+        isActive={isCurrent(n.href)}
         disabled={n.soon}
         className={n.soon ? "text-muted-foreground cursor-default" : undefined}
         tooltip={n.soon ? `${n.label} — a later phase` : n.label}
@@ -95,9 +98,10 @@ export function AppSidebar({
             <span>{n.label}</span>
           </>
         ) : (
-          <Link href={n.href}>
+          <Link href={n.href} className="relative" aria-current={isCurrent(n.href) ? "page" : undefined}>
             <n.icon />
             <span>{n.label}</span>
+            <LinkPending />
           </Link>
         )}
       </SidebarMenuButton>
@@ -116,6 +120,7 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
+        <nav aria-label="Main" className="contents">
         <SidebarGroup>
           <SidebarGroupLabel>Relationships</SidebarGroupLabel>
           <SidebarMenu>{RELATIONSHIPS.map(item)}</SidebarMenu>
@@ -128,12 +133,13 @@ export function AppSidebar({
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarMenu>{WORKSPACE.map(item)}</SidebarMenu>
         </SidebarGroup>
+        </nav>
       </SidebarContent>
 
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="gap-3">
+            <div className="flex h-12 w-full items-center gap-3 rounded-md p-2 text-sm group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0">
               <span className="bg-accent text-accent-foreground flex size-8 items-center justify-center rounded-full text-xs font-semibold">
                 {initials}
               </span>
@@ -143,7 +149,7 @@ export function AppSidebar({
                   {ROLE_LABEL[role]}
                 </span>
               </span>
-            </SidebarMenuButton>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

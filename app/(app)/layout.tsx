@@ -22,6 +22,9 @@ export default async function AppLayout({
 
   return (
     <TooltipProvider delayDuration={400}>
+      <a href="#content" className="skip-link">
+        Skip to content
+      </a>
       <SidebarProvider>
         <AppSidebar
           workspaces={workspaces.map((w) => ({
@@ -43,7 +46,7 @@ export default async function AppLayout({
           }}
         />
         {/* min-w-0 lets wide content (the pipeline board) scroll inside the page instead of widening it. */}
-        <SidebarInset className="min-w-0 pb-24 md:pb-0">
+        <SidebarInset id="content" tabIndex={-1} className="min-w-0 pb-24 outline-none md:pb-0">
           <ChatProvider key={workspace.id} userId={user.id}>
             {children}
           </ChatProvider>

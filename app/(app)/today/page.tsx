@@ -134,11 +134,11 @@ export default async function TodayPage() {
       </PageHeader>
 
       <main className="flex-1">
-        <Band tone="accent" index={0} narrow label="Your numbers">
+        <Band tone="ink" index={0} narrow label="Your numbers">
           <p className="text-muted-foreground text-sm">{today}</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">
+          <h2 className="mt-1 text-2xl font-bold tracking-tight">
             {greeting}, {firstName}
-          </h1>
+          </h2>
 
           {/* The three numbers that matter before anything else. */}
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -231,7 +231,7 @@ export default async function TodayPage() {
                       </span>
                     </span>
                     <span className="text-warn text-xs font-medium">
-                      {p.checkInInDays < 0 ? `${Math.abs(p.checkInInDays)}d late` : "today"}
+                      {p.checkInInDays < 0 ? `${Math.abs(p.checkInInDays)} ${Math.abs(p.checkInInDays) === 1 ? "day" : "days"} late` : "today"}
                     </span>
                   </Link>
                 ))}
@@ -270,7 +270,7 @@ export default async function TodayPage() {
                     <span className="text-warn flex items-center gap-1 text-xs font-medium">
                       <Clock className="size-3" />
                       {(c.touchDueInDays ?? 0) < 0
-                        ? `${Math.abs(c.touchDueInDays ?? 0)}d overdue`
+                        ? `${Math.abs(c.touchDueInDays ?? 0)} ${Math.abs(c.touchDueInDays ?? 0) === 1 ? "day" : "days"} overdue`
                         : "today"}
                     </span>
                   </Link>
@@ -345,9 +345,10 @@ export default async function TodayPage() {
                             : "border-input grid size-6 shrink-0 place-items-center rounded-full border-2"
                         }
                       >
-                        {s.done && <Check className="size-3.5" />}
+                        {s.done && <Check className="size-3.5" aria-hidden />}
                       </span>
                       <span className="flex-1">
+                        <span className="sr-only">{s.done ? "Done: " : "To do: "}</span>
                         <span
                           className={
                             s.done

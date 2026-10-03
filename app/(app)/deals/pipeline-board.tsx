@@ -36,6 +36,7 @@ export type BoardDeal = {
   organisationName?: string
   contactName?: string
   ownerInitials: string
+  ownerName?: string
   expected?: string
   daysInStage: number
 }
@@ -43,9 +44,9 @@ export type BoardDeal = {
 const dueLabel = (iso?: string) => {
   if (!iso) return null
   const days = Math.ceil((new Date(iso).getTime() - Date.now()) / 864e5)
-  if (days < 0) return { text: `${Math.abs(days)}d overdue`, tone: "text-destructive" }
+  if (days < 0) return { text: `${Math.abs(days)} ${Math.abs(days) === 1 ? "day" : "days"} overdue`, tone: "text-destructive" }
   if (days === 0) return { text: "Closes today", tone: "text-warn" }
-  if (days <= 7) return { text: `in ${days}d`, tone: "text-warn" }
+  if (days <= 7) return { text: `in ${days} ${days === 1 ? "day" : "days"}`, tone: "text-warn" }
   return {
     text: new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
     tone: "text-muted-foreground",
@@ -101,6 +102,7 @@ export function PipelineBoard({
           return (
             <section
               key={stage.id}
+              aria-labelledby={`stage-${stage.id}`}
               onDragOver={(e) => {
                 if (!dragging) return
                 e.preventDefault()
@@ -117,7 +119,9 @@ export function PipelineBoard({
               )}
             >
               <header className="flex items-baseline gap-2 px-2 pt-1">
-                <span className="text-sm font-semibold">{stage.label}</span>
+                <h3 id={`stage-${stage.id}`} className="text-sm font-semibold">
+                  {stage.label}
+                </h3>
                 <span className="text-muted-foreground text-xs tabular-nums">
                   {inStage.length}
                 </span>
@@ -157,9 +161,9 @@ export function PipelineBoard({
                           <DropdownMenuTrigger asChild>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               aria-label={`Move ${deal.title}`}
-                              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                              className="text-muted-foreground -my-1 -mr-1"
                             >
                               <MoreHorizontal />
                             </Button>
@@ -198,7 +202,12 @@ export function PipelineBoard({
                     </p>
 
                     <div className="text-muted-foreground mt-2 flex items-center gap-2 text-[11px]">
-                      <span className="bg-fill-strong text-foreground grid size-5 place-items-center rounded-full text-[9px] font-semibold">
+                      <span
+                        role="img"
+                        aria-label={deal.ownerName ? `Owner: ${deal.ownerName}` : "Owner"}
+                        title={deal.ownerName}
+                        className="bg-fill-strong text-foreground grid size-5 place-items-center rounded-full text-[10px] font-semibold"
+                      >
                         {deal.ownerInitials}
                       </span>
                       {due && (
@@ -210,7 +219,7 @@ export function PipelineBoard({
                       {deal.daysInStage > 14 &&
                         !["won", "lost"].includes(deal.stage) && (
                           <span className="text-warn ml-auto">
-                            {deal.daysInStage}d here
+                            {deal.daysInStage} days in this stage
                           </span>
                         )}
                     </div>
@@ -220,7 +229,7 @@ export function PipelineBoard({
 
               {inStage.length === 0 && (
                 <p className="text-muted-foreground px-2 py-6 text-center text-xs">
-                  {canEdit ? "Drag a deal here" : "Nothing here"}
+                  {canEdit ? "Drag a deal here, or use Move on a card" : "Nothing here"}
                 </p>
               )}
             </section>

@@ -124,7 +124,7 @@ export default async function ProjectsPage() {
 
       <main className="flex-1">
         {projects.length > 0 && (
-          <Band tone="accent" index={0} label="Projects at a glance">
+          <Band tone="ink" index={0} label="Projects at a glance">
             <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
               <BandStat
                 label="Ongoing"

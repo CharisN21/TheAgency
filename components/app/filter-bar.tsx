@@ -139,11 +139,12 @@ export function FilterBar({
       <div className="flex flex-wrap items-center gap-2">
         <Link
           href={base}
+          aria-current={!hasFilters ? "page" : undefined}
           className={cn(
-            "rounded-full px-3 py-1 text-xs font-semibold",
+            "inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-semibold",
             !hasFilters
-              ? "bg-accent text-accent-foreground"
-              : "text-muted-foreground hover:bg-muted",
+              ? "bg-accent text-accent-foreground border-primary/40"
+              : "text-muted-foreground hover:bg-muted border-transparent",
           )}
         >
           All
@@ -154,18 +155,21 @@ export function FilterBar({
             <span key={v.id} className="group relative inline-flex">
               <Link
                 href={`/${object}?${v.query}`}
+                aria-current={on ? "page" : undefined}
                 className={cn(
-                  "rounded-full px-3 py-1 text-xs font-semibold",
-                  on ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted",
+                  "inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-semibold",
+                  on
+                    ? "bg-accent text-accent-foreground border-primary/40"
+                    : "text-muted-foreground hover:bg-muted border-transparent",
                 )}
               >
                 {v.name}
-                {v.shared && <span className="ml-1 opacity-60">·shared</span>}
+                {v.shared && <span className="ml-1 font-normal"> · Shared</span>}
               </Link>
               {v.mine && (
                 <button
                   aria-label={`Remove the ${v.name} view`}
-                  className="bg-background text-muted-foreground hover:text-destructive absolute -top-1.5 -right-1.5 hidden rounded-full border p-0.5 group-hover:block"
+                  className="bg-background text-muted-foreground hover:text-destructive focus-visible:ring-ring absolute -top-1.5 -right-1.5 rounded-full border p-0.5 opacity-100 focus-visible:ring-2 focus-visible:outline-none md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                   onClick={() =>
                     start(async () => {
                       const r = await deleteView(v.id)
@@ -193,7 +197,7 @@ export function FilterBar({
             <button
               onClick={() => removeFilter(a.key)}
               aria-label={`Remove filter: ${a.text}`}
-              className="hover:bg-background rounded p-0.5"
+              className="hover:bg-background focus-visible:ring-ring rounded p-1 focus-visible:ring-2 focus-visible:outline-none"
             >
               <X className="size-3" />
             </button>
@@ -209,7 +213,7 @@ export function FilterBar({
           <PopoverContent align="start" className="w-72">
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs">Where</Label>
+                <Label htmlFor="filter-field" className="text-xs">Where</Label>
                 <Select
                   value={field}
                   onValueChange={(f) => {
@@ -217,7 +221,7 @@ export function FilterBar({
                     setValue("")
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="filter-field">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -231,9 +235,9 @@ export function FilterBar({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs">Is</Label>
+                <Label htmlFor="filter-value" className="text-xs">Is</Label>
                 <Select value={value} onValueChange={setValue}>
-                  <SelectTrigger>
+                  <SelectTrigger id="filter-value">
                     <SelectValue placeholder="Choose" />
                   </SelectTrigger>
                   <SelectContent>
@@ -270,7 +274,7 @@ export function FilterBar({
           </>
         )}
 
-        <form action={`/${object}`} className="ml-auto">
+        <form action={`/${object}`} role="search" className="ml-auto">
           {/* Keep the filters, and the page's own settings, when searching. */}
           {[...current.entries()]
             .filter(([k]) => k !== "q")
@@ -283,6 +287,7 @@ export function FilterBar({
               name="q"
               defaultValue={current.get("q") ?? ""}
               placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
               className="w-56 pl-8"
             />
           </div>
@@ -335,7 +340,7 @@ export function FilterBar({
       </Dialog>
 
       {pending && (
-        <p className="text-muted-foreground flex items-center gap-2 text-xs">
+        <p role="status" className="text-muted-foreground flex items-center gap-2 text-xs">
           <Loader2 className="size-3 animate-spin" /> Working…
         </p>
       )}

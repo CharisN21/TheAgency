@@ -25,7 +25,7 @@ export default async function AnalyticsPage() {
       <PageHeader title="Analytics" meta="Owners and admins" />
 
       <main className="flex-1">
-        <Band tone="accent" index={0} label="Across the workspace">
+        <Band tone="ink" index={0} label="Across the workspace">
           <Link
             href="/projects"
             className="text-muted-foreground hover:text-foreground mb-3 inline-flex min-h-11 items-center gap-1 text-sm"

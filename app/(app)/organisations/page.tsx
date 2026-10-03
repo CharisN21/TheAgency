@@ -80,7 +80,7 @@ export default async function OrganisationsPage({
 
       <main className="flex-1">
         {all.length > 0 && (
-          <Band tone="accent" index={0} wide label="Your organisations">
+          <Band tone="maroon" index={0} wide label="Your organisations">
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <BandStat
                 label="Organisations"

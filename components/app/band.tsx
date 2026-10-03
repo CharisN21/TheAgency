@@ -8,7 +8,9 @@ import { cn } from "cn"
  *
  * - `plain`  — the page itself
  * - `soft`   — greige, with a hairline above and below
- * - `accent` — the soft maroon tint, for the one band that leads a page
+ * - `accent` — the soft maroon tint, leading the Workspace pages
+ * - `maroon` — deep maroon, leading the Relationships pages
+ * - `ink`    — near-black with a maroon glow, leading the Work pages
  *
  * `index` staggers the arrival: 0 first, then 60ms apart.
  */
@@ -28,7 +30,7 @@ export function Band({
    * before any script loads and is announced as expandable.
    */
   fold?: { title: string; summary?: string; open?: boolean }
-  tone?: "plain" | "soft" | "accent"
+  tone?: "plain" | "soft" | "accent" | "maroon" | "ink"
   index?: number
   /** A reading-width column, for pages like Today. */
   narrow?: boolean
@@ -47,6 +49,8 @@ export function Band({
         "band-in px-4 py-6 md:px-8 md:py-8",
         tone === "soft" && "bg-muted/60 border-border border-y",
         tone === "accent" && "bg-accent/70 border-primary/10 border-b",
+        tone === "maroon" && "band-dark band-maroon",
+        tone === "ink" && "band-dark band-ink",
         className,
       )}
     >
@@ -114,7 +118,7 @@ export function BandStat({
         {value}
       </p>
       {/* On a phone the figure is enough; the help line waits for a wider screen. */}
-      {help && <p className="text-muted-foreground mt-0.5 hidden text-xs sm:block">{help}</p>}
+      {help && <p className="text-muted-foreground sr-only mt-0.5 text-xs sm:not-sr-only sm:block">{help}</p>}
     </div>
   )
 }
@@ -128,9 +132,9 @@ export function BandTitle({
   action?: React.ReactNode
 }) {
   return (
-    <h2 className="text-muted-foreground mb-3 flex min-h-8 items-center justify-between gap-2 text-xs font-semibold tracking-wide uppercase">
-      {children}
+    <div className="mb-3 flex min-h-8 items-center justify-between gap-2">
+      <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{children}</h2>
       {action}
-    </h2>
+    </div>
   )
 }

@@ -76,7 +76,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
       </PageHeader>
 
       <main className="flex-1">
-        <Band tone="accent" index={0} label={`${p.full_name} at a glance`}>
+        <Band tone="maroon" index={0} label={`${p.full_name} at a glance`}>
           <Link
             href="/people"
             className="text-muted-foreground hover:text-foreground mb-3 inline-flex min-h-11 items-center gap-1 text-sm"

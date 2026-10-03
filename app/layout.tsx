@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next"
+import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import "./globals.css"
@@ -32,9 +33,12 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased">
-        <TooltipProvider delayDuration={400}>{children}</TooltipProvider>
-        <Toaster position="bottom-center" />
+      {/* Browser extensions sometimes add attributes to body before the app loads. */}
+      <body className="font-sans antialiased" suppressHydrationWarning>
+        <ThemeProvider>
+          <TooltipProvider delayDuration={400}>{children}</TooltipProvider>
+          <Toaster position="bottom-center" closeButton mobileOffset={{ bottom: "5.5rem" }} toastOptions={{ duration: 6000 }} />
+        </ThemeProvider>
       </body>
     </html>
   )
