@@ -88,7 +88,7 @@ export default async function OrganisationsPage({
                 help={`${count("supplier", "supplier", "suppliers")} · ${count("client", "client", "clients")} · ${count("partner", "partner", "partners")}`}
               />
               <BandStat
-                label="Open with them"
+                lead label="Open with them"
                 value={moneyShort(openAll)}
                 help={`${all.filter((o) => o.openDeals > 0).length} with deals on the table`}
               />

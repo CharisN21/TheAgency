@@ -115,7 +115,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
 
           <div className="mt-5 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
             <BandStat
-              label="Open deals"
+              lead label="Open deals"
               value={moneyShort(found.openValue)}
               help={`${openDeals.length} deal${openDeals.length === 1 ? "" : "s"} on the table`}
             />
