@@ -6,7 +6,8 @@ import { ChevronLeft, ChevronRight, ClipboardList, Loader2, Lock, Megaphone, Mes
 import { toast } from "sonner"
 
 import { cn } from "cn"
-import { MessageActions } from "@/components/app/chat-actions"
+import { handleFor, matchTag, openTag, parseMentions } from "@/lib/chat/mentions"
+import { MessageActions, TaskSuggestion } from "@/components/app/chat-actions"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -92,6 +93,7 @@ type Line = {
   at: string
   text?: string
   card?: TaskCard
+  mentions?: string[]
   problem?: "before" | "failed"
 }
 type View = "list" | "thread" | "new-group" | "members"
@@ -311,7 +313,7 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
           if (!key) return { ...line, problem: "before" }
           try {
             const body = await openMessage(key, m, { channelId: id, epoch: m.epoch, senderDeviceId: m.sender_device_id })
-            return { ...line, text: body.text, card: body.card }
+            return { ...line, text: body.text, card: body.card, mentions: body.mentions }
           } catch (e) {
             console.error("Chat message would not open", { channel: id, message: m.id, epoch: m.epoch, error: e })
             return { ...line, problem: "failed" }
@@ -745,7 +747,9 @@ function Thread({
     setSending(true)
     setSendError(null)
     try {
-      await onSend({ text })
+      // Tags are worked out here and sealed inside the message; the server never sees them.
+      const mentions = parseMentions(text, others).filter((id) => id !== me.id)
+      await onSend(mentions.length > 0 ? { text, mentions } : { text })
       setDraft("")
     } catch (e) {
       setSendError(message(e, "That did not send"))
@@ -753,6 +757,11 @@ function Thread({
       setSending(false)
     }
   }
+
+  // People who can be tagged here: everyone in this chat but you.
+  const others = (state?.members ?? []).filter((m) => m.id !== me.id)
+  const tag = openTag(draft)
+  const matches = tag && others.length > 0 ? matchTag(tag.query, others) : []
 
   const before = lines.filter((l) => l.problem === "before").length
   const failed = lines.filter((l) => l.problem === "failed").length
@@ -804,6 +813,18 @@ function Thread({
                     <span className="text-foreground font-semibold">{l.mine ? "You" : l.sender}</span> · {time(l.at)}
                   </p>
                   {l.card ? <TaskCardView card={l.card} /> : <p className="text-sm leading-snug whitespace-pre-wrap">{l.text}</p>}
+                  {l.mine && !l.card && canEdit && state && l.mentions?.[0] && (
+                    <TaskSuggestion
+                      message={{ id: l.id, text: l.text!, senderId: l.senderId, senderName: l.sender, mine: l.mine, at: l.at }}
+                      taggedId={l.mentions[0]}
+                      me={me}
+                      people={people}
+                      onTaskMade={async (card) => {
+                        if (!state.canPost) return
+                        await onSend({ text: `New task for ${card.assignee}: ${card.title}`, card })
+                      }}
+                    />
+                  )}
                 </div>
                 {canEdit && state && !l.card && (
                   <MessageActions
@@ -841,6 +862,24 @@ function Thread({
               <p className="text-destructive mb-1.5 text-xs" role="alert">
                 Error: {sendError}
               </p>
+            )}
+            {matches.length > 0 && tag && (
+              <ul
+                aria-label="People you can tag"
+                className="bg-popover border-border mb-1.5 flex flex-col overflow-hidden rounded-lg border shadow-sm"
+              >
+                {matches.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      className="hover:bg-muted focus-visible:ring-ring flex min-h-11 w-full items-center px-3 text-left text-sm focus-visible:ring-2 focus-visible:outline-none"
+                      onClick={() => setDraft(draft.slice(0, tag.start) + "@" + handleFor(p, others) + " ")}
+                    >
+                      {p.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
             <label htmlFor="chat-draft" className="sr-only">
               Message {name}
