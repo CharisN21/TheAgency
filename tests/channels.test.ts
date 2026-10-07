@@ -328,3 +328,38 @@ describe("a chat for each project", () => {
     expect((await actions.postMessage(r.id!, { text: "back again" })).ok).toBe(true)
   })
 })
+
+describe("searching chat", () => {
+  it("finds words in the chats you are in, and never in one you are not", async () => {
+    as(f.charis.id)
+    await actions.loadChannels()
+    const ann = (await readDb()).channels.find((c) => c.workspace_id === f.kilima.id && c.kind === "announcements")!
+    expect((await actions.postMessage(ann.id, { text: "The Safaricom contract is signed on Friday" })).ok).toBe(true)
+
+    const found = await actions.searchChats("safaricom")
+    if (!found.ok) throw new Error("should search")
+    expect(found.hits).toHaveLength(1)
+    expect(found.hits[0].channelName).toBe("Announcements")
+    expect(found.hits[0].snippet).toMatch(/Safaricom contract/)
+
+    // A direct message between two other people is never opened for someone else.
+    const [a, b, c] = f.db.memberships.filter((m) => m.workspace_id === f.kilima.id).map((m) => m.user_id)
+    as(a)
+    const dm = await actions.startDirectMessage(b)
+    await actions.postMessage(dm.id!, { text: "secret supplier price is 4,200" })
+    as(c)
+    const none = await actions.searchChats("secret supplier")
+    if (!none.ok) throw new Error("should search")
+    expect(none.hits).toHaveLength(0)
+    as(b)
+    const mine = await actions.searchChats("secret supplier")
+    if (!mine.ok) throw new Error("should search")
+    expect(mine.hits).toHaveLength(1)
+  })
+
+  it("asks for at least two letters and does not search other workspaces", async () => {
+    as(f.charis.id)
+    expect((await actions.searchChats("a")).ok).toBe(false)
+    expect((await actions.searchChats("x".repeat(101))).ok).toBe(false)
+  })
+})

@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight, ClipboardList, Loader2, Lock, Megaphone, MessageSquare, Plus, Send, UserRound, Users } from "lucide-react"
+import { ChevronLeft, ChevronRight, ClipboardList, Loader2, Lock, Megaphone, MessageSquare, Plus, Search, Send, UserRound, Users } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "cn"
@@ -22,9 +22,11 @@ import {
   markChannelRead,
   postMessage,
   removeGroupMember,
+  searchChats,
   startDirectMessage,
   type ChannelState,
   type ChatDirectory,
+  type ChatHit,
 } from "@/lib/data/actions"
 
 /* ------------------------------------------------------------- context */
@@ -403,6 +405,8 @@ function Pigeonholes({
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
+      <ChatSearch onOpen={onOpen} />
+
       <Section title="Announcements">
         {announcements.map((c) => (
           <Row key={c.id} icon={Megaphone} label={c.name} hint="Everyone reads · owners and admins post" unread={c.unread} onClick={() => onOpen(c.id)} />
@@ -509,6 +513,101 @@ function Row({
       )}
       <ChevronRight className="text-muted-foreground size-4" />
     </button>
+  )
+}
+
+/** Searches the messages in the chats you are in. Results open the chat they came from. */
+function ChatSearch({ onOpen }: { onOpen: (id: string) => void }) {
+  const [text, setText] = useState("")
+  const [hits, setHits] = useState<ChatHit[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  const latest = useRef(0)
+
+  const q = text.trim()
+  const searching = q.length >= 2
+
+  useEffect(() => {
+    if (q.length < 2) return
+    const ticket = ++latest.current
+    const t = setTimeout(async () => {
+      setBusy(true)
+      try {
+        const r = await searchChats(q)
+        if (ticket !== latest.current) return
+        if (r.ok) {
+          setHits(r.hits)
+          setProblem(null)
+        } else {
+          setProblem(r.message)
+        }
+      } catch (e) {
+        if (ticket === latest.current) setProblem(message(e, "Search did not work. Try again."))
+      } finally {
+        if (ticket === latest.current) setBusy(false)
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [q])
+
+  return (
+    <div className="px-4 pt-3 pb-1">
+      <label htmlFor="chat-search" className="sr-only">
+        Search messages
+      </label>
+      <div className="relative">
+        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+        <Input
+          id="chat-search"
+          type="search"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Search messages"
+          autoComplete="off"
+          maxLength={100}
+          className="pl-9"
+        />
+        {searching && busy && <Loader2 className="text-muted-foreground absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin" />}
+      </div>
+
+      {searching && problem && (
+        <p className="text-destructive mt-2 text-xs" role="alert">
+          Error: {problem}
+        </p>
+      )}
+      {searching && hits && (
+        <div className="mt-2" aria-live="polite">
+          {hits.length === 0 ? (
+            <p className="text-muted-foreground py-2 text-sm">Nothing found for &ldquo;{text.trim()}&rdquo;.</p>
+          ) : (
+            <>
+              <p className="text-muted-foreground py-1 text-xs">
+                {hits.length === 20 ? "The 20 newest matches" : `${hits.length} ${hits.length === 1 ? "match" : "matches"}`}
+              </p>
+              <ul className="-mx-4">
+                {hits.map((h) => (
+                  <li key={h.messageId}>
+                    <button
+                      type="button"
+                      onClick={() => onOpen(h.channelId)}
+                      className="hover:bg-muted/60 focus-visible:ring-ring flex min-h-12 w-full flex-col gap-0.5 px-4 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                    >
+                      <span className="text-muted-foreground flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate font-medium">
+                          {h.channelName} · {h.senderName}
+                        </span>
+                        <span className="shrink-0">{new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                      </span>
+                      <span className="line-clamp-2 text-sm break-words">{h.snippet}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

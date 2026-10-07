@@ -3468,6 +3468,68 @@ export async function postMessage(
   return { ok: true, message: "Sent", id }
 }
 
+export type ChatHit = {
+  messageId: string
+  channelId: string
+  channelName: string
+  senderName: string
+  at: string
+  /** A short piece of the message around the match. */
+  snippet: string
+}
+
+const MAX_SEARCH = 100
+const MAX_HITS = 20
+const SEARCH_WINDOW = 3000
+
+/**
+ * Looks through the messages in the chats this person is in. Messages are stored
+ * sealed, so the server opens them to look; a chat you are not in is never opened.
+ */
+export async function searchChats(
+  query: string
+): Promise<{ ok: true; hits: ChatHit[]; searched: number } | { ok: false; message: string }> {
+  const { user, workspace } = await requireContext()
+  const q = typeof query === "string" ? query.trim().toLowerCase() : ""
+  if (q.length < 2) return { ok: false, message: "Type at least two letters to search" }
+  if (q.length > MAX_SEARCH) return { ok: false, message: "That search is too long" }
+
+  const db = await readDb()
+  const mine = new Map(
+    db.channels
+      .filter((c) => c.workspace_id === workspace.id && channelMemberIds(db, c).includes(user.id))
+      .map((c) => [c.id, c])
+  )
+  const recent = db.messages
+    .filter((m) => m.workspace_id === workspace.id && mine.has(m.channel_id))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, SEARCH_WINDOW)
+
+  const name = (id: string) => db.profiles.find((p) => p.id === id)?.full_name ?? "Someone"
+  const hits: ChatHit[] = []
+  for (const m of recent) {
+    if (hits.length >= MAX_HITS) break
+    const body = openBody(m.body, { workspaceId: m.workspace_id, channelId: m.channel_id, senderId: m.sender_id })
+    if (!body) continue
+    const text = body.card ? `${body.text} ${body.card.title}` : body.text
+    const at = text.toLowerCase().indexOf(q)
+    if (at < 0) continue
+    const from = Math.max(0, at - 40)
+    const snippet = `${from > 0 ? "…" : ""}${text.slice(from, at + q.length + 60).replace(/\s+/g, " ")}${
+      at + q.length + 60 < text.length ? "…" : ""
+    }`
+    hits.push({
+      messageId: m.id,
+      channelId: m.channel_id,
+      channelName: chatName(db, mine.get(m.channel_id)!, user.id),
+      senderName: name(m.sender_id),
+      at: m.created_at,
+      snippet,
+    })
+  }
+  return { ok: true, hits, searched: recent.length }
+}
+
 export async function markChannelRead(channelId: string): Promise<Result> {
   const { user, workspace } = await requireContext()
   const ch = channelFor(await readDb(), channelId, workspace.id, user.id)

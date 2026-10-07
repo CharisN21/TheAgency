@@ -67,7 +67,7 @@ Every action returns a result and raises a toast. Lists have skeletons and empty
 
 1. **Try the import on the real supplier and Safaricom sheets**, then run the duplicates review on what came in.
 2. **Design system** is published (version 11, 3 Oct 2026) with the bands board: lead tones by area, the lead number tile, motion and loading. Regenerate with `python design-system/gen_bands.py` and republish when bands change.
-3. **Phase 5 — 5b team chat is built** (see above). Next in Phase 5: email digests and quiet hours for the notification centre (needs Resend), and search in chat. A closed project's chat is read-only until the project reopens, and the invite page carries a chat privacy line (both done). 5c (recovery keys, safety numbers) is cancelled: nothing to recover.
+3. **Phase 5 — 5b team chat is built** (see above). Next in Phase 5: email digests and quiet hours for the notification centre (needs Resend). Search in chat is done (a box at the top of the chat list, `searchChats`; the server opens messages only in chats you are in). A closed project's chat is read-only until the project reopens, and the invite page carries a chat privacy line (both done). 5c (recovery keys, safety numbers) is cancelled: nothing to recover.
 4. **Phase 1 is built.** Next: add a Claude API key and try the three Claude features for real; then use Phase 1 on a real project before Phase 2 (a CLAUDE.md rule).
 5. **Supabase**, once the flows and the feel are settled. Rewrite `store.ts` as a Postgres adapter, run the migrations (`0001`, then `0002_not_duplicates`), enable Google and magic-link auth, then delete the local store. Merging must become one database function (one transaction) — see the note at the end of `0002`.
 
