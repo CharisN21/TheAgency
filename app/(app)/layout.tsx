@@ -2,12 +2,13 @@ import { AppSidebar } from "@/components/app/app-sidebar"
 import { ChatProvider } from "@/components/app/chat"
 import { LaunchSplash } from "@/components/app/launch-splash"
 import { PushListener } from "@/components/app/push-card"
+import { QuickCaptureProvider } from "@/components/app/quick-capture"
 import { MobileTabBar } from "@/components/app/mobile-tabbar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { listContacts, listDeals, listFlags, listOrganisations, listProjects } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
-import { OPEN_STAGES } from "@/lib/data/types"
+import { can, OPEN_STAGES } from "@/lib/data/types"
 
 /** The app shell: sidebar on desktop, tab bar on iPhone. */
 export default async function AppLayout({
@@ -51,9 +52,11 @@ export default async function AppLayout({
         {/* min-w-0 lets wide content (the pipeline board) scroll inside the page instead of widening it. */}
         <SidebarInset id="content" tabIndex={-1} className="min-w-0 pb-24 outline-none md:pb-0">
           <PushListener />
-          <ChatProvider key={workspace.id} userId={user.id}>
-            {children}
-          </ChatProvider>
+          <QuickCaptureProvider key={workspace.id} canEdit={can.edit(role)}>
+            <ChatProvider key={workspace.id} userId={user.id}>
+              {children}
+            </ChatProvider>
+          </QuickCaptureProvider>
         </SidebarInset>
         <MobileTabBar />
       </SidebarProvider>

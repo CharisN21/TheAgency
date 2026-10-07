@@ -59,7 +59,7 @@ The look is fixed and lives in a published design system (maroon `#7c1f35` on wa
 6. AI Mentor & Insights (weekly recap, decision log, coaching).
 7. Harden & productize (offline, backups, data protection, M-Pesa pricing test).
 
-One phase at a time. Phase 1 must be used on a real project before Phase 2 starts.
+One phase at a time. Phase 1 must be used on a real project before Phase 2 starts. (On 7 Oct 2026 Charis chose to start Phase 2 first; plan in `docs/phase-2-today-capture-notebook-palette.md`, built in small slices.)
 
 `HANDOFF.md` says where the work stands, what is next and how to split phases across sessions. Open it first in a new session.
 

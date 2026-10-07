@@ -510,6 +510,21 @@ export type PushDevice = {
   created_at: string
 }
 
+/**
+ * A private note. Only the person who wrote it can read, change or delete it:
+ * not owners, not admins. It reaches anyone else only when its author posts it
+ * onto a record's timeline, which copies the words and leaves this untouched.
+ */
+export type Note = {
+  id: string
+  workspace_id: string
+  author_id: string
+  body: string
+  pinned: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type ObjectivePeriod = "week" | "month" | "year"
 
 export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
@@ -634,6 +649,7 @@ export type Database = {
   notifications: Notification[]
   notification_prefs: NotificationPrefs[]
   push_subscriptions: PushDevice[]
+  notes: Note[]
   channels: Channel[]
   channel_members: ChannelMember[]
   messages: Message[]

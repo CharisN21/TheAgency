@@ -333,6 +333,7 @@ export function seed(): Database {
     ],
     notification_prefs: [],
     push_subscriptions: [],
+    notes: [],
     channels: [],
     channel_members: [],
     messages: [],
@@ -405,6 +406,7 @@ export async function readDb(): Promise<Database> {
     parsed.notifications ??= []
     parsed.notification_prefs ??= []
     parsed.push_subscriptions ??= []
+    parsed.notes ??= []
     parsed.channels ??= []
     parsed.channel_members ??= []
     parsed.messages ??= []

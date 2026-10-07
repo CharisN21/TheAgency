@@ -71,7 +71,7 @@ export function AppSidebar({
     { href: "/today", label: "Today", icon: Sun },
     { href: "/projects", label: "Projects", icon: FolderKanban, count: counts.projects },
     { href: "/meetings", label: "Meetings", icon: CalendarDays, soon: true },
-    { href: "/notebook", label: "Notebook", icon: NotebookPen, soon: true },
+    { href: "/notebook", label: "Notebook", icon: NotebookPen },
   ]
 
   const WORKSPACE: Item[] = [

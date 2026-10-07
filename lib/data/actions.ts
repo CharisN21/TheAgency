@@ -3015,6 +3015,74 @@ export async function setNotificationMuted(type: NotificationType, muted: boolea
   return { ok: true, message: muted ? "Switched off" : "Switched on" }
 }
 
+/* ------------------------------------------------- notebook (Phase 2) */
+// A private notebook. Only the author can read, change or delete a note: owners
+// and admins cannot. Making a task from a note, or posting it to a record's
+// timeline, goes through createTask and logActivity, which copy the words.
+
+const MAX_NOTE = 10000
+const MAX_NOTES_EACH = 2000
+
+const cleanNote = (text: unknown) => (typeof text === "string" ? text.trim() : "")
+
+/** Keeps a thought in your notebook. Anyone in the workspace may, viewers included: it is theirs alone. */
+export async function captureNote(text: string): Promise<Result & { id?: string }> {
+  const { user, workspace } = await requireContext()
+  const body = cleanNote(text)
+  if (!body) return { ok: false, message: "Write something to keep" }
+  if (body.length > MAX_NOTE) return { ok: false, message: `Keep a note under ${MAX_NOTE.toLocaleString("en-GB")} characters` }
+
+  const id = newId()
+  const result = await mutate((d) => {
+    if (d.notes.filter((n) => n.workspace_id === workspace.id && n.author_id === user.id).length >= MAX_NOTES_EACH) {
+      return { ok: false as const, message: "Your notebook is full. Delete some old notes first." }
+    }
+    d.notes.unshift({ id, workspace_id: workspace.id, author_id: user.id, body, pinned: false, created_at: now(), updated_at: now() })
+    return { ok: true as const, message: "Kept in your notebook", id }
+  })
+  revalidatePath("/notebook")
+  return result
+}
+
+export async function updateNote(id: string, text: string): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const body = cleanNote(text)
+  if (!body) return { ok: false, message: "A note cannot be empty. Delete it instead." }
+  if (body.length > MAX_NOTE) return { ok: false, message: `Keep a note under ${MAX_NOTE.toLocaleString("en-GB")} characters` }
+  const found = await mutate((d) => {
+    const n = d.notes.find((x) => x.id === id && x.workspace_id === workspace.id && x.author_id === user.id)
+    if (!n) return false
+    n.body = body
+    n.updated_at = now()
+    return true
+  })
+  revalidatePath("/notebook")
+  return found ? { ok: true, message: "Saved" } : { ok: false, message: "That note is not here" }
+}
+
+export async function setNotePinned(id: string, pinned: boolean): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const found = await mutate((d) => {
+    const n = d.notes.find((x) => x.id === id && x.workspace_id === workspace.id && x.author_id === user.id)
+    if (!n) return false
+    n.pinned = Boolean(pinned)
+    return true
+  })
+  revalidatePath("/notebook")
+  return found ? { ok: true, message: pinned ? "Pinned to the top" : "Unpinned" } : { ok: false, message: "That note is not here" }
+}
+
+export async function deleteNote(id: string): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const removed = await mutate((d) => {
+    const before = d.notes.length
+    d.notes = d.notes.filter((x) => !(x.id === id && x.workspace_id === workspace.id && x.author_id === user.id))
+    return before - d.notes.length
+  })
+  revalidatePath("/notebook")
+  return removed ? { ok: true, message: "Deleted" } : { ok: false, message: "That note is not here" }
+}
+
 /* --------------------------------------------- banners on phones and laptops */
 
 const MAX_DEVICES = 10

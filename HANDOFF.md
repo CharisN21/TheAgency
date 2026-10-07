@@ -65,6 +65,8 @@ Every action returns a result and raises a toast. Lists have skeletons and empty
 
 ## What is next, in order
 
+0. **Phase 2 has started** (7 Oct 2026), plan in `docs/phase-2-today-capture-notebook-palette.md`. Slice 1 is built: the private **Notebook** (`/notebook`, `notes` table, migration `0013`, only the author can read a note, owners and admins cannot) and **Quick Capture** (pencil in the top bar or Alt N: keep a note or make a task). Next slices, one branch each: **Ctrl K palette**, then **Today** sharpened (a Captured band), then a phone **share target**. For email, Charis has no domain yet: sign-in email can start on Supabase's own sender for testing, and "connect your Gmail" needs no domain; Resend needs one.
+
 1. **Try the import on the real supplier and Safaricom sheets**, then run the duplicates review on what came in.
 2. **Design system** is published (version 11, 3 Oct 2026) with the bands board: lead tones by area, the lead number tile, motion and loading. Regenerate with `python design-system/gen_bands.py` and republish when bands change.
 3. **Phase 5 — 5b team chat is built** (see above). Next in Phase 5: email digests and quiet hours for the notification centre (needs Resend). Search in chat is done (a box at the top of the chat list, `searchChats`; the server opens messages only in chats you are in). A closed project's chat is read-only until the project reopens, and the invite page carries a chat privacy line (both done). 5c (recovery keys, safety numbers) is cancelled: nothing to recover.

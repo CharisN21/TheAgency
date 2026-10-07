@@ -1199,6 +1199,14 @@ export async function unreadNotificationCount(workspaceId: string, userId: strin
   return db.notifications.filter((n) => n.workspace_id === workspaceId && n.user_id === userId && !n.read_at).length
 }
 
+/** Your own notes in this workspace, pinned first, then newest. Nobody else's, whatever their role. */
+export async function listMyNotes(workspaceId: string, userId: string) {
+  const db = await readDb()
+  return db.notes
+    .filter((n) => n.workspace_id === workspaceId && n.author_id === userId)
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updated_at.localeCompare(a.updated_at))
+}
+
 export type BannerSettings = { banners: boolean; quietOn: boolean; quietFrom: string; quietTo: string }
 
 /** This person's banner controls for one workspace. Quiet hours default to 22:00 to 07:00 when first switched on. */
