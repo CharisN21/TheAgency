@@ -28,6 +28,8 @@ import { z } from "zod"
 import { askForJson } from "@/lib/ai/claude"
 import { openBody, sealBody, type ChatBody } from "@/lib/chat/at-rest"
 import { actorName, notify } from "./notify"
+import { isPushEndpoint, isPushKey } from "@/lib/push/hosts"
+import { deliverPush, pushConfigured } from "@/lib/push/send"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
   ACTIVITY_LABEL,
@@ -3010,6 +3012,93 @@ export async function setNotificationMuted(type: NotificationType, muted: boolea
   })
   revalidatePath("/settings")
   return { ok: true, message: muted ? "Switched off" : "Switched on" }
+}
+
+/* --------------------------------------------- banners on phones and laptops */
+
+const MAX_DEVICES = 10
+
+export type PushStatus = {
+  /** False when the server has no push keys: the Settings card says so. */
+  configured: boolean
+  publicKey: string
+  devices: { id: string; label: string; created_at: string }[]
+  /** Which of them is the browser asking, if any. */
+  thisDeviceId: string | null
+}
+
+/** Your devices, and whether the one you are on is among them. */
+export async function pushStatus(endpoint?: string): Promise<PushStatus> {
+  const { user } = await requireContext()
+  const db = await readDb()
+  const mine = db.push_subscriptions.filter((s) => s.user_id === user.id)
+  return {
+    configured: pushConfigured(),
+    publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
+    devices: mine.map((s) => ({ id: s.id, label: s.label, created_at: s.created_at })),
+    thisDeviceId: (typeof endpoint === "string" && mine.find((s) => s.endpoint === endpoint)?.id) || null,
+  }
+}
+
+/** Turns banners on for this phone or laptop. */
+export async function savePushDevice(
+  input: { endpoint: string; keys: { p256dh: string; auth: string } },
+  label: string
+): Promise<Result> {
+  const { user } = await requireContext()
+  if (!pushConfigured()) return { ok: false, message: "Banners are not set up on this server yet" }
+  if (!isPushEndpoint(input?.endpoint) || !isPushKey(input?.keys?.p256dh) || !isPushKey(input?.keys?.auth)) {
+    return { ok: false, message: "This browser sent something we cannot use for banners" }
+  }
+  const name = typeof label === "string" ? label.trim().slice(0, 60) : ""
+
+  return mutate((d) => {
+    // The same browser signing in as someone else takes the device over.
+    d.push_subscriptions = d.push_subscriptions.filter((s) => s.endpoint !== input.endpoint)
+    const mine = d.push_subscriptions.filter((s) => s.user_id === user.id)
+    if (mine.length >= MAX_DEVICES) return { ok: false as const, message: `You can have ${MAX_DEVICES} devices. Remove one first.` }
+    d.push_subscriptions.push({
+      id: newId(),
+      user_id: user.id,
+      endpoint: input.endpoint,
+      p256dh: input.keys.p256dh,
+      auth: input.keys.auth,
+      label: name || "This device",
+      created_at: now(),
+    })
+    return { ok: true as const, message: "Banners are on for this device" }
+  }).then((r) => {
+    revalidatePath("/settings")
+    return r
+  })
+}
+
+/** Turns banners off for one of your devices. Only your own can be removed. */
+export async function removePushDevice(id: string): Promise<Result> {
+  const { user } = await requireContext()
+  const removed = await mutate((d) => {
+    const before = d.push_subscriptions.length
+    d.push_subscriptions = d.push_subscriptions.filter((s) => !(s.id === id && s.user_id === user.id))
+    return before - d.push_subscriptions.length
+  })
+  revalidatePath("/settings")
+  return removed ? { ok: true, message: "Banners are off for that device" } : { ok: false, message: "That device is not here" }
+}
+
+/** Sends one banner to all of your devices, so you can see it works. */
+export async function sendTestPush(): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  if (!pushConfigured()) return { ok: false, message: "Banners are not set up on this server yet" }
+  const db = await readDb()
+  if (!db.push_subscriptions.some((s) => s.user_id === user.id)) {
+    return { ok: false, message: "Turn banners on for a device first" }
+  }
+  const r = await deliverPush([
+    { user_id: user.id, title: "This is a test banner", workspace: workspace.name, href: "/settings", tag: "test" },
+  ])
+  return r.sent > 0
+    ? { ok: true, message: `Sent to ${r.sent} ${r.sent === 1 ? "device" : "devices"}` }
+    : { ok: false, message: "It could not be sent. Turn banners off and on again for this device." }
 }
 
 /**

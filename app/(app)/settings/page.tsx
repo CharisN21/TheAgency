@@ -7,6 +7,7 @@ import { aiAvailable } from "@/lib/ai/claude"
 import { FieldManager } from "@/components/app/custom-fields"
 import { AppearancePicker } from "@/components/app/appearance"
 import { NotificationSwitches } from "@/components/app/notifications"
+import { PushCard } from "@/components/app/push-card"
 import { getMutedNotifications, listCustomFields } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can, ROLE_HELP, ROLE_LABEL } from "@/lib/data/types"
@@ -77,6 +78,7 @@ export default async function SettingsPage() {
                 not need; this is yours only and changes nothing for anyone else. Email digests and
                 quiet hours come next.
               </p>
+              <PushCard />
               <NotificationSwitches muted={await getMutedNotifications(workspace.id, user.id)} />
             </CardContent>
           </Card>

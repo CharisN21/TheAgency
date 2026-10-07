@@ -483,6 +483,22 @@ export type NotificationPrefs = {
   muted: NotificationType[]
 }
 
+/**
+ * A phone or laptop that has turned notifications on. Belongs to the person,
+ * not a workspace: one device gets banners from every workspace they are in,
+ * and each banner says which one.
+ */
+export type PushDevice = {
+  id: string
+  user_id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  /** "iPhone", "Chrome on Windows": so you can tell your devices apart. */
+  label: string
+  created_at: string
+}
+
 export type ObjectivePeriod = "week" | "month" | "year"
 
 export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
@@ -606,6 +622,7 @@ export type Database = {
   custom_values: CustomValue[]
   notifications: Notification[]
   notification_prefs: NotificationPrefs[]
+  push_subscriptions: PushDevice[]
   channels: Channel[]
   channel_members: ChannelMember[]
   messages: Message[]

@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 
+import { takePushes } from "@/lib/push/outbox"
 import { periodStart, type Database } from "./types"
 
 /**
@@ -331,6 +332,7 @@ export function seed(): Database {
       },
     ],
     notification_prefs: [],
+    push_subscriptions: [],
     channels: [],
     channel_members: [],
     messages: [],
@@ -402,6 +404,7 @@ export async function readDb(): Promise<Database> {
     parsed.custom_values ??= []
     parsed.notifications ??= []
     parsed.notification_prefs ??= []
+    parsed.push_subscriptions ??= []
     parsed.channels ??= []
     parsed.channel_members ??= []
     parsed.messages ??= []
@@ -446,6 +449,12 @@ export async function mutate<T>(fn: (db: Database) => T | Promise<T>): Promise<T
   const db = await readDb()
   const result = await fn(db)
   await writeDb(db)
+  // Banners go out only once the change is saved, and never hold it up for long.
+  const pushes = takePushes(db)
+  if (pushes.length > 0) {
+    const { deliverPush } = await import("@/lib/push/send")
+    await Promise.race([deliverPush(pushes), new Promise((r) => setTimeout(r, 4000))]).catch(() => {})
+  }
   return result
 }
 

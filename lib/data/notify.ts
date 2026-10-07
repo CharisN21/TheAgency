@@ -1,5 +1,6 @@
 import "server-only"
 
+import { queuePush } from "@/lib/push/outbox"
 import { newId } from "./store"
 import type { Database, NotificationType } from "./types"
 
@@ -37,8 +38,9 @@ export function notify(
   )
     return
 
+  const id = newId()
   db.notifications.unshift({
-    id: newId(),
+    id,
     workspace_id: n.workspace_id,
     user_id: n.user_id,
     type: n.type,
@@ -47,6 +49,13 @@ export function notify(
     actor_id: n.actor_id,
     dedupe_key: n.dedupe_key,
     created_at: new Date().toISOString(),
+  })
+  queuePush(db, {
+    user_id: n.user_id,
+    title: n.title,
+    workspace: db.workspaces.find((w) => w.id === n.workspace_id)?.name ?? "The Agency",
+    href: n.href,
+    tag: id,
   })
   // Keep the newest 200 per person; older ones have done their job.
   const mine = db.notifications.filter((x) => x.user_id === n.user_id)

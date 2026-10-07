@@ -55,6 +55,14 @@ Two ways, and they are not the same.
 
 **Needs from you:** a Google Cloud project (for Google sign-in and the send permission), a privacy page on your domain, and later the Microsoft equivalent if members use Outlook.
 
+## One email in several workspaces
+
+Already how the data is built: one person (one email, one login) can have a membership in any number of workspaces, with a different role in each, and a switcher in the app. Workspaces are walled off from each other: switching changes everything you see, and the tests prove one workspace cannot read another's rows. This holds when the ventures are unrelated.
+
+- **Banners:** a device belongs to the person, so it gets banners from every workspace they are in, and each banner names the workspace in its second line. Mutes are per workspace already; a per-workspace "banners from this workspace" switch is a small next step.
+- **Mailbox (step 3):** one connection per person, but each sent email is saved on the timeline of the workspace it was sent from, never the other.
+- **Name:** the display name belongs to the login, so it is the same in every workspace. Role is per workspace. A different name per workspace is possible later if ventures should not know each other.
+
 ## Suggested order
 
 1. **Push notifications** (can start now, no accounts).
