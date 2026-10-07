@@ -1,10 +1,12 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, Loader2, Lock, Megaphone, MessageSquare, Plus, Send, UserRound, Users } from "lucide-react"
+import Link from "next/link"
+import { ChevronLeft, ChevronRight, ClipboardList, Loader2, Lock, Megaphone, MessageSquare, Plus, Send, UserRound, Users } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "cn"
+import { MessageActions } from "@/components/app/chat-actions"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -18,6 +20,8 @@ import {
   sealMessage,
   unwrapChannelKey,
   wrapChannelKey,
+  type MessageBody,
+  type TaskCard,
 } from "@/lib/crypto/e2ee"
 import {
   deviceName,
@@ -70,7 +74,16 @@ export function ChatButton() {
  * sent before this device could read the chat — expected. "failed": a key was
  * given but did not open, or the message did not open — never expected.
  */
-type Line = { id: string; sender: string; mine: boolean; at: string; text?: string; problem?: "before" | "failed" }
+type Line = {
+  id: string
+  senderId: string
+  sender: string
+  mine: boolean
+  at: string
+  text?: string
+  card?: TaskCard
+  problem?: "before" | "failed"
+}
 type View = "list" | "thread" | "new-group" | "members"
 
 const time = (iso: string) =>
@@ -275,14 +288,20 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
       const names = new Map(s.people.map((p) => [p.id, first(p.name)]))
       const opened = await Promise.all(
         s.messages.map(async (m): Promise<Line> => {
-          const line = { id: m.id, sender: names.get(m.sender_id) ?? "Someone", mine: m.sender_id === userId, at: m.created_at }
+          const line = {
+            id: m.id,
+            senderId: m.sender_id,
+            sender: names.get(m.sender_id) ?? "Someone",
+            mine: m.sender_id === userId,
+            at: m.created_at,
+          }
           const cacheKey = `${id}:${m.epoch}`
           if (brokenKeys.current.has(cacheKey)) return { ...line, problem: "failed" }
           const key = keys.current.get(cacheKey)
           if (!key) return { ...line, problem: "before" }
           try {
             const body = await openMessage(key, m, { channelId: id, epoch: m.epoch, senderDeviceId: m.sender_device_id })
-            return { ...line, text: body.text }
+            return { ...line, text: body.text, card: body.card }
           } catch (e) {
             console.error("Chat message would not open", { channel: id, message: m.id, epoch: m.epoch, error: e })
             return { ...line, problem: "failed" }
@@ -359,7 +378,7 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
     void tick(false)
   }
 
-  const send = async (text: string) => {
+  const send = async (body: MessageBody) => {
     const me = device.current
     const id = activeRef.current
     if (!me || !id) throw new Error("Chat is not ready on this device yet. Try again in a moment.")
@@ -369,7 +388,7 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
       if (s.rotationNeeded) throw new Error("This chat's key is being renewed. Try again in a moment.")
       const key = keys.current.get(`${id}:${s.channel.epoch}`)
       if (!key) throw new Error("This device cannot open the current chat key. A new one has been asked for; try again shortly.")
-      const sealed = await sealMessage(key, { text }, { channelId: id, epoch: s.channel.epoch, senderDeviceId: me.deviceId })
+      const sealed = await sealMessage(key, body, { channelId: id, epoch: s.channel.epoch, senderDeviceId: me.deviceId })
       const r = await postMessage(id, me.deviceId, s.channel.epoch, sealed)
       if (r.ok) {
         // Sent. Refreshing is a nicety; a failure here must not look like the send failed.
@@ -474,7 +493,17 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
             />
           )}
 
-          {view === "thread" && !deviceRemoved && <Thread state={state} lines={lines} notice={notice} onSend={send} />}
+          {view === "thread" && !deviceRemoved && (
+            <Thread
+              state={state}
+              lines={lines}
+              notice={notice}
+              onSend={send}
+              canEdit={directory?.canEdit ?? false}
+              me={{ id: userId, name: state?.people.find((p) => p.id === userId)?.name ?? "You" }}
+              people={directory?.people ?? []}
+            />
+          )}
 
           {view === "new-group" && directory && (
             <NewGroup
@@ -668,11 +697,18 @@ function Thread({
   lines,
   notice,
   onSend,
+  canEdit,
+  me,
+  people,
 }: {
   state: ChannelState | null
   lines: Line[]
   notice: string | null
-  onSend: (text: string) => Promise<void>
+  onSend: (body: MessageBody) => Promise<void>
+  /** May turn messages into tasks, record notes and flags. */
+  canEdit: boolean
+  me: { id: string; name: string }
+  people: { id: string; name: string }[]
 }) {
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
@@ -689,7 +725,7 @@ function Thread({
     setSending(true)
     setSendError(null)
     try {
-      await onSend(text)
+      await onSend({ text })
       setDraft("")
     } catch (e) {
       setSendError(message(e, "That did not send"))
@@ -742,11 +778,26 @@ function Thread({
           {lines
             .filter((l) => l.text !== undefined)
             .map((l) => (
-              <li key={l.id}>
-                <p className="text-muted-foreground text-xs">
-                  <span className="text-foreground font-semibold">{l.mine ? "You" : l.sender}</span> · {time(l.at)}
-                </p>
-                <p className="text-sm leading-snug whitespace-pre-wrap">{l.text}</p>
+              <li key={l.id} className="flex items-start gap-1">
+                <div className="min-w-0 flex-1">
+                  <p className="text-muted-foreground text-xs">
+                    <span className="text-foreground font-semibold">{l.mine ? "You" : l.sender}</span> · {time(l.at)}
+                  </p>
+                  {l.card ? <TaskCardView card={l.card} /> : <p className="text-sm leading-snug whitespace-pre-wrap">{l.text}</p>}
+                </div>
+                {canEdit && state && !l.card && (
+                  <MessageActions
+                    message={{ text: l.text!, senderId: l.senderId, senderName: l.sender, mine: l.mine, at: l.at }}
+                    chatName={state.channel.name}
+                    me={me}
+                    people={people}
+                    onTaskMade={async (card) => {
+                      // Someone who cannot post here (Announcements) still gets the task, just no card.
+                      if (!state.canPost) return
+                      await onSend({ text: `New task for ${card.assignee}: ${card.title}`, card })
+                    }}
+                  />
+                )}
               </li>
             ))}
         </ol>
@@ -970,5 +1021,22 @@ function GroupMembers({
         </div>
       )}
     </div>
+  )
+}
+
+/** A task made from a message, as a card in the chat that links to where the task lives. */
+function TaskCardView({ card }: { card: TaskCard }) {
+  return (
+    <Link
+      href={card.href}
+      className="bg-card border-border hover:bg-muted/60 mt-1.5 flex min-h-11 items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors duration-150"
+    >
+      <ClipboardList className="text-primary size-4 shrink-0" aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">{card.title}</span>
+        <span className="text-muted-foreground block text-xs">Task for {card.assignee} · open it</span>
+      </span>
+      <ChevronRight className="text-muted-foreground size-4" aria-hidden />
+    </Link>
   )
 }

@@ -1495,7 +1495,7 @@ function checkTaskLinks(
   return null
 }
 
-export async function createTask(formData: FormData): Promise<Result> {
+export async function createTask(formData: FormData): Promise<Result & { id?: string }> {
   const { user, workspace, role } = await requireContext()
   if (!can.edit(role)) return { ok: false, message: "Viewers cannot add tasks" }
 
@@ -1522,9 +1522,10 @@ export async function createTask(formData: FormData): Promise<Result> {
 
   const forName = db.profiles.find((p) => p.id === links.assignee_id)?.full_name ?? "someone"
 
+  const id = newId()
   await mutate((d) => {
     d.tasks.push({
-      id: newId(),
+      id,
       workspace_id: workspace.id,
       title,
       notes: str(formData, "notes") || undefined,
@@ -1555,6 +1556,7 @@ export async function createTask(formData: FormData): Promise<Result> {
   return {
     ok: true,
     message: links.assignee_id === user.id ? "Task added" : `Task added for ${forName.split(" ")[0]}`,
+    id,
   }
 }
 
@@ -3224,6 +3226,8 @@ export type ChatDirectory = {
   /** Everyone else in the workspace, for starting a direct message or a group. */
   people: { id: string; name: string }[]
   canCreateGroup: boolean
+  /** May turn messages into tasks, flags and record notes (anyone but a viewer). */
+  canEdit: boolean
 }
 
 /** Your chats in this workspace, with unread counts. Makes Announcements the first time. */
@@ -3273,7 +3277,7 @@ export async function loadChannels(deviceId: string): Promise<ChatDirectory> {
     .map((m) => ({ id: m.user_id, name: db.profiles.find((p) => p.id === m.user_id)?.full_name ?? "Someone" }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
-  return { ok: true, deviceKnown: known, channels, people, canCreateGroup: can.createGroup(role) }
+  return { ok: true, deviceKnown: known, channels, people, canCreateGroup: can.createGroup(role), canEdit: can.edit(role) }
 }
 
 /** Starts a team group with the people chosen. You are always in it. */
@@ -3580,4 +3584,33 @@ export async function markChannelRead(channelId: string): Promise<Result> {
   if (!ch) return { ok: false, message: "That chat is not here" }
   await mutate((d) => markRead(d, ch, user.id))
   return { ok: true, message: "" }
+}
+
+/* -------------------------------------------- from a chat message (5b) */
+
+type Choice = { value: string; label: string }
+
+/**
+ * The records a chat message can be turned into or saved on: projects for a
+ * task or flag, and organisations, people and deals for a note. Names only.
+ */
+export async function loadChatRecordOptions(): Promise<{
+  projects: Choice[]
+  organisations: Choice[]
+  contacts: Choice[]
+  deals: Choice[]
+}> {
+  const { workspace } = await requireContext()
+  const db = await readDb()
+  const mine = <T extends { workspace_id: string }>(rows: T[]) => rows.filter((r) => r.workspace_id === workspace.id)
+  const byLabel = (a: Choice, b: Choice) => a.label.localeCompare(b.label)
+  return {
+    projects: mine(db.projects)
+      .filter((p) => p.status === "active")
+      .map((p) => ({ value: p.id, label: p.name }))
+      .sort(byLabel),
+    organisations: mine(db.organisations).map((o) => ({ value: o.id, label: o.name })).sort(byLabel),
+    contacts: mine(db.contacts).map((c) => ({ value: c.id, label: c.full_name })).sort(byLabel),
+    deals: mine(db.deals).map((d) => ({ value: d.id, label: d.title })).sort(byLabel),
+  }
 }
