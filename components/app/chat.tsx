@@ -7,7 +7,10 @@ import { toast } from "sonner"
 
 import { cn } from "cn"
 import { handleFor, matchTag, openTag, parseMentions } from "@/lib/chat/mentions"
+import { safetyNumber } from "@/lib/crypto/safety"
+import { checkStatus } from "@/lib/crypto/verified"
 import { MessageActions, TaskSuggestion } from "@/components/app/chat-actions"
+import { SafetyButton, SafetyChangedNotice, SafetyDialog, type Safety } from "@/components/app/safety-number"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -127,6 +130,8 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
   const [activeId, setActiveId] = useState<string | null>(null)
   const [state, setState] = useState<ChannelState | null>(null)
   const [lines, setLines] = useState<Line[]>([])
+  const [safety, setSafety] = useState<Safety | null>(null)
+  const [safetyOpen, setSafetyOpen] = useState(false)
 
   const device = useRef<StoredDevice | null>(null)
   const keys = useRef(new Map<string, CryptoKey>())
@@ -320,8 +325,19 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
           }
         }),
       )
+      // The safety number with the other person, for direct messages.
+      let nextSafety: Safety | null = null
+      if (s.channel.kind === "dm") {
+        const other = s.members.find((m) => m.id !== userId)
+        if (other) {
+          const keysOf = (uid: string) => s.devices.filter((d) => d.user_id === uid).map((d) => d.public_key)
+          const number = await safetyNumber({ userId, keys: keysOf(userId) }, { userId: other.id, keys: keysOf(other.id) })
+          nextSafety = { number, status: checkStatus(userId, other.id, number), otherId: other.id, otherName: other.name }
+        }
+      }
       // The person may have moved to another chat while this one loaded.
       if (activeRef.current !== id) return s
+      setSafety(nextSafety)
       setState(s)
       setLines(opened)
       void markChannelRead(id).catch(() => {
@@ -377,6 +393,7 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
   const openChat = (id: string) => {
     setState(null)
     setLines([])
+    setSafety(null)
     activeRef.current = id
     setActiveId(id)
     setView("thread")
@@ -449,6 +466,7 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
                 </Button>
               )}
               <SheetTitle className="min-w-0 flex-1 truncate">{title}</SheetTitle>
+              {view === "thread" && safety && <SafetyButton safety={safety} onOpen={() => setSafetyOpen(true)} />}
               {view === "thread" && state?.channel.kind === "group" && (
                 <Button
                   variant="ghost"
@@ -515,6 +533,18 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
             />
           )}
 
+          {view === "thread" && !deviceRemoved && safety?.status === "changed" && (
+            <SafetyChangedNotice name={first(safety.otherName)} onOpen={() => setSafetyOpen(true)} />
+          )}
+          {safety && (
+            <SafetyDialog
+              open={safetyOpen}
+              onOpenChange={setSafetyOpen}
+              safety={safety}
+              me={userId}
+              onChanged={(status) => setSafety((s) => (s ? { ...s, status } : s))}
+            />
+          )}
           {view === "thread" && !deviceRemoved && (
             <Thread
               state={state}

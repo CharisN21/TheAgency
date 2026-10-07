@@ -140,6 +140,8 @@ Pigeonholes, not one big room:
 
 Fixed before merge: key renewals are checked as exact sets of real device ids; device keys must be real P-256 points; removing someone from a workspace removes them from its groups and DMs; keys are only renewed when needed, and only owners and admins renew the Announcements key; a device that cannot open its key can ask for a new one; the device key is confirmed saved before the device is registered; a removed device stops and asks instead of re-adding itself; messages that fail to open show as an error, not as "sent before this device"; refresh failures show "not updating"; no double sends.
 
+**Safety numbers** (built 7 Oct 2026, `lib/crypto/safety.ts`, `components/app/safety-number.tsx`): in a direct message, the header button shows a 60-digit number worked out from every active key of both people (their devices, and a recovery key once there is one). Compare it out loud; if it matches on both phones, nobody is in between. Marking it checked is kept on this device only (`lib/crypto/verified.ts`). If a device or key is added for either person later, the number changes, the button says Changed and a warning shows, so a newly added device cannot go unnoticed (this answers the second limit below for direct messages). Groups have no safety number yet.
+
 **Known limits, still open:**
 
 - **Messages do not prove who sent them.** Anyone holding a chat's key could seal a message naming another device; only the server's record of the sender stops it. Fix with a signing key per device (ECDSA P-256) before calling Announcements tamper-proof.
