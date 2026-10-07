@@ -629,7 +629,9 @@ function Thread({
 
       {state && !state.canPost ? (
         <p className="border-border text-muted-foreground border-t px-4 py-4 text-sm">
-          Only owners and admins post announcements. Reply to them in a direct message.
+          {state.closedProject
+            ? "This project is closed, so its chat is kept to read. Reopen the project to write here again."
+            : "Only owners and admins post announcements. Reply to them in a direct message."}
         </p>
       ) : (
         <form

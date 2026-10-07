@@ -93,6 +93,11 @@ export default async function JoinPage({
         {ROLE_HELP[invite.role]}
       </p>
 
+      <p className="text-muted-foreground mt-3 text-left text-sm">
+        Chat here is private to the people in each chat and stored encrypted. You sign in with your email and
+        never handle keys. It is not end-to-end, so whoever runs this app could in principle read it.
+      </p>
+
       {user ? (
         <>
           <AcceptButton token={token} workspaceName={workspace.name} />
