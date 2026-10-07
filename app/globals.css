@@ -356,3 +356,18 @@ html { scroll-padding-top: 4.5rem; scroll-padding-bottom: 6.5rem; }
   .launch-splash-mark, .launch-splash-by { animation: none; }
   .launch-splash { animation-delay: 600ms; animation-duration: 150ms; }
 }
+
+/* ---- Scrollbars: on a laptop or desktop (a mouse), thin and tinted from the
+   theme instead of the browser's heavy default with arrow buttons. Phones and
+   tablets keep their own thin bars that appear while you swipe. Bars that are
+   hidden on purpose (the sidebar's) stay hidden. Uses the theme's own colours,
+   so dark mode follows. */
+@media (hover: hover) and (pointer: fine) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 55%, transparent) transparent;
+  }
+  *:hover {
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 80%, transparent) transparent;
+  }
+}
