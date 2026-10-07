@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeft, Building2, CalendarClock, HandCoins } from "l
 
 import { Band, BandTitle } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
+import { ProjectChatButton } from "@/components/app/project-chat-button"
 import { ProgressRing } from "@/components/app/progress-ring"
 import { HealthPill, ProjectForm, ProjectTasks } from "@/components/app/projects"
 import { NewTask } from "@/components/app/tasks"
@@ -70,6 +71,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   return (
     <div className="flex min-h-svh flex-col">
       <PageHeader title={p.name} meta={p.status === "closed" ? "Closed" : "Project"}>
+        {can.createGroup(role) && (p.lead_id === user.id || p.member_ids.includes(user.id) || can.editWorkspace(role)) && (
+          <ProjectChatButton projectId={p.id} />
+        )}
         {editable && (
           <ProjectForm
             values={{

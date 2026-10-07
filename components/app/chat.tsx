@@ -48,7 +48,17 @@ import {
 
 /* ------------------------------------------------------------- context */
 
-const ChatContext = createContext<{ open: () => void; unread: number } | null>(null)
+const ChatContext = createContext<{
+  open: () => void
+  /** Opens the drawer straight onto one chat, e.g. a project's. */
+  openChannel: (id: string) => void
+  unread: number
+} | null>(null)
+
+/** Lets any page open the chat drawer on a given chat (the project page uses it). */
+export function useChat() {
+  return useContext(ChatContext)
+}
 
 /** The bubble in the top bar. Opens the chat drawer; Ctrl J does the same. */
 export function ChatButton() {
@@ -409,7 +419,17 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
           : "Team chat"
 
   return (
-    <ChatContext.Provider value={{ open: () => setOpen(true), unread }}>
+    <ChatContext.Provider
+      value={{
+        open: () => setOpen(true),
+        openChannel: (id) => {
+          setView("thread")
+          openChat(id)
+          setOpen(true)
+        },
+        unread,
+      }}
+    >
       {children}
       <Sheet open={isOpen} onOpenChange={setOpen}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
