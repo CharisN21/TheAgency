@@ -5,10 +5,11 @@
  */
 export type PushItem = {
   user_id: string
-  /** Safe to read on a lock screen. */
+  /** What happened. Safe to read on a lock screen. */
   title: string
-  /** The workspace it is about, so someone in several can tell which. */
-  workspace: string
+  /** The workspace it is about: its name heads the banner and its mark is the icon. */
+  workspace: { id: string; name: string; color: string }
+  /** The page inside the app it opens. */
   href?: string
   /** Same tag replaces an earlier banner instead of stacking. */
   tag?: string

@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app/app-sidebar"
 import { ChatProvider } from "@/components/app/chat"
+import { LaunchSplash } from "@/components/app/launch-splash"
 import { PushListener } from "@/components/app/push-card"
 import { MobileTabBar } from "@/components/app/mobile-tabbar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -23,6 +24,7 @@ export default async function AppLayout({
 
   return (
     <TooltipProvider delayDuration={400}>
+      <LaunchSplash name={workspace.name} color={workspace.accent_color} />
       <a href="#content" className="skip-link">
         Skip to content
       </a>

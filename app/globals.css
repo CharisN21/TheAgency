@@ -330,3 +330,29 @@ html { scroll-padding-top: 4.5rem; scroll-padding-bottom: 6.5rem; }
     }
   }
 }
+
+/* ---- Launch screen: the workspace's mark, shown for a moment when the app is
+   opened installed (Home Screen or desktop app), never in a browser tab. It
+   holds, then fades out on its own, so it needs no script. Reduced motion gets
+   no movement and a shorter hold. */
+.launch-splash { display: none; }
+@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+  .launch-splash {
+    position: fixed; inset: 0; z-index: 110; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: var(--background);
+    animation: launch-splash-out 300ms ease-out 1000ms forwards;
+  }
+}
+.launch-splash-mark { animation: launch-splash-in 350ms ease-out both; }
+.launch-splash-by {
+  position: absolute; bottom: max(2rem, env(safe-area-inset-bottom));
+  font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
+  animation: launch-splash-in 350ms ease-out 150ms both;
+}
+@keyframes launch-splash-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes launch-splash-out { to { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  .launch-splash-mark, .launch-splash-by { animation: none; }
+  .launch-splash { animation-delay: 600ms; animation-duration: 150ms; }
+}

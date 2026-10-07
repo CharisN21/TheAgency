@@ -3,6 +3,7 @@ import "server-only"
 import webpush from "web-push"
 
 import { mutate, readDb } from "@/lib/data/store"
+import { openLink, workspaceIconPath } from "./open"
 import type { PushItem } from "./outbox"
 
 /**
@@ -34,7 +35,15 @@ export async function deliverPush(items: PushItem[]): Promise<{ sent: number; re
       db.push_subscriptions
         .filter((s) => s.user_id === item.user_id)
         .map(async (s) => {
-          const payload = JSON.stringify({ title: item.title, body: item.workspace, href: item.href ?? "/today", tag: item.tag })
+          // The workspace heads the banner (the phone adds "The Agency" beneath it), and
+          // the message follows. Tapping it switches to that workspace first.
+          const payload = JSON.stringify({
+            title: item.workspace.name,
+            body: item.title,
+            icon: workspaceIconPath(item.workspace.name, item.workspace.color),
+            href: openLink(item.workspace.id, item.href),
+            tag: item.tag,
+          })
           try {
             await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, {
               TTL: 60 * 60,

@@ -148,9 +148,11 @@ describe("sending", () => {
     const [subscription, payload] = send.mock.calls[0]
     expect(subscription.endpoint).toBe(GOOD)
     const body = JSON.parse(payload)
-    expect(body.title).toMatch(/task/i)
-    expect(body.body).toBe("Kilima Labs")
-    expect(body.href).toMatch(/^\//)
+    // The workspace heads the banner and the message follows; tapping switches workspace first.
+    expect(body.title).toBe("Kilima Labs")
+    expect(body.body).toMatch(/task/i)
+    expect(body.icon).toMatch(/^\/workspace-icon\?l=K&c=[0-9a-f]{6}$/)
+    expect(body.href).toMatch(new RegExp(`^/open\\?w=${f.kilima.id}&to=%2F`))
   })
 
   it("never sends the banner to the person who did the thing", async () => {
@@ -191,7 +193,10 @@ describe("sending", () => {
     await assignTask(f.achieng.id)
 
     expect(send).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(send.mock.calls[0][1]).body).toBe("Elsewhere")
+    const banner = JSON.parse(send.mock.calls[0][1])
+    expect(banner.title).toBe("Elsewhere")
+    expect(banner.icon).toMatch(/l=E/)
+    expect(banner.href).toContain(`w=${f.elsewhere.id}`)
   })
 
   it("forgets a device the push service says is gone, and keeps the others", async () => {

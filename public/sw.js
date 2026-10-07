@@ -5,7 +5,8 @@ self.addEventListener("install", () => self.skipWaiting())
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()))
 
 // Only addresses inside the app: a banner can never send someone to another site.
-const inApp = (href) => (typeof href === "string" && href.startsWith("/") && !href.startsWith("//") ? href : "/today")
+const inApp = (href) =>
+  typeof href === "string" && href.startsWith("/") && !href.startsWith("//") && !href.startsWith("/\\") ? href : "/today"
 
 self.addEventListener("push", (event) => {
   let data = {}
@@ -18,7 +19,7 @@ self.addEventListener("push", (event) => {
     (async () => {
       await self.registration.showNotification(String(data.title || "The Agency").slice(0, 120), {
         body: data.body ? String(data.body).slice(0, 120) : undefined,
-        icon: "/icon-192.png",
+        icon: inApp(data.icon) === "/today" ? "/icon-192.png" : inApp(data.icon),
         badge: "/icon-192.png",
         tag: data.tag ? String(data.tag) : undefined,
         data: { href: inApp(data.href) },
