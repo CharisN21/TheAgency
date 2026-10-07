@@ -47,7 +47,7 @@ export default async function TeamPage() {
         <Band tone="accent" index={0} narrow label={`People in ${workspace.name}`}>
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <BandStat
-              label="Members"
+              lead label="Members"
               value={String(members.length)}
               help={`In ${workspace.name}`}
             />

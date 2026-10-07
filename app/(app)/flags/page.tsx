@@ -80,7 +80,7 @@ export default async function FlagsPage() {
             </span>
           </p>
           <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
-            <BandStat label="Open" value={String(open.length)} help="Waiting for a conversation" />
+            <BandStat lead label="Open" value={String(open.length)} help="Waiting for a conversation" />
             <BandStat
               label="Serious"
               value={String(open.filter((f) => f.severity === "serious").length)}

@@ -102,7 +102,7 @@ export default async function DealsPage({
         <Band tone="maroon" index={0} wide label="Pipeline numbers">
           <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
             {stats.map((s) => (
-              <BandStat key={s.label} label={s.label} value={s.value} help={s.help} />
+              <BandStat key={s.label} lead={s === stats[0]} label={s.label} value={s.value} help={s.help} />
             ))}
           </div>
         </Band>

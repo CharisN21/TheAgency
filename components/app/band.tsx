@@ -97,28 +97,40 @@ export function BandStat({
   value,
   help,
   tone,
+  lead = false,
 }: {
   label: string
   value: string
   help?: string
   /** Status colour for the figure; the help line says what it means. */
   tone?: "warn"
+  /**
+   * The one number that matters most on the page: a solid tile in the
+   * opposite tone (maroon on light bands, white on dark ones) and a bigger
+   * figure. Its label names the status, so it drops the status colour.
+   */
+  lead?: boolean
 }) {
+  const quiet = lead ? "text-primary-foreground/80" : "text-muted-foreground"
   return (
-    <div className="bg-card/70 border-primary/10 min-w-0 rounded-xl border px-3 py-2.5 sm:px-4 sm:py-3">
-      <p className="text-muted-foreground text-[11px] leading-tight font-semibold tracking-wide uppercase sm:text-xs">
-        {label}
-      </p>
+    <div
+      className={cn(
+        "min-w-0 rounded-xl border px-3 py-2.5 sm:px-4 sm:py-3",
+        lead ? "bg-primary text-primary-foreground border-transparent shadow-sm" : "bg-card/70 border-primary/10",
+      )}
+    >
+      <p className={cn(quiet, "text-[11px] leading-tight font-semibold tracking-wide uppercase sm:text-xs")}>{label}</p>
       <p
         className={cn(
-          "mt-1 truncate text-lg font-bold tabular-nums sm:text-xl",
-          tone === "warn" && "text-warn",
+          "mt-1 truncate font-bold tabular-nums",
+          lead ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl",
+          tone === "warn" && !lead && "text-warn",
         )}
       >
         {value}
       </p>
-      {/* On a phone the figure is enough; the help line waits for a wider screen. */}
-      {help && <p className="text-muted-foreground sr-only mt-0.5 text-xs sm:not-sr-only sm:block">{help}</p>}
+      {/* On a phone the figure is enough; the help line is still read out. */}
+      {help && <p className={cn(quiet, "sr-only mt-0.5 text-xs sm:not-sr-only sm:block")}>{help}</p>}
     </div>
   )
 }

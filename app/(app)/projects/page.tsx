@@ -138,7 +138,7 @@ export default async function ProjectsPage() {
                 tone={troubled > 0 ? "warn" : undefined}
               />
               <BandStat
-                label="Overdue tasks"
+                lead label="Overdue tasks"
                 value={String(overdue)}
                 help="Across every ongoing project"
                 tone={overdue > 0 ? "warn" : undefined}

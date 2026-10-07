@@ -4,7 +4,13 @@ Every signed-in page is built from full-width bands (`components/app/band.tsx` i
 
 ## Tones
 
-- **Lead** — `accent-soft` at 70%, with a hairline of `accent` at 10% below. One per page, first: the greeting, the record's name, the key numbers. This is a second use of `accent-soft`, alongside selected rows.
+One lead band per page, first, and its tone says which part of the app you are in:
+
+- **Maroon** — `accent` with a soft light from the top left. Relationships: organisations, people, deals.
+- **Ink** — `ink` (in the dark theme, `surface`) with a maroon glow top right. Work: Today, projects.
+- **Tint** — `accent-soft` at 70%, with a hairline of `accent` at 10% below. Workspace: team, flags, settings, notifications.
+
+Inside a maroon or ink band the shared roles are re-pointed locally: surfaces become translucent white, text white, and status colours take their dark-theme values. No new colours.
 - **Plain** — `bg`, no border.
 - **Soft** — `fill` at 60%, with `separator` hairlines above and below.
 
@@ -12,7 +18,7 @@ After the lead, tones alternate plain, soft, plain by position among the bands a
 
 ## Number tile (`BandStat`)
 
-Label in caps, the figure, one line of help. A figure in a status colour always has its meaning in the help line. On a phone the tiles sit side by side and the help line is hidden.
+Label in caps, the figure, one line of help. The page's most important number leads: a solid tile in the opposite tone (white on maroon and ink, maroon on the tint) with a 24–30px figure; its label names the status, so it drops the status colour. A figure in a status colour always has its meaning in the help line. On a phone the help line is hidden visually but still read out.
 
 ## Widths
 
@@ -20,4 +26,4 @@ Narrow (896px) for reading pages, normal (1024px) for record pages, wide (full w
 
 ## Motion
 
-Arrive: rise 10px and fade in over 240ms, ease-out, staggered 60ms. Reveal: bands below the fold rise 14px as they scroll into view, via a CSS scroll timeline; unsupported browsers show them as they are. Both are off under `prefers-reduced-motion`.
+Arrive: rise 10px and fade in over 240ms, ease-out, staggered 60ms. Reveal: bands below the fold rise 14px as they scroll into view, via a CSS scroll timeline; unsupported browsers show them as they are. Page: a 200ms fade on each navigation. Link: a 2px maroon sweep under the clicked link until its page arrives. Loading: every page has a loading screen in its own shape and lead tone, with shimmering placeholders. All of it is off under `prefers-reduced-motion`.

@@ -82,7 +82,7 @@ export default async function NotificationsPage({
             .
           </p>
           <div className="grid grid-cols-2 gap-2 sm:gap-3">
-            <BandStat label="Unread" value={String(unread)} help="Open one to mark it read" />
+            <BandStat lead label="Unread" value={String(unread)} help="Open one to mark it read" />
             <BandStat label="Kept" value={String(all.length)} help="Your newest 200 are kept" />
           </div>
         </Band>
