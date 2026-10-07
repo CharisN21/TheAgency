@@ -303,4 +303,28 @@ describe("a chat for each project", () => {
     expect(again.ok).toBe(false)
     expect(again.message).toMatch(/Ask someone in it/)
   })
+
+  it("keeps the chat to read once the project is closed, and opens it again on reopening", async () => {
+    const p = project()
+    as(p.lead_id)
+    const r = await actions.startProjectChat(p.id)
+    expect((await actions.postMessage(r.id!, { text: "before closing" })).ok).toBe(true)
+
+    await mutate((d) => {
+      d.projects.find((x) => x.id === p.id)!.status = "closed"
+    })
+    const closed = await actions.postMessage(r.id!, { text: "after closing" })
+    expect(closed.ok).toBe(false)
+    expect(closed.message).toMatch(/closed/)
+    const opened = await actions.loadChannel(r.id!)
+    if (!opened.ok) throw new Error("should open")
+    expect(opened.state.closedProject).toBe(true)
+    expect(opened.state.canPost).toBe(false)
+    expect(opened.state.messages.map((m) => m.text)).toEqual(["before closing"])
+
+    await mutate((d) => {
+      d.projects.find((x) => x.id === p.id)!.status = "active"
+    })
+    expect((await actions.postMessage(r.id!, { text: "back again" })).ok).toBe(true)
+  })
 })

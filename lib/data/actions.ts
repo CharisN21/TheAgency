@@ -3112,6 +3112,10 @@ function markRead(d: Database, ch: Channel, userId: string) {
 /** Who may post: Announcements is owners and admins; everywhere else, any member. */
 const canPost = (ch: Channel, role: Role) => ch.kind !== "announcements" || can.announce(role)
 
+/** A project's chat is kept to read once the project is closed, and opens again if the project does. */
+const projectClosed = (db: Database, ch: Channel) =>
+  !!ch.project_id && db.projects.find((p) => p.id === ch.project_id)?.status === "closed"
+
 /** Who may remove someone else from a group: whoever started it, or an owner or admin in it. */
 const canManage = (ch: Channel, role: Role, userId: string) =>
   ch.kind === "group" && (ch.created_by === userId || role === "owner" || role === "admin")
@@ -3351,6 +3355,8 @@ export type ChannelState = {
   /** Names for everyone who appears: members and past senders. */
   people: { id: string; name: string }[]
   canPost: boolean
+  /** The chat belongs to a closed project: still readable, nobody can post. */
+  closedProject: boolean
   canManage: boolean
   /** True when older messages exist than the ones sent here. */
   truncated: boolean
@@ -3392,7 +3398,8 @@ export async function loadChannel(
       channel: { id: ch.id, kind: ch.kind, name: chatName(db, ch, user.id), createdBy: ch.created_by },
       members: memberIds.map((id) => ({ id, name: name(id) })).sort((a, b) => a.name.localeCompare(b.name)),
       people: [...peopleIds].map((id) => ({ id, name: name(id) })),
-      canPost: canPost(ch, role),
+      canPost: canPost(ch, role) && !projectClosed(db, ch),
+      closedProject: projectClosed(db, ch),
       canManage: canManage(ch, role, user.id),
       truncated: all.length > stored.length,
       unreadable,
@@ -3415,6 +3422,7 @@ export async function postMessage(
   const db = await readDb()
   const ch = channelFor(db, channelId, workspace.id, user.id)
   if (!ch) return { ok: false, message: "That chat is not here" }
+  if (projectClosed(db, ch)) return { ok: false, message: "This project is closed, so its chat is read-only" }
   if (!canPost(ch, role)) return { ok: false, message: "Only owners and admins post announcements" }
 
   const text = typeof input?.text === "string" ? input.text.trim() : ""
