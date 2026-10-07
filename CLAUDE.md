@@ -55,7 +55,7 @@ The look is fixed and lives in a published design system (maroon `#7c1f35` on wa
 2. Today dashboard, Quick Capture, Notebook, Ctrl K palette.
 3. Network depth: import, merge duplicates, saved views, segments.
 4. Meetings (Google Calendar + Meet, notes to tasks).
-5. Team comms: **5a** notification centre, then **5b** end-to-end encrypted channels and DMs. Full design in `docs/phase-5-messaging-and-notifications.md` — read it before writing any key-handling code.
+5. Team comms: **5a** notification centre, then **5b** team chat (Announcements, groups and direct messages), stored encrypted by the server, not end-to-end (decided 7 Oct 2026, so nobody handles keys). Full design in `docs/phase-5-messaging-and-notifications.md`; the earlier end-to-end version is the git tag `chat-e2ee-last`.
 6. AI Mentor & Insights (weekly recap, decision log, coaching).
 7. Harden & productize (offline, backups, data protection, M-Pesa pricing test).
 

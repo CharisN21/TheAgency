@@ -1,20 +1,12 @@
--- Phase 5b: encrypted chat. Adds six tables; changes nothing that exists.
+-- Phase 5b: team chat. Adds four tables; changes nothing that exists.
 -- Three kinds: announcements (everyone reads, owners and admins post),
 -- groups (named, chosen members) and direct messages (two people).
--- Design: docs/phase-5-messaging-and-notifications.md, Part B.
--- The server stores public keys, wrapped keys and sealed messages only.
-
--- Devices belong to a person, not a workspace: one phone serves every
--- workspace you are in. The private key never leaves the device.
-create table public.devices (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.profiles (id) on delete cascade,
-  name text not null,
-  public_key jsonb not null check (public_key ? 'x' and public_key ? 'y' and not public_key ? 'd'),
-  created_at timestamptz not null default now(),
-  last_seen_at timestamptz not null default now(),
-  revoked_at timestamptz
-);
+--
+-- Messages are stored encrypted by the app server (lib/chat/at-rest.ts) with a
+-- key it holds in CHAT_ENCRYPTION_KEY, never in the database. They are not
+-- end-to-end encrypted. The database holds only the sealed text, so a copy of it
+-- on its own reads as nothing. (An earlier design kept keys per device; that
+-- version is the git tag chat-e2ee-last.)
 
 create table public.channels (
   id uuid primary key default gen_random_uuid(),
@@ -23,11 +15,8 @@ create table public.channels (
   kind text not null check (kind in ('announcements', 'group', 'dm')),
   created_by uuid references public.profiles (id),
   created_at timestamptz not null default now(),
-  epoch integer not null default 0,
   -- A group made from a project's chat button; one chat per project.
-  project_id uuid references public.projects on delete set null,
-  -- A member's device could not open this epoch's key; the next member who can makes a new one.
-  rekey_epoch integer
+  project_id uuid references public.projects on delete set null
 );
 create unique index channels_one_per_project on public.channels (project_id) where project_id is not null;
 create unique index channels_one_announcements on public.channels (workspace_id) where kind = 'announcements';
@@ -55,26 +44,13 @@ returns boolean language sql security definer stable set search_path = '' as $$
   )
 $$;
 
-create table public.channel_keys (
-  workspace_id uuid not null references public.workspaces on delete cascade,
-  channel_id uuid not null references public.channels on delete cascade,
-  epoch integer not null,
-  device_id uuid not null references public.devices on delete cascade,
-  wrapped_by_device_id uuid not null references public.devices,
-  wrapped_key text not null,
-  created_at timestamptz not null default now(),
-  primary key (channel_id, epoch, device_id)
-);
-
 create table public.messages (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces on delete cascade,
   channel_id uuid not null references public.channels on delete cascade,
   sender_id uuid not null references public.profiles (id),
-  sender_device_id uuid not null references public.devices,
-  epoch integer not null,
-  iv text not null,
-  ciphertext text not null check (length(ciphertext) <= 65536),
+  -- Sealed by the app server: text, tags and any task card. Opaque to the database.
+  body text not null check (length(body) <= 20000),
   created_at timestamptz not null default now()
 );
 create index messages_channel_idx on public.messages (channel_id, created_at);
@@ -87,57 +63,27 @@ create table public.channel_reads (
   primary key (channel_id, user_id)
 );
 
-alter table public.devices enable row level security;
 alter table public.channels enable row level security;
 alter table public.channel_members enable row level security;
-alter table public.channel_keys enable row level security;
 alter table public.messages enable row level security;
 alter table public.channel_reads enable row level security;
-
--- Public keys are public to people who share a workspace with you: they are
--- needed to wrap channel keys for your devices.
-create policy "see devices of people you work with" on public.devices
-  for select using (
-    user_id = (select auth.uid())
-    or exists (
-      select 1 from public.memberships a join public.memberships b on a.workspace_id = b.workspace_id
-      where a.user_id = (select auth.uid()) and b.user_id = devices.user_id
-    )
-  );
--- No insert or update policies on devices: adding and removing go through
--- register_device and revoke_device (security definer), which check the key
--- is a real P-256 point, enforce the limit of 10, and only ever set
--- revoked_at from null to now(). A direct insert or update would skip them.
 
 -- Owners and admins do not see groups or direct messages they are not in.
 create policy "members read their chats" on public.channels
   for select using (public.in_channel(id));
 create policy "members see who is in their chats" on public.channel_members
   for select using (public.in_channel(channel_id));
-
--- A wrapped key is readable only by the device it was wrapped for.
-create policy "device reads its own wrapped keys" on public.channel_keys
-  for select using (
-    exists (select 1 from public.devices d where d.id = channel_keys.device_id and d.user_id = (select auth.uid()))
-  );
-
-create policy "members read sealed messages" on public.messages
+create policy "members read their messages" on public.messages
   for select using (public.in_channel(channel_id));
-
 create policy "own read markers" on public.channel_reads
   for all using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()) and public.is_member(workspace_id));
 
--- Removing someone from a workspace also deletes their channel_members and
--- channel_reads rows there (in remove_member), so a later re-invite does not
--- restore them to private chats.
---
--- Rotating a key, posting a message, and starting or changing a group are each
--- a security-definer function (rotate_channel, post_message, create_group,
--- start_direct_message, add_group_members, remove_group_member) repeating the
--- checks in lib/data/actions.ts: a new key covers exactly the active devices of
--- current members (compared as sets of uuid, never as text), a key is only
--- renewed when one is needed, only owners and admins renew the Announcements
--- key, nothing is posted while the key is out of date, only owners
--- and admins post announcements, and only a group's starter or an owner or
--- admin removes someone else. So there are deliberately no insert policies on
--- channels, channel_members, channel_keys or messages for ordinary users.
+-- Starting a chat, posting, and changing a group are each a security-definer
+-- function (create_group, start_direct_message, add_group_members,
+-- remove_group_member, post_message) repeating the checks in lib/data/actions.ts:
+-- only owners and admins post announcements, only a group's starter or an owner
+-- or admin removes someone else, tags are people in the chat, a task card points
+-- at a real task in the workspace. Removing someone from a workspace also deletes
+-- their channel_members and channel_reads rows there (in remove_member), so a
+-- later re-invite does not restore them to private chats. So there are
+-- deliberately no insert policies on these tables for ordinary users.

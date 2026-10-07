@@ -33,7 +33,19 @@ This part is a week of work and has no cryptography in it. It should ship **befo
 
 ---
 
-## Part B — Messaging, end-to-end encrypted
+## Part B — Team chat
+
+> **Decision, 7 Oct 2026: chat is no longer end-to-end encrypted.** Charis chose that team members sign in with their email and nothing else: no keys, devices, recovery words or safety numbers, and history survives a lost phone. Chat is now **private inside the app and stored encrypted by the server**:
+>
+> - Only the people in a chat can open it. Owners and admins cannot open groups or direct messages they are not in.
+> - Each message is sealed on the server (`lib/chat/at-rest.ts`, AES-256-GCM) with a key made for its workspace from `CHAT_ENCRYPTION_KEY`, which lives in the server's environment, never in the database. A database copy or backup on its own shows nothing readable. A message copied into another chat, workspace or sender will not open.
+> - It is **not** end-to-end: the app reads messages to show them, so whoever runs the hosting could in principle read them. The app says so (chat list, "About chat privacy").
+> - Someone added to a group can read what was already said there; the app tells you when you add them.
+> - It opens the door to search, AI summaries and restoring access, none of which end-to-end allows.
+>
+> The sections below from "What fully encrypted will and will not mean" to the end of "The cryptography" describe the earlier end-to-end design. They are **superseded** and kept for reference only; that whole version (devices, keys, recovery key plans, safety numbers, key-handling tests) is the git tag `chat-e2ee-last`. The layout, work-tool and review sections further down still hold, except where they mention keys, devices or sealed text.
+
+### The earlier design: end-to-end (superseded)
 
 ### What "fully encrypted" will and will not mean
 

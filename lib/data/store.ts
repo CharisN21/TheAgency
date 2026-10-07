@@ -331,10 +331,8 @@ export function seed(): Database {
       },
     ],
     notification_prefs: [],
-    devices: [],
     channels: [],
     channel_members: [],
-    channel_keys: [],
     messages: [],
     channel_reads: [],
     custom_values: [
@@ -404,29 +402,30 @@ export async function readDb(): Promise<Database> {
     parsed.custom_values ??= []
     parsed.notifications ??= []
     parsed.notification_prefs ??= []
-    parsed.devices ??= []
     parsed.channels ??= []
     parsed.channel_members ??= []
-    // #general became Announcements; its messages and keys carry over unchanged.
-    for (const c of parsed.channels as { kind: string; name: string }[]) {
-      if (c.kind === "general") Object.assign(c, { kind: "announcements", name: "Announcements" })
-    }
-    // One Announcements per workspace. A restart during that rename once made a
-    // second, empty one; keep the one holding messages and drop only empties.
-    const msgs = (parsed.messages ?? []) as { channel_id: string }[]
-    const count = (id: string) => msgs.filter((m) => m.channel_id === id).length
-    const keeper = new Map<string, { id: string; n: number; at: string }>()
-    for (const c of parsed.channels as { id: string; kind: string; workspace_id: string; created_at: string }[]) {
-      if (c.kind !== "announcements") continue
-      const best = keeper.get(c.workspace_id)
-      const n = count(c.id)
-      if (!best || n > best.n || (n === best.n && c.created_at < best.at)) keeper.set(c.workspace_id, { id: c.id, n, at: c.created_at })
-    }
-    parsed.channels = (parsed.channels as { id: string; kind: string; workspace_id: string }[]).filter(
-      (c) => c.kind !== "announcements" || keeper.get(c.workspace_id)?.id === c.id || count(c.id) > 0
-    ) as typeof parsed.channels
-    parsed.channel_keys ??= []
     parsed.messages ??= []
+    // Chat once kept per-device keys (end-to-end). It no longer does, so those
+    // records go, and so do messages sealed that way: the server cannot open them.
+    delete (parsed as Record<string, unknown>).devices
+    delete (parsed as Record<string, unknown>).channel_keys
+    parsed.messages = parsed.messages.filter((m) => typeof (m as { body?: unknown }).body === "string")
+    // One Announcements per workspace (an older restart could make a second).
+    const seen = new Set<string>()
+    parsed.channels = parsed.channels
+      .map((c) => {
+        const x = c as unknown as Record<string, unknown>
+        if (x.kind === "general") Object.assign(x, { kind: "announcements", name: "Announcements" })
+        delete x.epoch
+        delete x.rekey_epoch
+        return c
+      })
+      .filter((c) => {
+        if (c.kind !== "announcements") return true
+        if (seen.has(c.workspace_id)) return false
+        seen.add(c.workspace_id)
+        return true
+      })
     parsed.channel_reads ??= []
     cache = parsed as Database
   } catch {
