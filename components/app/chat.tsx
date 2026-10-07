@@ -524,17 +524,14 @@ function ChatSearch({ onOpen }: { onOpen: (id: string) => void }) {
   const [problem, setProblem] = useState<string | null>(null)
   const latest = useRef(0)
 
+  const q = text.trim()
+  const searching = q.length >= 2
+
   useEffect(() => {
-    const q = text.trim()
+    if (q.length < 2) return
     const ticket = ++latest.current
-    if (q.length < 2) {
-      setHits(null)
-      setProblem(null)
-      setBusy(false)
-      return
-    }
-    setBusy(true)
     const t = setTimeout(async () => {
+      setBusy(true)
       try {
         const r = await searchChats(q)
         if (ticket !== latest.current) return
@@ -551,7 +548,7 @@ function ChatSearch({ onOpen }: { onOpen: (id: string) => void }) {
       }
     }, 300)
     return () => clearTimeout(t)
-  }, [text])
+  }, [q])
 
   return (
     <div className="px-4 pt-3 pb-1">
@@ -570,15 +567,15 @@ function ChatSearch({ onOpen }: { onOpen: (id: string) => void }) {
           maxLength={100}
           className="pl-9"
         />
-        {busy && <Loader2 className="text-muted-foreground absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin" />}
+        {searching && busy && <Loader2 className="text-muted-foreground absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin" />}
       </div>
 
-      {problem && (
+      {searching && problem && (
         <p className="text-destructive mt-2 text-xs" role="alert">
           Error: {problem}
         </p>
       )}
-      {hits && (
+      {searching && hits && (
         <div className="mt-2" aria-live="polite">
           {hits.length === 0 ? (
             <p className="text-muted-foreground py-2 text-sm">Nothing found for &ldquo;{text.trim()}&rdquo;.</p>
