@@ -235,3 +235,87 @@ describe("sending", () => {
     expect(send.mock.calls[0][0].endpoint).toBe(GOOD)
   })
 })
+
+describe("chat messages notify the people in the chat", () => {
+  const mine = async (userId: string) =>
+    (await readDb()).notifications.filter((n) => n.user_id === userId && n.type.startsWith("chat_"))
+
+  it("tells the other person in a direct message, with a banner, and never shows the message", async () => {
+    as(f.achieng.id)
+    await actions.savePushDevice(device(), "Chrome on Windows")
+
+    as(f.wanjiru.id)
+    const dm = await actions.startDirectMessage(f.achieng.id)
+    await actions.postMessage(dm.id!, { text: "the supplier price is 4,200 and do not share it" })
+
+    const got = await mine(f.achieng.id)
+    expect(got).toHaveLength(1)
+    expect(got[0].type).toBe("chat_message")
+    expect(got[0].title).toBe("Wanjiru sent you a message")
+    expect(got[0].href).toBe(`/today?chat=${dm.id}`)
+    expect(await mine(f.wanjiru.id)).toHaveLength(0)
+    expect(await mine(f.otieno.id)).toHaveLength(0)
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(String(send.mock.calls[0][1])).not.toMatch(/4,200|supplier/)
+  })
+
+  it("makes one notification for a burst, and a new one once it has been read", async () => {
+    as(f.wanjiru.id)
+    const dm = await actions.startDirectMessage(f.achieng.id)
+    await actions.postMessage(dm.id!, { text: "one" })
+    await actions.postMessage(dm.id!, { text: "two" })
+    await actions.postMessage(dm.id!, { text: "three" })
+    expect(await mine(f.achieng.id)).toHaveLength(1)
+
+    as(f.achieng.id)
+    await actions.markChannelRead(dm.id!)
+    expect((await mine(f.achieng.id))[0].read_at).toBeTruthy()
+
+    as(f.wanjiru.id)
+    await actions.postMessage(dm.id!, { text: "four" })
+    expect(await mine(f.achieng.id)).toHaveLength(2)
+  })
+
+  it("always tells someone who is tagged, even in a burst", async () => {
+    as(f.wanjiru.id)
+    const g = await actions.createGroup("Stand-up", [f.achieng.id, f.otieno.id])
+    await actions.postMessage(g.id!, { text: "morning all" })
+    await actions.postMessage(g.id!, { text: "@Achieng please look", mentions: [f.achieng.id] })
+
+    const got = await mine(f.achieng.id)
+    expect(got.map((n) => n.type).sort()).toEqual(["chat_mention", "chat_message"])
+    expect(got.find((n) => n.type === "chat_mention")!.title).toBe("Wanjiru tagged you in Stand-up")
+    expect((await mine(f.otieno.id)).map((n) => n.type)).toEqual(["chat_message"])
+  })
+
+  it("tells everyone else about an announcement", async () => {
+    as(f.charis.id)
+    const id = (await actions.loadChannels()).channels.find((c) => c.kind === "announcements")!.id
+    await actions.postMessage(id, { text: "Office closed Friday" })
+    const members = f.db.memberships.filter((m) => m.workspace_id === f.kilima.id).map((m) => m.user_id)
+    for (const u of members) {
+      expect(await mine(u), u).toHaveLength(u === f.charis.id ? 0 : 1)
+    }
+    expect((await mine(members.find((u) => u !== f.charis.id)!))[0].title).toBe("New announcement from Charis")
+  })
+
+  it("never tells people who are not in the chat, or other workspaces", async () => {
+    as(f.wanjiru.id)
+    const dm = await actions.startDirectMessage(f.achieng.id)
+    await actions.postMessage(dm.id!, { text: "private" })
+    expect(await mine(f.brian.id)).toHaveLength(0)
+    expect(await mine(f.zawadi.id)).toHaveLength(0)
+  })
+
+  it("sends nothing for chat if the person switched it off", async () => {
+    as(f.achieng.id)
+    await actions.savePushDevice(device(), "Chrome on Windows")
+    await actions.setNotificationMuted("chat_message", true)
+    as(f.wanjiru.id)
+    const dm = await actions.startDirectMessage(f.achieng.id)
+    await actions.postMessage(dm.id!, { text: "hello" })
+    expect(await mine(f.achieng.id)).toHaveLength(0)
+    expect(send).not.toHaveBeenCalled()
+  })
+});

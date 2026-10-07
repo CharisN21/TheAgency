@@ -443,6 +443,8 @@ export type NotificationType =
   | "people_overdue"
   | "records_assigned"
   | "invite_accepted"
+  | "chat_message"
+  | "chat_mention"
 
 /** What each kind is called in the settings, in plain words. */
 export const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -455,6 +457,8 @@ export const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   people_overdue: "People you own are overdue to speak to",
   records_assigned: "People or organisations are handed to you",
   invite_accepted: "Someone accepts your invite",
+  chat_message: "A new message in a chat you are in",
+  chat_mention: "Someone tags you in a chat",
 }
 
 /**

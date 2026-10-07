@@ -22,6 +22,8 @@ const CHIP: Partial<Record<NotificationType, string>> = {
   people_overdue: "People overdue",
   records_assigned: "Handed to you",
   invite_accepted: "Invites",
+  chat_message: "Chat",
+  chat_mention: "Chat tags",
 }
 
 export default async function NotificationsPage({

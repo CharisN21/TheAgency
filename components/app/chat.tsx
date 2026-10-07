@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ChevronLeft, ChevronRight, ClipboardList, Loader2, Lock, Megaphone, MessageSquare, Plus, Search, Send, UserRound, Users } from "lucide-react"
 import { toast } from "sonner"
 
@@ -230,6 +231,23 @@ export function ChatProvider({ userId, children }: { userId: string; children: R
     setActiveId(id)
     setView("thread")
   }
+
+  // A banner or a notification opens its chat with /today?chat=<id>.
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const wanted = params.get("chat")
+  useEffect(() => {
+    if (!wanted) return
+    /* eslint-disable react-hooks/set-state-in-effect -- opening a chat from the address is a reaction to it changing */
+    openChat(wanted)
+    setOpen(true)
+    /* eslint-enable react-hooks/set-state-in-effect */
+    const rest = new URLSearchParams(params.toString())
+    rest.delete("chat")
+    router.replace(rest.size > 0 ? `${pathname}?${rest}` : pathname, { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted])
 
   const backToList = () => {
     activeRef.current = null

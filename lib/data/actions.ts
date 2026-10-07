@@ -3553,6 +3553,35 @@ export async function postMessage(
       created_at: now(),
     })
     markRead(d, ch, user.id)
+
+    // Tell the others, in the same change. Titles never carry the message itself.
+    const href = `/today?chat=${ch.id}`
+    const who = actorName(d, user.id)
+    for (const uid of channelMemberIds(d, ch)) {
+      if (uid === user.id) continue
+      const tagged = body.mentions?.includes(uid) ?? false
+      // A burst of messages is one notification until it has been read.
+      if (!tagged && d.notifications.some((n) => n.user_id === uid && n.type === "chat_message" && n.href === href && !n.read_at)) {
+        continue
+      }
+      const where = chatName(d, ch, uid)
+      notify(d, {
+        workspace_id: workspace.id,
+        user_id: uid,
+        actor_id: user.id,
+        type: tagged ? "chat_mention" : "chat_message",
+        title: tagged
+          ? ch.kind === "dm"
+            ? `${who} tagged you in a message`
+            : `${who} tagged you in ${where}`
+          : ch.kind === "dm"
+            ? `${who} sent you a message`
+            : ch.kind === "announcements"
+              ? `New announcement from ${who}`
+              : `${who} wrote in ${where}`,
+        href,
+      })
+    }
   })
   return { ok: true, message: "Sent", id }
 }
@@ -3623,7 +3652,14 @@ export async function markChannelRead(channelId: string): Promise<Result> {
   const { user, workspace } = await requireContext()
   const ch = channelFor(await readDb(), channelId, workspace.id, user.id)
   if (!ch) return { ok: false, message: "That chat is not here" }
-  await mutate((d) => markRead(d, ch, user.id))
+  await mutate((d) => {
+    markRead(d, ch, user.id)
+    // Reading the chat reads its notifications too.
+    const href = `/today?chat=${ch.id}`
+    for (const n of d.notifications) {
+      if (n.user_id === user.id && n.href === href && !n.read_at) n.read_at = now()
+    }
+  })
   return { ok: true, message: "" }
 }
 
