@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app/app-sidebar"
 import { ChatProvider } from "@/components/app/chat"
+import { PushListener } from "@/components/app/push-card"
 import { MobileTabBar } from "@/components/app/mobile-tabbar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -47,6 +48,7 @@ export default async function AppLayout({
         />
         {/* min-w-0 lets wide content (the pipeline board) scroll inside the page instead of widening it. */}
         <SidebarInset id="content" tabIndex={-1} className="min-w-0 pb-24 outline-none md:pb-0">
+          <PushListener />
           <ChatProvider key={workspace.id} userId={user.id}>
             {children}
           </ChatProvider>

@@ -443,6 +443,8 @@ export type NotificationType =
   | "people_overdue"
   | "records_assigned"
   | "invite_accepted"
+  | "chat_message"
+  | "chat_mention"
 
 /** What each kind is called in the settings, in plain words. */
 export const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -455,6 +457,8 @@ export const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   people_overdue: "People you own are overdue to speak to",
   records_assigned: "People or organisations are handed to you",
   invite_accepted: "Someone accepts your invite",
+  chat_message: "A new message in a chat you are in",
+  chat_mention: "Someone tags you in a chat",
 }
 
 /**
@@ -481,6 +485,22 @@ export type NotificationPrefs = {
   workspace_id: string
   user_id: string
   muted: NotificationType[]
+}
+
+/**
+ * A phone or laptop that has turned notifications on. Belongs to the person,
+ * not a workspace: one device gets banners from every workspace they are in,
+ * and each banner says which one.
+ */
+export type PushDevice = {
+  id: string
+  user_id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  /** "iPhone", "Chrome on Windows": so you can tell your devices apart. */
+  label: string
+  created_at: string
 }
 
 export type ObjectivePeriod = "week" | "month" | "year"
@@ -606,6 +626,7 @@ export type Database = {
   custom_values: CustomValue[]
   notifications: Notification[]
   notification_prefs: NotificationPrefs[]
+  push_subscriptions: PushDevice[]
   channels: Channel[]
   channel_members: ChannelMember[]
   messages: Message[]
