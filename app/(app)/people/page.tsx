@@ -71,7 +71,7 @@ export default async function PeoplePage({
           <Band tone="maroon" index={0} label="Who to speak to">
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <BandStat
-                label="Speak to today"
+                lead label="Speak to today"
                 value={String(due)}
                 help={due === 0 ? "Nobody is waiting on you" : "Due today or overdue"}
                 tone={due > 0 ? "warn" : undefined}

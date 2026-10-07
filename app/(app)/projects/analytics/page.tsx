@@ -39,7 +39,7 @@ export default async function AnalyticsPage() {
           </p>
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <BandStat
-              label="Completion"
+              lead label="Completion"
               value={pct(overall.completion)}
               help={`${overall.done} of ${overall.total} tasks done`}
             />

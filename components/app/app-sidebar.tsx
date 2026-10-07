@@ -123,20 +123,26 @@ export function AppSidebar({
         <nav aria-label="Main" className="contents">
         <SidebarGroup>
           <SidebarGroupLabel>Relationships</SidebarGroupLabel>
-          <SidebarMenu>{RELATIONSHIPS.map(item)}</SidebarMenu>
+          <SidebarMenu>{RELATIONSHIPS.filter((n) => !n.soon).map(item)}</SidebarMenu>
         </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Work</SidebarGroupLabel>
-          <SidebarMenu>{WORK.map(item)}</SidebarMenu>
+          <SidebarMenu>{WORK.filter((n) => !n.soon).map(item)}</SidebarMenu>
         </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-          <SidebarMenu>{WORKSPACE.map(item)}</SidebarMenu>
+          <SidebarMenu>{WORKSPACE.filter((n) => !n.soon).map(item)}</SidebarMenu>
         </SidebarGroup>
         </nav>
       </SidebarContent>
 
       <SidebarFooter>
+        <p className="text-muted-foreground px-2 text-xs leading-snug group-data-[collapsible=icon]:hidden">
+          Coming later: {[...RELATIONSHIPS, ...WORK, ...WORKSPACE]
+            .filter((n) => n.soon)
+            .map((n) => n.label)
+            .join(", ")}
+        </p>
         <SidebarMenu>
           <SidebarMenuItem>
             <div className="flex h-12 w-full items-center gap-3 rounded-md p-2 text-sm group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0">
