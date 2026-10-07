@@ -485,6 +485,13 @@ export type NotificationPrefs = {
   workspace_id: string
   user_id: string
   muted: NotificationType[]
+  /** No banners from this workspace. The bell still fills. */
+  banners_off?: boolean
+  /** A daily window with no banners, "HH:MM" on the person's own clock. */
+  quiet_from?: string
+  quiet_to?: string
+  /** The zone that clock is in, e.g. "Africa/Nairobi". */
+  tz?: string
 }
 
 /**

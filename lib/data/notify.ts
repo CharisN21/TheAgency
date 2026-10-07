@@ -1,6 +1,7 @@
 import "server-only"
 
 import { queuePush } from "@/lib/push/outbox"
+import { bannersAllowed } from "@/lib/push/quiet"
 import { newId } from "./store"
 import type { Database, NotificationType } from "./types"
 
@@ -50,14 +51,18 @@ export function notify(
     dedupe_key: n.dedupe_key,
     created_at: new Date().toISOString(),
   })
-  const workspace = db.workspaces.find((w) => w.id === n.workspace_id)
-  queuePush(db, {
-    user_id: n.user_id,
-    title: n.title,
-    workspace: { id: n.workspace_id, name: workspace?.name ?? "The Agency", color: workspace?.accent_color ?? "" },
-    href: n.href,
-    tag: id,
-  })
+  // The notification is always made. A banner is only sent if this workspace's
+  // banners are on and it is not the person's quiet hours.
+  if (bannersAllowed(prefs)) {
+    const workspace = db.workspaces.find((w) => w.id === n.workspace_id)
+    queuePush(db, {
+      user_id: n.user_id,
+      title: n.title,
+      workspace: { id: n.workspace_id, name: workspace?.name ?? "The Agency", color: workspace?.accent_color ?? "" },
+      href: n.href,
+      tag: id,
+    })
+  }
   // Keep the newest 200 per person; older ones have done their job.
   const mine = db.notifications.filter((x) => x.user_id === n.user_id)
   if (mine.length > 200) {
