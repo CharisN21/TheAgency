@@ -3094,7 +3094,13 @@ export async function sendTestPush(): Promise<Result> {
     return { ok: false, message: "Turn banners on for a device first" }
   }
   const r = await deliverPush([
-    { user_id: user.id, title: "This is a test banner", workspace: workspace.name, href: "/settings", tag: "test" },
+    {
+      user_id: user.id,
+      title: "This is a test banner",
+      workspace: { id: workspace.id, name: workspace.name, color: workspace.accent_color },
+      href: "/settings",
+      tag: "test",
+    },
   ])
   return r.sent > 0
     ? { ok: true, message: `Sent to ${r.sent} ${r.sent === 1 ? "device" : "devices"}` }

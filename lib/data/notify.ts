@@ -50,10 +50,11 @@ export function notify(
     dedupe_key: n.dedupe_key,
     created_at: new Date().toISOString(),
   })
+  const workspace = db.workspaces.find((w) => w.id === n.workspace_id)
   queuePush(db, {
     user_id: n.user_id,
     title: n.title,
-    workspace: db.workspaces.find((w) => w.id === n.workspace_id)?.name ?? "The Agency",
+    workspace: { id: n.workspace_id, name: workspace?.name ?? "The Agency", color: workspace?.accent_color ?? "" },
     href: n.href,
     tag: id,
   })
