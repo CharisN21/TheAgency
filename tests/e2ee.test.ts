@@ -166,3 +166,24 @@ describe("task cards inside messages", () => {
     }
   })
 })
+
+describe("tags inside messages", () => {
+  const ctx = { channelId: "c", epoch: 1, senderDeviceId: "d" }
+
+  it("tags travel sealed with the text and open again", async () => {
+    const key = await createChannelKey()
+    const sealed = await sealMessage(key, { text: "@Achieng please send the quote", mentions: ["user-1"] }, ctx)
+    expect(JSON.stringify(sealed)).not.toContain("user-1")
+    expect((await openMessage(key, sealed, ctx)).mentions).toEqual(["user-1"])
+  })
+
+  it("tags that are the wrong shape, or far too many, are dropped and the text kept", async () => {
+    const key = await createChannelKey()
+    for (const bad of [[7], "everyone", { id: "x" }, Array.from({ length: 21 }, (_, i) => `u${i}`), ["x".repeat(65)]]) {
+      const sealed = await sealMessage(key, { text: "hello", mentions: bad as never }, ctx)
+      const body = await openMessage(key, sealed, ctx)
+      expect(body.text).toBe("hello")
+      expect(body.mentions).toBeUndefined()
+    }
+  })
+})

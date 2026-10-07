@@ -201,5 +201,9 @@ export async function openMessage(
   if (typeof body?.text !== "string") throw new Error("Not a message")
   // A card that is not exactly the expected shape (or links off-site) is dropped, keeping the text.
   if (body.card !== undefined && !isTaskCard(body.card)) delete body.card
+  // Tags must be a short list of ids; anything else is dropped, keeping the text.
+  if (body.mentions !== undefined && !(Array.isArray(body.mentions) && body.mentions.length <= 20 && body.mentions.every((m) => typeof m === "string" && m.length <= 64))) {
+    delete body.mentions
+  }
   return body
 }

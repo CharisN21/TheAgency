@@ -141,7 +141,7 @@ function Leaves({ children }: { children: React.ReactNode }) {
   )
 }
 
-function TaskFromMessage({
+export function TaskFromMessage({
   open,
   onOpenChange,
   message,
@@ -398,5 +398,86 @@ function SaveToRecord({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Under your own message that tags someone: "Make this a task for Achieng?".
+ * It only offers. Pressing Make a task opens the same form as the "..." menu,
+ * with that person ready as the one it is for, and you can change it. Not now
+ * hides the offer on this device. Nothing is made or assigned until you press
+ * Make task in the form.
+ */
+export function TaskSuggestion({
+  message,
+  taggedId,
+  me,
+  people,
+  onTaskMade,
+}: {
+  message: ChatMessageRef & { id: string }
+  taggedId: string
+  me: { id: string; name: string }
+  people: { id: string; name: string }[]
+  onTaskMade: (card: TaskCard) => Promise<void>
+}) {
+  const key = "agency-task-suggestions-dismissed"
+  const [gone, setGone] = useState<boolean>(() => {
+    try {
+      return (JSON.parse(localStorage.getItem(key) ?? "[]") as string[]).includes(message.id)
+    } catch {
+      return false
+    }
+  })
+  const [open, setOpen] = useState(false)
+  const [projects, setProjects] = useState<Choice[] | undefined>()
+  const tagged = people.find((p) => p.id === taggedId)
+  if (gone || !tagged) return null
+
+  const dismiss = () => {
+    setGone(true)
+    try {
+      const all = JSON.parse(localStorage.getItem(key) ?? "[]") as string[]
+      localStorage.setItem(key, JSON.stringify([...all, message.id].slice(-200)))
+    } catch {
+      // Remembering is a convenience; the offer simply returns next time.
+    }
+  }
+  const everyone: Choice[] = [{ value: me.id, label: `${me.name} (you)` }, ...people.map((p) => ({ value: p.id, label: p.name }))]
+
+  return (
+    <>
+      <p className="bg-accent text-accent-foreground mt-1.5 flex flex-wrap items-center gap-x-2 rounded-lg px-3 py-1 text-xs">
+        <span>Make this a task for {tagged.name.split(" ")[0]}?</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-accent-foreground h-8 font-semibold"
+          onClick={() => {
+            setOpen(true)
+            void loadChatRecordOptions()
+              .then((o) => setProjects(o.projects))
+              .catch(() => toast.error("Your projects could not be loaded. You can still make the task."))
+          }}
+        >
+          Make a task
+        </Button>
+        <Button variant="ghost" size="sm" className="text-accent-foreground h-8" onClick={dismiss}>
+          Not now
+        </Button>
+      </p>
+      <TaskFromMessage
+        open={open}
+        onOpenChange={setOpen}
+        message={message}
+        everyone={everyone}
+        projects={projects}
+        defaultAssignee={taggedId}
+        onTaskMade={async (card) => {
+          await onTaskMade(card)
+          dismiss()
+        }}
+      />
+    </>
   )
 }
