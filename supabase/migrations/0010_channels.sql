@@ -24,9 +24,12 @@ create table public.channels (
   created_by uuid references public.profiles (id),
   created_at timestamptz not null default now(),
   epoch integer not null default 0,
+  -- A group made from a project's chat button; one chat per project.
+  project_id uuid references public.projects on delete set null,
   -- A member's device could not open this epoch's key; the next member who can makes a new one.
   rekey_epoch integer
 );
+create unique index channels_one_per_project on public.channels (project_id) where project_id is not null;
 create unique index channels_one_announcements on public.channels (workspace_id) where kind = 'announcements';
 
 -- Who is in a group or a direct message. Announcements needs no rows: it is everyone.

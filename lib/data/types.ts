@@ -567,6 +567,8 @@ export type Channel = {
   created_at: string
   /** The current key epoch. 0 means no key yet; the first member to open it makes one. */
   epoch: number
+  /** A group made from a project's chat button: that project, so there is only ever one. */
+  project_id?: string
   /**
    * Set when a member's device was given the current key but could not open
    * it (a broken or tampered key). The next member who can makes a new one.

@@ -3217,6 +3217,8 @@ export type ChannelSummary = {
   lastAt: string
   /** For a direct message: the other person. */
   with?: string
+  /** For a project's group: the project it belongs to. */
+  projectId?: string
 }
 
 export type ChatDirectory = {
@@ -3267,6 +3269,7 @@ export async function loadChannels(deviceId: string): Promise<ChatDirectory> {
           ).length,
           lastAt: mine.reduce((latest, m) => (m.created_at > latest ? m.created_at : latest), ""),
           with: c.kind === "dm" ? channelMemberIds(d, c).find((id) => id !== user.id) : undefined,
+          projectId: c.project_id,
         }
       })
   })
@@ -3305,6 +3308,57 @@ export async function createGroup(
     }
   })
   return { ok: true, message: `${title} started`, id }
+}
+
+/**
+ * Opens a project's chat, starting it the first time: a group named after the
+ * project with its lead and members who are still in the workspace, and you.
+ * One per project. Whoever is added to the project later is added to the
+ * chat by anyone already in it (the people list in the chat).
+ */
+export async function startProjectChat(projectId: string): Promise<Result & { id?: string }> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.createGroup(role)) return { ok: false, message: "Viewers cannot start chats" }
+  const db = await readDb()
+  const project = db.projects.find((p) => p.id === projectId && p.workspace_id === workspace.id)
+  if (!project) return { ok: false, message: "That project is not here" }
+  // Only people on the project, and owners and admins, start its chat.
+  const onIt = project.lead_id === user.id || project.member_ids.includes(user.id)
+  if (!onIt && !can.editWorkspace(role)) {
+    return { ok: false, message: "Only people on the project, and owners and admins, can start its chat" }
+  }
+
+  const existing = db.channels.find((c) => c.workspace_id === workspace.id && c.project_id === projectId)
+  if (existing) {
+    // Opening it again must not let you into a private group you are not in.
+    if (!channelMemberIds(db, existing).includes(user.id)) {
+      return { ok: false, message: "This project's chat already exists. Ask someone in it to add you." }
+    }
+    return { ok: true, message: "", id: existing.id }
+  }
+
+  const people = [...new Set([user.id, project.lead_id, ...project.member_ids])].filter((id) =>
+    inWorkspace(db, workspace.id, id)
+  )
+  if (people.length < 2) return { ok: false, message: "Add someone to the project first, then start its chat" }
+
+  const id = newId()
+  await mutate((d) => {
+    d.channels.push({
+      id,
+      workspace_id: workspace.id,
+      name: project.name.slice(0, 40),
+      kind: "group",
+      created_by: user.id,
+      created_at: now(),
+      epoch: 0,
+      project_id: projectId,
+    })
+    for (const uid of people) {
+      d.channel_members.push({ workspace_id: workspace.id, channel_id: id, user_id: uid, added_by: user.id, added_at: now() })
+    }
+  })
+  return { ok: true, message: `${project.name} chat started`, id }
 }
 
 /** Opens your direct message with someone, starting it the first time. */

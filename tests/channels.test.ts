@@ -446,3 +446,56 @@ describe("from a chat message", () => {
     expect(ids.some((id) => f.elsewhereIds.includes(id))).toBe(false)
   })
 })
+
+describe("a chat for each project", () => {
+  const project = () => f.db.projects.find((p) => p.workspace_id === f.kilima.id)!
+
+  it("starts a group named after the project, with its lead and members, once", async () => {
+    const p = project()
+    as(p.lead_id)
+    const r = await actions.startProjectChat(p.id)
+    expect(r.ok).toBe(true)
+    const db = await readDb()
+    const ch = db.channels.find((c) => c.id === r.id)!
+    expect(ch.kind).toBe("group")
+    expect(ch.project_id).toBe(p.id)
+    expect(ch.name).toBe(p.name.slice(0, 40))
+    const inIt = db.channel_members.filter((m) => m.channel_id === ch.id).map((m) => m.user_id).sort()
+    expect(inIt).toEqual([...new Set([p.lead_id, ...p.member_ids])].sort())
+    // Pressing it again opens the same chat, and makes no second one.
+    expect((await actions.startProjectChat(p.id)).id).toBe(r.id)
+    expect((await readDb()).channels.filter((c) => c.project_id === p.id).length).toBe(1)
+  })
+
+  it("is not for outsiders, viewers or other workspaces", async () => {
+    const p = project()
+    const outsider = [f.charis, f.wanjiru, f.otieno, f.achieng].find(
+      (u) => u.id !== p.lead_id && !p.member_ids.includes(u.id) && !["owner", "admin"].includes(
+        f.db.memberships.find((m) => m.workspace_id === f.kilima.id && m.user_id === u.id)!.role,
+      ),
+    )
+    if (outsider) {
+      as(outsider.id)
+      expect((await actions.startProjectChat(p.id)).ok).toBe(false)
+    }
+    as(f.brian.id)
+    expect((await actions.startProjectChat(p.id)).ok).toBe(false)
+    as(f.zawadi.id)
+    signedIn.workspaceId = f.kilima.id
+    expect((await actions.startProjectChat(p.id)).ok).toBe(false)
+    expect((await readDb()).channels.some((c) => c.project_id === p.id)).toBe(false)
+  })
+
+  it("does not let an owner into a project chat they are not in", async () => {
+    const p = project()
+    as(p.lead_id)
+    const r = await actions.startProjectChat(p.id)
+    await mutate((d) => {
+      d.channel_members = d.channel_members.filter((m) => !(m.channel_id === r.id && m.user_id === f.charis.id))
+    })
+    as(f.charis.id)
+    const again = await actions.startProjectChat(p.id)
+    expect(again.ok).toBe(false)
+    expect(again.message).toMatch(/Ask someone in it/)
+  })
+})
