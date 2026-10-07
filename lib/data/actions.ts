@@ -29,6 +29,7 @@ import { askForJson } from "@/lib/ai/claude"
 import { openBody, sealBody, type ChatBody } from "@/lib/chat/at-rest"
 import { actorName, notify } from "./notify"
 import { isPushEndpoint, isPushKey } from "@/lib/push/hosts"
+import { isClock, isZone } from "@/lib/push/quiet"
 import { deliverPush, pushConfigured } from "@/lib/push/send"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
@@ -3083,6 +3084,48 @@ export async function removePushDevice(id: string): Promise<Result> {
   })
   revalidatePath("/settings")
   return removed ? { ok: true, message: "Banners are off for that device" } : { ok: false, message: "That device is not here" }
+}
+
+/**
+ * Banner controls for yourself in this workspace: switch its banners off, or
+ * set a daily quiet window. Either way notifications still arrive in the bell.
+ */
+export async function setBannerSettings(input: {
+  banners: boolean
+  quietOn: boolean
+  quietFrom: string
+  quietTo: string
+  tz: string
+}): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  if (typeof input?.banners !== "boolean" || typeof input?.quietOn !== "boolean") {
+    return { ok: false, message: "That is not a valid setting" }
+  }
+  if (input.quietOn) {
+    if (!isClock(input.quietFrom) || !isClock(input.quietTo)) return { ok: false, message: "Pick a start and an end time" }
+    if (input.quietFrom === input.quietTo) return { ok: false, message: "The start and end times must be different" }
+    if (!isZone(input.tz)) return { ok: false, message: "We could not read your time zone" }
+  }
+
+  await mutate((d) => {
+    let prefs = d.notification_prefs.find((p) => p.workspace_id === workspace.id && p.user_id === user.id)
+    if (!prefs) {
+      prefs = { workspace_id: workspace.id, user_id: user.id, muted: [] }
+      d.notification_prefs.push(prefs)
+    }
+    prefs.banners_off = input.banners ? undefined : true
+    if (input.quietOn) {
+      prefs.quiet_from = input.quietFrom
+      prefs.quiet_to = input.quietTo
+      prefs.tz = input.tz
+    } else {
+      prefs.quiet_from = undefined
+      prefs.quiet_to = undefined
+      prefs.tz = undefined
+    }
+  })
+  revalidatePath("/settings")
+  return { ok: true, message: "Saved" }
 }
 
 /** Sends one banner to all of your devices, so you can see it works. */

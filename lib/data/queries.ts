@@ -1199,6 +1199,20 @@ export async function unreadNotificationCount(workspaceId: string, userId: strin
   return db.notifications.filter((n) => n.workspace_id === workspaceId && n.user_id === userId && !n.read_at).length
 }
 
+export type BannerSettings = { banners: boolean; quietOn: boolean; quietFrom: string; quietTo: string }
+
+/** This person's banner controls for one workspace. Quiet hours default to 22:00 to 07:00 when first switched on. */
+export async function getBannerSettings(workspaceId: string, userId: string): Promise<BannerSettings> {
+  const db = await readDb()
+  const p = db.notification_prefs.find((x) => x.workspace_id === workspaceId && x.user_id === userId)
+  return {
+    banners: !p?.banners_off,
+    quietOn: Boolean(p?.quiet_from && p?.quiet_to),
+    quietFrom: p?.quiet_from ?? "22:00",
+    quietTo: p?.quiet_to ?? "07:00",
+  }
+}
+
 export async function getMutedNotifications(workspaceId: string, userId: string): Promise<NotificationType[]> {
   const db = await readDb()
   return db.notification_prefs.find((p) => p.workspace_id === workspaceId && p.user_id === userId)?.muted ?? []

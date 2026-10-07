@@ -7,8 +7,8 @@ import { aiAvailable } from "@/lib/ai/claude"
 import { FieldManager } from "@/components/app/custom-fields"
 import { AppearancePicker } from "@/components/app/appearance"
 import { NotificationSwitches } from "@/components/app/notifications"
-import { PushCard } from "@/components/app/push-card"
-import { getMutedNotifications, listCustomFields } from "@/lib/data/queries"
+import { BannerControls, PushCard } from "@/components/app/push-card"
+import { getBannerSettings, getMutedNotifications, listCustomFields } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
 import { can, ROLE_HELP, ROLE_LABEL } from "@/lib/data/types"
 import { WorkspaceNameForm, ResetDemo } from "./forms"
@@ -75,10 +75,11 @@ export default async function SettingsPage() {
             <CardContent className="flex flex-col gap-3 p-0">
               <p className="text-muted-foreground px-6 text-sm">
                 The bell in the top bar tells you what happened to your work. Switch off what you do
-                not need; this is yours only and changes nothing for anyone else. Email digests and
-                quiet hours come next.
+                not need; this is yours only and changes nothing for anyone else. Email digests come
+                next.
               </p>
               <PushCard />
+              <BannerControls workspaceName={workspace.name} initial={await getBannerSettings(workspace.id, user.id)} />
               <NotificationSwitches muted={await getMutedNotifications(workspace.id, user.id)} />
             </CardContent>
           </Card>

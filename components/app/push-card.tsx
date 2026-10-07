@@ -6,7 +6,17 @@ import { Bell, BellOff, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { pushStatus, removePushDevice, savePushDevice, sendTestPush, type PushStatus } from "@/lib/data/actions"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import {
+  pushStatus,
+  removePushDevice,
+  savePushDevice,
+  sendTestPush,
+  setBannerSettings,
+  type PushStatus,
+} from "@/lib/data/actions"
+import type { BannerSettings } from "@/lib/data/queries"
 
 type Support = "checking" | "ready" | "needs-install" | "unsupported"
 
@@ -224,6 +234,74 @@ export function PushCard() {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Settings: banner controls for this workspace only. Someone in two unrelated
+ * ventures can silence one and keep the other. Notifications still reach the bell.
+ */
+export function BannerControls({ workspaceName, initial }: { workspaceName: string; initial: BannerSettings }) {
+  const [s, setS] = useState(initial)
+  const [pending, start] = useTransition()
+
+  function save(next: BannerSettings) {
+    const before = s
+    setS(next)
+    start(async () => {
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const r = await setBannerSettings({ ...next, tz: zone })
+      if (r.ok) toast.success(r.message)
+      else {
+        setS(before)
+        toast.error(r.message)
+      }
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-1 px-6">
+      <div className="flex min-h-12 items-center justify-between gap-4">
+        <label htmlFor="banners-on" className="text-sm">
+          <span className="block font-medium">Banners from {workspaceName}</span>
+          <span className="text-muted-foreground block">Off means no banner, but the bell still fills.</span>
+        </label>
+        <Switch id="banners-on" checked={s.banners} disabled={pending} onCheckedChange={(v) => save({ ...s, banners: v })} />
+      </div>
+
+      <div className="flex min-h-12 items-center justify-between gap-4">
+        <label htmlFor="quiet-on" className="text-sm">
+          <span className="block font-medium">Quiet hours</span>
+          <span className="text-muted-foreground block">No banners in this window. They wait in the bell.</span>
+        </label>
+        <Switch id="quiet-on" checked={s.quietOn} disabled={pending || !s.banners} onCheckedChange={(v) => save({ ...s, quietOn: v })} />
+      </div>
+
+      {s.quietOn && s.banners && (
+        <div className="flex flex-wrap items-center gap-3 pb-2">
+          <label className="text-muted-foreground flex items-center gap-2 text-sm">
+            From
+            <Input
+              type="time"
+              value={s.quietFrom}
+              disabled={pending}
+              onChange={(e) => e.target.value && save({ ...s, quietFrom: e.target.value })}
+              className="h-11 w-32"
+            />
+          </label>
+          <label className="text-muted-foreground flex items-center gap-2 text-sm">
+            To
+            <Input
+              type="time"
+              value={s.quietTo}
+              disabled={pending}
+              onChange={(e) => e.target.value && save({ ...s, quietTo: e.target.value })}
+              className="h-11 w-32"
+            />
+          </label>
+        </div>
       )}
     </div>
   )
