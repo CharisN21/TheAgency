@@ -26,7 +26,7 @@ import {
 import { z } from "zod"
 
 import { askForJson } from "@/lib/ai/claude"
-import { isUsablePublicKey, type PublicKeyJwk } from "@/lib/crypto/e2ee"
+import { openBody, sealBody, type ChatBody } from "@/lib/chat/at-rest"
 import { actorName, notify } from "./notify"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
 import {
@@ -3071,17 +3071,14 @@ export async function refreshDailyReminders(): Promise<void> {
   })
 }
 
-/* ------------------------------------------------- encrypted channels (5b) */
-// The server never sees a message in the clear. It checks who may do what,
-// stores what devices send, and hands each device only the keys wrapped for it.
+/* ------------------------------------------------------------ team chat (5b) */
 // Three kinds of chat: Announcements (everyone reads, owners and admins post),
-// groups (named, chosen members) and direct messages (two people).
+// groups (named, chosen members) and direct messages (two people). Messages are
+// stored encrypted by the server (lib/chat/at-rest.ts). Only members of a chat
+// can open it in the app; owners and admins cannot open chats they are not in.
 
-const B64 = /^[A-Za-z0-9+/]+={0,2}$/
-const MAX_DEVICES = 10
-const MAX_SEALED = 64 * 1024
-
-type PublicKey = Database["devices"][number]["public_key"]
+const MAX_TEXT = 4000
+const MAX_TAGS = 20
 
 const inWorkspace = (db: Database, workspaceId: string, userId: string) =>
   db.memberships.some((m) => m.workspace_id === workspaceId && m.user_id === userId)
@@ -3100,49 +3097,10 @@ function channelMemberIds(db: Database, ch: Channel): string[] {
     .map((m) => m.user_id)
 }
 
-/** The devices that must hold the current key: every active device of every member. */
-function expectedDeviceIds(db: Database, ch: Channel): string[] {
-  const members = new Set(channelMemberIds(db, ch))
-  return db.devices
-    .filter((d) => members.has(d.user_id) && !d.revoked_at)
-    .map((d) => d.id)
-    .sort()
-}
-
-/**
- * True when someone joined or left, or a device was added or removed, since
- * the current key was made. Nothing can be sent until a member's device makes
- * a new one, so nobody who has left ever receives a new message.
- */
-function needsRotation(db: Database, ch: Channel): boolean {
-  if (ch.epoch === 0 || ch.rekey_epoch === ch.epoch) return true
-  const holders = db.channel_keys
-    .filter((k) => k.channel_id === ch.id && k.epoch === ch.epoch)
-    .map((k) => k.device_id)
-  return !sameSet(holders, expectedDeviceIds(db, ch))
-}
-
-/** Exactly the same ids: no missing, no extra, no repeats. Never compare joined strings. */
-function sameSet(given: string[], expected: string[]) {
-  const want = new Set(expected)
-  return given.length === want.size && new Set(given).size === given.length && given.every((id) => want.has(id))
-}
-
-/**
- * Who may make a new key: anyone in a group or direct message; for
- * Announcements, only those who may post there.
- */
-const canRotate = (ch: Channel, role: Role) => ch.kind !== "announcements" || can.announce(role)
-
 /** The chat, only if this person is in it and it is in this workspace. */
 function channelFor(db: Database, channelId: string, workspaceId: string, userId: string) {
   const ch = db.channels.find((c) => c.id === channelId && c.workspace_id === workspaceId)
   return ch && channelMemberIds(db, ch).includes(userId) ? ch : null
-}
-
-/** A device, only if it is this person's and has not been removed. */
-function myDevice(db: Database, deviceId: string, userId: string) {
-  return db.devices.find((d) => d.id === deviceId && d.user_id === userId && !d.revoked_at) ?? null
 }
 
 function markRead(d: Database, ch: Channel, userId: string) {
@@ -3165,49 +3123,6 @@ function chatName(db: Database, ch: Channel, userId: string) {
   return db.profiles.find((p) => p.id === other)?.full_name ?? "Someone who has left"
 }
 
-/** Adds this browser or phone as one of your devices. Only its public key is sent. */
-export async function registerDevice(
-  name: string,
-  publicKey: unknown
-): Promise<Result & { deviceId?: string }> {
-  const { user } = await requireContext()
-  if (!(await isUsablePublicKey(publicKey))) return { ok: false, message: "That is not a device key" }
-  const label = String(name ?? "").trim().slice(0, 60) || "This device"
-
-  const db = await readDb()
-  const active = db.devices.filter((d) => d.user_id === user.id && !d.revoked_at)
-  if (active.length >= MAX_DEVICES) {
-    return { ok: false, message: `You already have ${MAX_DEVICES} devices. Remove an old one in Settings first.` }
-  }
-
-  const id = newId()
-  const { kty, crv, x, y } = publicKey as PublicKeyJwk
-  await mutate((d) => {
-    d.devices.push({
-      id,
-      user_id: user.id,
-      name: label,
-      public_key: { kty, crv, x, y },
-      created_at: now(),
-      last_seen_at: now(),
-    })
-  })
-  return { ok: true, message: "This device can now read your chats", deviceId: id }
-}
-
-/** Stops one of your devices reading anything new. The next key is made without it. */
-export async function revokeDevice(deviceId: string): Promise<Result> {
-  const { user } = await requireContext()
-  if (!myDevice(await readDb(), deviceId, user.id)) {
-    return { ok: false, message: "That device is not yours, or is already removed" }
-  }
-  await mutate((d) => {
-    d.devices.find((x) => x.id === deviceId)!.revoked_at = now()
-  })
-  revalidatePath("/settings")
-  return { ok: true, message: "Device removed. It cannot read new messages." }
-}
-
 export type ChannelSummary = {
   id: string
   kind: Channel["kind"]
@@ -3223,7 +3138,6 @@ export type ChannelSummary = {
 
 export type ChatDirectory = {
   ok: true
-  deviceKnown: boolean
   channels: ChannelSummary[]
   /** Everyone else in the workspace, for starting a direct message or a group. */
   people: { id: string; name: string }[]
@@ -3233,17 +3147,10 @@ export type ChatDirectory = {
 }
 
 /** Your chats in this workspace, with unread counts. Makes Announcements the first time. */
-export async function loadChannels(deviceId: string): Promise<ChatDirectory> {
+export async function loadChannels(): Promise<ChatDirectory> {
   const { user, workspace, role } = await requireContext()
-  const known = Boolean(myDevice(await readDb(), deviceId, user.id))
 
   const channels = await mutate((d) => {
-    if (known) d.devices.find((x) => x.id === deviceId)!.last_seen_at = now()
-    // Unread counts only what this device can open: messages from before it
-    // was added stay closed to it, so they are not waiting to be read.
-    const openable = new Set(
-      known ? d.channel_keys.filter((k) => k.device_id === deviceId).map((k) => `${k.channel_id}:${k.epoch}`) : []
-    )
     if (!d.channels.some((c) => c.workspace_id === workspace.id && c.kind === "announcements")) {
       d.channels.push({
         id: newId(),
@@ -3252,7 +3159,6 @@ export async function loadChannels(deviceId: string): Promise<ChatDirectory> {
         kind: "announcements",
         created_by: user.id,
         created_at: now(),
-        epoch: 0,
       })
     }
     return d.channels
@@ -3264,9 +3170,7 @@ export async function loadChannels(deviceId: string): Promise<ChatDirectory> {
           id: c.id,
           kind: c.kind,
           name: chatName(d, c, user.id),
-          unread: mine.filter(
-            (m) => m.sender_id !== user.id && m.created_at > read && openable.has(`${m.channel_id}:${m.epoch}`)
-          ).length,
+          unread: mine.filter((m) => m.sender_id !== user.id && m.created_at > read).length,
           lastAt: mine.reduce((latest, m) => (m.created_at > latest ? m.created_at : latest), ""),
           with: c.kind === "dm" ? channelMemberIds(d, c).find((id) => id !== user.id) : undefined,
           projectId: c.project_id,
@@ -3280,7 +3184,7 @@ export async function loadChannels(deviceId: string): Promise<ChatDirectory> {
     .map((m) => ({ id: m.user_id, name: db.profiles.find((p) => p.id === m.user_id)?.full_name ?? "Someone" }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
-  return { ok: true, deviceKnown: known, channels, people, canCreateGroup: can.createGroup(role), canEdit: can.edit(role) }
+  return { ok: true, channels, people, canCreateGroup: can.createGroup(role), canEdit: can.edit(role) }
 }
 
 /** Starts a team group with the people chosen. You are always in it. */
@@ -3302,7 +3206,7 @@ export async function createGroup(
 
   const id = newId()
   await mutate((d) => {
-    d.channels.push({ id, workspace_id: workspace.id, name: title, kind: "group", created_by: user.id, created_at: now(), epoch: 0 })
+    d.channels.push({ id, workspace_id: workspace.id, name: title, kind: "group", created_by: user.id, created_at: now() })
     for (const uid of [user.id, ...ids]) {
       d.channel_members.push({ workspace_id: workspace.id, channel_id: id, user_id: uid, added_by: user.id, added_at: now() })
     }
@@ -3351,7 +3255,6 @@ export async function startProjectChat(projectId: string): Promise<Result & { id
       kind: "group",
       created_by: user.id,
       created_at: now(),
-      epoch: 0,
       project_id: projectId,
     })
     for (const uid of people) {
@@ -3384,7 +3287,7 @@ export async function startDirectMessage(otherId: string): Promise<Result & { id
 
   const id = newId()
   await mutate((d) => {
-    d.channels.push({ id, workspace_id: workspace.id, name: "", kind: "dm", created_by: user.id, created_at: now(), epoch: 0 })
+    d.channels.push({ id, workspace_id: workspace.id, name: "", kind: "dm", created_by: user.id, created_at: now() })
     for (const uid of [user.id, otherId]) {
       d.channel_members.push({ workspace_id: workspace.id, channel_id: id, user_id: uid, added_by: user.id, added_at: now() })
     }
@@ -3432,204 +3335,129 @@ export async function removeGroupMember(channelId: string, userId: string): Prom
   return { ok: true, message: userId === user.id ? "You left the group" : "Removed from the group" }
 }
 
-export type SealedMessage = {
+export type ChatMessage = {
   id: string
   sender_id: string
-  sender_device_id: string
-  epoch: number
-  iv: string
-  ciphertext: string
-  created_at: string
+  at: string
+  text: string
+  mentions?: string[]
+  card?: ChatBody["card"]
 }
 
 export type ChannelState = {
-  channel: { id: string; kind: Channel["kind"]; name: string; epoch: number; createdBy: string }
+  channel: { id: string; kind: Channel["kind"]; name: string; createdBy: string }
   /** Who is in it now, for the header and the member list. */
   members: { id: string; name: string }[]
   /** Names for everyone who appears: members and past senders. */
   people: { id: string; name: string }[]
   canPost: boolean
   canManage: boolean
-  rotationNeeded: boolean
-  /** Whether this person may make the new key when one is needed. */
-  canRotate: boolean
   /** True when older messages exist than the ones sent here. */
   truncated: boolean
-  /** The devices the next key must be wrapped for, with their public keys. */
-  devices: { id: string; user_id: string; public_key: PublicKey }[]
-  /** Keys wrapped for this device, one per epoch it was given, with the wrapping device's public key. */
-  keys: { epoch: number; wrapped_key: string; wrapper_public_key: PublicKey }[]
-  messages: SealedMessage[]
+  /** Stored messages that could not be opened (changed or damaged): never silently hidden. */
+  unreadable: number
+  messages: ChatMessage[]
 }
 
-/** Everything one device needs to open a chat. Only its own wrapped keys are included. */
+/** Everything the chat drawer needs to show one chat, messages opened. Members only. */
 export async function loadChannel(
-  channelId: string,
-  deviceId: string
+  channelId: string
 ): Promise<{ ok: true; state: ChannelState } | { ok: false; message: string }> {
   const { user, workspace, role } = await requireContext()
   const db = await readDb()
   const ch = channelFor(db, channelId, workspace.id, user.id)
   if (!ch) return { ok: false, message: "That chat is not here" }
-  if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
 
   const memberIds = channelMemberIds(db, ch)
   const all = db.messages
     .filter((m) => m.channel_id === ch.id)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
-  const messages = all.slice(-200)
-  const name = (id: string) => db.profiles.find((p) => p.id === id)?.full_name ?? "Someone"
-  const peopleIds = new Set([...memberIds, ...messages.map((m) => m.sender_id)])
-  const expected = new Set(expectedDeviceIds(db, ch))
+  const stored = all.slice(-200)
+  const messages: ChatMessage[] = []
+  let unreadable = 0
+  for (const m of stored) {
+    const body = openBody(m.body, { workspaceId: m.workspace_id, channelId: m.channel_id, senderId: m.sender_id })
+    if (!body) {
+      unreadable++
+      continue
+    }
+    messages.push({ id: m.id, sender_id: m.sender_id, at: m.created_at, text: body.text, mentions: body.mentions, card: body.card })
+  }
 
+  const name = (id: string) => db.profiles.find((p) => p.id === id)?.full_name ?? "Someone"
+  const peopleIds = new Set([...memberIds, ...stored.map((m) => m.sender_id)])
   return {
     ok: true,
     state: {
-      channel: { id: ch.id, kind: ch.kind, name: chatName(db, ch, user.id), epoch: ch.epoch, createdBy: ch.created_by },
+      channel: { id: ch.id, kind: ch.kind, name: chatName(db, ch, user.id), createdBy: ch.created_by },
       members: memberIds.map((id) => ({ id, name: name(id) })).sort((a, b) => a.name.localeCompare(b.name)),
       people: [...peopleIds].map((id) => ({ id, name: name(id) })),
       canPost: canPost(ch, role),
       canManage: canManage(ch, role, user.id),
-      rotationNeeded: needsRotation(db, ch),
-      canRotate: canRotate(ch, role),
-      truncated: all.length > messages.length,
-      devices: db.devices
-        .filter((d) => expected.has(d.id))
-        .map((d) => ({ id: d.id, user_id: d.user_id, public_key: d.public_key })),
-      keys: db.channel_keys
-        .filter((k) => k.channel_id === ch.id && k.device_id === deviceId)
-        .flatMap((k) => {
-          const wrapper = db.devices.find((d) => d.id === k.wrapped_by_device_id)
-          return wrapper ? [{ epoch: k.epoch, wrapped_key: k.wrapped_key, wrapper_public_key: wrapper.public_key }] : []
-        }),
-      messages: messages.map((m) => ({
-        id: m.id,
-        sender_id: m.sender_id,
-        sender_device_id: m.sender_device_id,
-        epoch: m.epoch,
-        iv: m.iv,
-        ciphertext: m.ciphertext,
-        created_at: m.created_at,
-      })),
+      truncated: all.length > stored.length,
+      unreadable,
+      messages,
     },
   }
 }
 
 /**
- * Stores a new chat key, wrapped by this device for exactly the devices that
- * should hold it: no more (nobody who left), no fewer (nobody locked out).
+ * Stores a message. Checks everything the browser could get wrong or fake: that
+ * you are in the chat and may post there, the length, that every tag is
+ * someone in the chat, and that a task card points at a real task here and an
+ * in-app page.
  */
-export async function rotateChannel(
-  channelId: string,
-  deviceId: string,
-  epoch: number,
-  wrapped: { device_id: string; wrapped_key: string }[]
-): Promise<Result> {
-  const { user, workspace, role } = await requireContext()
-  const db = await readDb()
-  const ch = channelFor(db, channelId, workspace.id, user.id)
-  if (!ch) return { ok: false, message: "That chat is not here" }
-  if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
-  if (!canRotate(ch, role)) return { ok: false, message: "Only owners and admins renew the Announcements key" }
-  if (epoch !== ch.epoch + 1) return { ok: false, message: "Someone else just changed the chat key. Opening it again." }
-  // A new key only when one is needed, so nobody can churn a working chat.
-  if (!needsRotation(db, ch)) return { ok: false, message: "The chat key is already up to date" }
-  if (!Array.isArray(wrapped) || !wrapped.every((w) => w && typeof w.device_id === "string")) {
-    return { ok: false, message: "That key is not in the right shape" }
-  }
-  if (!sameSet(wrapped.map((w) => w.device_id), expectedDeviceIds(db, ch))) {
-    return { ok: false, message: "The people in the chat changed. Opening it again." }
-  }
-  // AES-KW of a 256-bit key is 40 bytes: 56 characters of base64.
-  if (!wrapped.every((w) => typeof w.wrapped_key === "string" && w.wrapped_key.length === 56 && B64.test(w.wrapped_key))) {
-    return { ok: false, message: "That key is not in the right shape" }
-  }
-
-  const saved = await mutate((d) => {
-    const c = d.channels.find((x) => x.id === ch.id)!
-    if (c.epoch !== epoch - 1 || !needsRotation(d, c)) return false
-    for (const w of wrapped) {
-      d.channel_keys.push({
-        workspace_id: c.workspace_id,
-        channel_id: c.id,
-        epoch,
-        device_id: w.device_id,
-        wrapped_by_device_id: deviceId,
-        wrapped_key: w.wrapped_key,
-        created_at: now(),
-      })
-    }
-    c.epoch = epoch
-    c.rekey_epoch = undefined
-    return true
-  })
-  return saved
-    ? { ok: true, message: "New chat key made" }
-    : { ok: false, message: "Someone else just changed the chat key. Opening it again." }
-}
-
-/** Stores a sealed message. Refused if the key is out of date, so nobody who left can read it. */
 export async function postMessage(
   channelId: string,
-  deviceId: string,
-  epoch: number,
-  sealed: { iv: string; ciphertext: string }
+  input: { text: string; mentions?: string[]; card?: ChatBody["card"] }
 ): Promise<Result & { id?: string }> {
   const { user, workspace, role } = await requireContext()
   const db = await readDb()
   const ch = channelFor(db, channelId, workspace.id, user.id)
   if (!ch) return { ok: false, message: "That chat is not here" }
   if (!canPost(ch, role)) return { ok: false, message: "Only owners and admins post announcements" }
-  if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
-  if (epoch !== ch.epoch || needsRotation(db, ch)) {
-    return { ok: false, message: "This chat's key needs renewing before anyone can send" }
+
+  const text = typeof input?.text === "string" ? input.text.trim() : ""
+  if (text.length === 0) return { ok: false, message: "Write something to send" }
+  if (text.length > MAX_TEXT) return { ok: false, message: `Keep a message under ${MAX_TEXT} characters` }
+
+  const body: ChatBody = { text }
+  if (input.mentions !== undefined) {
+    const members = new Set(channelMemberIds(db, ch))
+    const ids = input.mentions
+    if (!Array.isArray(ids) || ids.length > MAX_TAGS || !ids.every((id) => typeof id === "string" && members.has(id))) {
+      return { ok: false, message: "You can only tag people who are in this chat" }
+    }
+    if (ids.length > 0) body.mentions = [...new Set(ids)]
   }
-  const { iv, ciphertext } = sealed ?? {}
-  if (typeof iv !== "string" || iv.length !== 16 || !B64.test(iv)) {
-    return { ok: false, message: "That message is not sealed properly" }
-  }
-  if (typeof ciphertext !== "string" || !B64.test(ciphertext) || ciphertext.length > MAX_SEALED) {
-    return { ok: false, message: "That message is too long, or not sealed properly" }
+  if (input.card !== undefined) {
+    const c = input.card
+    const task = c && db.tasks.find((t) => t.id === c.taskId && t.workspace_id === workspace.id)
+    const okShape =
+      c &&
+      c.kind === "task" &&
+      ["taskId", "title", "assignee", "href"].every((k) => typeof (c as Record<string, unknown>)[k] === "string") &&
+      c.title.length <= 200 &&
+      c.assignee.length <= 100 &&
+      /^\/(?![/\\])/.test(c.href)
+    if (!okShape || !task) return { ok: false, message: "That task card is not valid" }
+    body.card = { kind: "task", taskId: c.taskId, title: c.title, assignee: c.assignee, href: c.href }
   }
 
   const id = newId()
+  const sealed = sealBody(body, { workspaceId: workspace.id, channelId: ch.id, senderId: user.id })
   await mutate((d) => {
     d.messages.push({
       id,
-      workspace_id: ch.workspace_id,
+      workspace_id: workspace.id,
       channel_id: ch.id,
       sender_id: user.id,
-      sender_device_id: deviceId,
-      epoch,
-      iv,
-      ciphertext,
+      body: sealed,
       created_at: now(),
     })
     markRead(d, ch, user.id)
   })
   return { ok: true, message: "Sent", id }
-}
-
-/**
- * A device was given the current key but cannot open it: a broken or
- * tampered key. Asks for a new key, which the next member who can will make.
- * Only a device that was given this epoch's key may ask, once per epoch.
- */
-export async function reportUnreadableKey(channelId: string, deviceId: string, epoch: number): Promise<Result> {
-  const { user, workspace } = await requireContext()
-  const db = await readDb()
-  const ch = channelFor(db, channelId, workspace.id, user.id)
-  if (!ch) return { ok: false, message: "That chat is not here" }
-  if (!myDevice(db, deviceId, user.id)) return { ok: false, message: "This device needs adding again" }
-  if (epoch !== ch.epoch) return { ok: false, message: "That key has already been replaced" }
-  if (!db.channel_keys.some((k) => k.channel_id === ch.id && k.epoch === epoch && k.device_id === deviceId)) {
-    return { ok: false, message: "This device was not given that key" }
-  }
-  await mutate((d) => {
-    const c = d.channels.find((x) => x.id === ch.id)!
-    if (c.epoch === epoch) c.rekey_epoch = epoch
-  })
-  return { ok: true, message: "Asked for a new chat key" }
 }
 
 export async function markChannelRead(channelId: string): Promise<Result> {

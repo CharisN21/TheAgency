@@ -530,21 +530,9 @@ export function periodEnd(period: ObjectivePeriod, start: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-/* ------------------------------------------------- encrypted channels (5b) */
-// The server stores public keys, wrapped keys and sealed messages only.
-// Nothing here can be read without a member's device. See lib/crypto/e2ee.ts.
-
-/** One browser or phone a person uses. The private key never leaves it. */
-export type Device = {
-  id: string
-  user_id: string
-  /** e.g. "Windows · Chrome", so people can tell their devices apart. */
-  name: string
-  public_key: { kty: "EC"; crv: "P-256"; x: string; y: string }
-  created_at: string
-  last_seen_at: string
-  revoked_at?: string
-}
+/* ------------------------------------------------------------ team chat (5b) */
+// Messages are stored encrypted by the server (lib/chat/at-rest.ts), with a key
+// the server holds. Only members of a chat can open it in the app.
 
 /**
  * Announcements: the whole workspace reads, owners and admins post.
@@ -565,15 +553,8 @@ export type Channel = {
   kind: ChannelKind
   created_by: string
   created_at: string
-  /** The current key epoch. 0 means no key yet; the first member to open it makes one. */
-  epoch: number
   /** A group made from a project's chat button: that project, so there is only ever one. */
   project_id?: string
-  /**
-   * Set when a member's device was given the current key but could not open
-   * it (a broken or tampered key). The next member who can makes a new one.
-   */
-  rekey_epoch?: number
 }
 
 /** Who is in a group or a direct message. Announcements need no rows: it is everyone. */
@@ -585,28 +566,13 @@ export type ChannelMember = {
   added_at: string
 }
 
-/** A channel key for one epoch, wrapped so only one device can open it. */
-export type ChannelKey = {
-  workspace_id: string
-  channel_id: string
-  epoch: number
-  device_id: string
-  /** The device that wrapped it; its public key is needed to open it. */
-  wrapped_by_device_id: string
-  wrapped_key: string
-  created_at: string
-}
-
-/** A sealed message. Text and mentions are inside the ciphertext. */
+/** A stored message. `body` is the sealed text, tags and card (see lib/chat/at-rest.ts). */
 export type Message = {
   id: string
   workspace_id: string
   channel_id: string
   sender_id: string
-  sender_device_id: string
-  epoch: number
-  iv: string
-  ciphertext: string
+  body: string
   created_at: string
 }
 
@@ -640,10 +606,8 @@ export type Database = {
   custom_values: CustomValue[]
   notifications: Notification[]
   notification_prefs: NotificationPrefs[]
-  devices: Device[]
   channels: Channel[]
   channel_members: ChannelMember[]
-  channel_keys: ChannelKey[]
   messages: Message[]
   channel_reads: ChannelRead[]
 }

@@ -4,6 +4,8 @@ import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:cr
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
+import type { TaskCard } from "./card"
+
 /**
  * Chat messages are stored encrypted, with a key the server holds. A leaked
  * database or backup alone shows nothing readable. This is not end-to-end:
@@ -25,7 +27,7 @@ export type ChatBody = {
   /** Ids of people tagged in the message. */
   mentions?: string[]
   /** A task made from the message, shown as a card that links to it. */
-  card?: { kind: "task"; taskId: string; title: string; assignee: string; href: string }
+  card?: TaskCard
 }
 
 export type Where = { workspaceId: string; channelId: string; senderId: string }
