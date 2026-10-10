@@ -150,3 +150,91 @@ describe("working with your own notes", () => {
     expect(db.notes.find((n) => n.id === id)!.author_id).toBe(f.wanjiru.id)
   })
 })
+
+describe("titles", () => {
+  it("keeps an optional title, tidied, and lets you change or remove it", async () => {
+    as(f.wanjiru.id)
+    const id = (await actions.captureNote("Call them on Monday", "  Eastern   Reagents  "))!.id!
+    expect((await mine(f.wanjiru.id))[0].title).toBe("Eastern Reagents")
+    expect((await actions.updateNote(id, "Call them on Tuesday", "Reagents follow-up")).ok).toBe(true)
+    expect((await mine(f.wanjiru.id))[0].title).toBe("Reagents follow-up")
+    await actions.updateNote(id, "Call them on Tuesday", "")
+    expect((await mine(f.wanjiru.id))[0].title).toBeUndefined()
+    expect((await actions.captureNote("no title")).ok).toBe(true)
+  })
+
+  it("refuses a title that is too long", async () => {
+    as(f.wanjiru.id)
+    expect((await actions.captureNote("words", "x".repeat(121))).ok).toBe(false)
+  })
+})
+
+describe("whiteboards", () => {
+  const line = [{ c: "ink", w: 1, p: [0.1, 0.1, 0.5, 0.5, 0.9, 0.2] }]
+
+  it("saves a drawing with a title and caption, and changes it later", async () => {
+    as(f.wanjiru.id)
+    const r = await actions.saveBoard({ title: "Warehouse layout", caption: "Racks on the left", drawing: line })
+    expect(r.ok).toBe(true)
+    const [board] = await mine(f.wanjiru.id)
+    expect(board.kind).toBe("board")
+    expect(board.title).toBe("Warehouse layout")
+    expect(board.body).toBe("Racks on the left")
+    expect(board.drawing).toEqual(line)
+
+    const more = [...line, { c: "primary", w: 2, p: [0.2, 0.8] }, { c: "erase", w: 3, p: [0.5, 0.5, 0.6, 0.6] }]
+    expect((await actions.saveBoard({ id: board.id, title: "Warehouse v2", caption: "", drawing: more })).ok).toBe(true)
+    const [again] = await mine(f.wanjiru.id)
+    expect(again.drawing).toHaveLength(3)
+    expect(again.title).toBe("Warehouse v2")
+    expect(again.body).toBe("")
+  })
+
+  it("rounds points to keep boards small", async () => {
+    as(f.wanjiru.id)
+    await actions.saveBoard({ title: "", caption: "", drawing: [{ c: "ink", w: 1, p: [0.123456, 0.987654] }] })
+    expect((await mine(f.wanjiru.id))[0].drawing![0].p).toEqual([0.123, 0.988])
+  })
+
+  it("refuses anything that is not a drawing", async () => {
+    as(f.wanjiru.id)
+    for (const bad of [
+      "not a drawing",
+      [{ c: "red", w: 1, p: [0.1, 0.1] }],
+      [{ c: "#ff0000", w: 1, p: [0.1, 0.1] }],
+      [{ c: "ink", w: 9, p: [0.1, 0.1] }],
+      [{ c: "ink", w: 1, p: [0.1] }],
+      [{ c: "ink", w: 1, p: [1.5, 0.1] }],
+      [{ c: "ink", w: 1, p: [-0.1, 0.1] }],
+      [{ c: "ink", w: 1, p: ["0.1", 0.1] }],
+      [{ c: "ink", w: 1, p: Array(8002).fill(0.5) }],
+      Array(1501).fill({ c: "ink", w: 1, p: [0.1, 0.1] }),
+    ]) {
+      expect((await actions.saveBoard({ title: "x", caption: "", drawing: bad })).ok, JSON.stringify(bad).slice(0, 60)).toBe(false)
+    }
+    expect(await mine(f.wanjiru.id)).toHaveLength(0)
+  })
+
+  it("does not save a completely empty new board", async () => {
+    as(f.wanjiru.id)
+    expect((await actions.saveBoard({ title: "", caption: "", drawing: [] })).ok).toBe(false)
+  })
+
+  it("is private like a note: nobody else can see or change it, owners included", async () => {
+    as(f.wanjiru.id)
+    const id = (await actions.saveBoard({ title: "Private sketch", caption: "", drawing: line }))!.id!
+    for (const other of [f.charis.id, f.achieng.id]) {
+      expect(await mine(other), other).toHaveLength(0)
+      as(other)
+      expect((await actions.saveBoard({ id, title: "hijack", caption: "", drawing: [] })).ok, other).toBe(false)
+      expect((await actions.deleteNote(id)).ok, other).toBe(false)
+    }
+    expect((await readDb()).notes.find((n) => n.id === id)!.title).toBe("Private sketch")
+  })
+
+  it("will not turn a written note into a board", async () => {
+    as(f.wanjiru.id)
+    const id = (await actions.captureNote("words"))!.id!
+    expect((await actions.saveBoard({ id, title: "", caption: "", drawing: line })).ok).toBe(false)
+  })
+})

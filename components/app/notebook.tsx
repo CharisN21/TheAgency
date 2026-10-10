@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ClipboardList, FilePlus2, Loader2, MoreHorizontal, NotebookPen, Pencil, Pin, PinOff, Search, Trash2 } from "lucide-react"
+import { ClipboardList, FilePlus2, Loader2, MoreHorizontal, NotebookPen, Pencil, Pin, PinOff, PenTool, Search, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -32,6 +32,7 @@ import {
   updateNote,
 } from "@/lib/data/actions"
 import type { Note } from "@/lib/data/types"
+import { BoardPicture, WhiteboardEditor } from "@/components/app/whiteboard"
 
 type Options = Awaited<ReturnType<typeof loadChatRecordOptions>>
 
@@ -40,11 +41,15 @@ const when = (iso: string) =>
 
 const firstLine = (text: string, max: number) => text.split("\n")[0].trim().slice(0, max)
 
+const isBoard = (n: Note) => n.kind === "board"
+
 /** The whole notebook: write a note, search, and work with each one. */
 export function Notebook({ notes, canEdit }: { notes: Note[]; canEdit: boolean }) {
   const router = useRouter()
   const [text, setText] = useState("")
+  const [title, setTitle] = useState("")
   const [find, setFind] = useState("")
+  const [board, setBoard] = useState<Note | "new" | null>(null)
   const [pending, start] = useTransition()
   const [editing, setEditing] = useState<Note | null>(null)
   const [tasking, setTasking] = useState<Note | null>(null)
@@ -53,14 +58,15 @@ export function Notebook({ notes, canEdit }: { notes: Note[]; canEdit: boolean }
 
   const shown = useMemo(() => {
     const q = find.trim().toLowerCase()
-    return q ? notes.filter((n) => n.body.toLowerCase().includes(q)) : notes
+    return q ? notes.filter((n) => `${n.title ?? ""}\n${n.body}`.toLowerCase().includes(q)) : notes
   }, [notes, find])
 
   function save() {
     start(async () => {
-      const r = await captureNote(text)
+      const r = await captureNote(text, title)
       if (r.ok) {
         setText("")
+        setTitle("")
         toast.success(r.message)
         router.refresh()
       } else toast.error(r.message)
@@ -76,6 +82,17 @@ export function Notebook({ notes, canEdit }: { notes: Note[]; canEdit: boolean }
           save()
         }}
       >
+        <Label htmlFor="new-note-title" className="sr-only">
+          Title
+        </Label>
+        <Input
+          id="new-note-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Title (optional)"
+          maxLength={120}
+          autoComplete="off"
+        />
         <Label htmlFor="new-note" className="sr-only">
           Write a note
         </Label>
@@ -93,11 +110,16 @@ export function Notebook({ notes, canEdit }: { notes: Note[]; canEdit: boolean }
           maxLength={10000}
           rows={3}
         />
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground text-xs">Ctrl Enter to keep</span>
-          <Button type="submit" disabled={pending || text.trim().length === 0}>
-            {pending ? <Loader2 className="animate-spin" /> : <FilePlus2 />} Keep note
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-muted-foreground hidden text-xs sm:inline">Ctrl Enter to keep</span>
+          <div className="flex flex-1 justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setBoard("new")}>
+              <PenTool /> New whiteboard
+            </Button>
+            <Button type="submit" disabled={pending || text.trim().length === 0}>
+              {pending ? <Loader2 className="animate-spin" /> : <FilePlus2 />} Keep note
+            </Button>
+          </div>
         </div>
       </form>
 
@@ -124,7 +146,8 @@ export function Notebook({ notes, canEdit }: { notes: Note[]; canEdit: boolean }
           <NotebookPen className="text-ink-3 size-8" />
           <h3 className="font-semibold">Nothing kept yet</h3>
           <p className="text-muted-foreground max-w-sm text-sm">
-            Jot down a thought, a number or a reminder. Press Alt N from anywhere in the app to capture one in two seconds.
+            Jot down a thought, a number or a reminder, or open a whiteboard and sketch it. Press Alt N from anywhere in the app to
+            capture a note in two seconds.
           </p>
         </div>
       ) : shown.length === 0 ? (
@@ -136,7 +159,26 @@ export function Notebook({ notes, canEdit }: { notes: Note[]; canEdit: boolean }
           {shown.map((n) => (
             <li key={n.id} className="bg-card rounded-xl border p-4">
               <div className="flex items-start gap-2">
-                <p className="min-w-0 flex-1 text-sm leading-relaxed break-words whitespace-pre-wrap">{n.body}</p>
+                <div className="min-w-0 flex-1">
+                  {(n.title || isBoard(n)) && (
+                    <h3 className="mb-1 font-semibold break-words">{n.title || "Whiteboard"}</h3>
+                  )}
+                  {isBoard(n) && (
+                    <button
+                      type="button"
+                      onClick={() => setBoard(n)}
+                      className="focus-visible:ring-ring mb-2 block w-full max-w-md overflow-hidden rounded-lg border focus-visible:ring-2 focus-visible:outline-none"
+                      aria-label={`Open the whiteboard${n.title ? ` ${n.title}` : ""}`}
+                    >
+                      <BoardPicture drawing={n.drawing ?? []} />
+                    </button>
+                  )}
+                  {n.body && (
+                    <p className={isBoard(n) ? "text-muted-foreground text-sm break-words whitespace-pre-wrap" : "text-sm leading-relaxed break-words whitespace-pre-wrap"}>
+                      {n.body}
+                    </p>
+                  )}
+                </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon-sm" className="text-muted-foreground shrink-0" aria-label="Do something with this note">
@@ -155,17 +197,25 @@ export function Notebook({ notes, canEdit }: { notes: Note[]; canEdit: boolean }
                     >
                       {n.pinned ? <PinOff /> : <Pin />} {n.pinned ? "Unpin" : "Pin to the top"}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setEditing(n)}>
-                      <Pencil /> Edit
-                    </DropdownMenuItem>
+                    {isBoard(n) ? (
+                      <DropdownMenuItem onSelect={() => setBoard(n)}>
+                        <PenTool /> Open whiteboard
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onSelect={() => setEditing(n)}>
+                        <Pencil /> Edit
+                      </DropdownMenuItem>
+                    )}
                     {canEdit && (
                       <>
                         <DropdownMenuItem onSelect={() => setTasking(n)}>
                           <ClipboardList /> Make a task
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => setPosting(n)}>
-                          <FilePlus2 /> Post to a timeline
-                        </DropdownMenuItem>
+                        {!isBoard(n) && (
+                          <DropdownMenuItem onSelect={() => setPosting(n)}>
+                            <FilePlus2 /> Post to a timeline
+                          </DropdownMenuItem>
+                        )}
                       </>
                     )}
                     <DropdownMenuSeparator />
@@ -186,6 +236,9 @@ export function Notebook({ notes, canEdit }: { notes: Note[]; canEdit: boolean }
       )}
 
       {editing && <EditNote note={editing} onClose={() => setEditing(null)} />}
+      {board && (
+        <WhiteboardEditor note={board === "new" ? undefined : board} onClose={() => setBoard(null)} onSaved={() => router.refresh()} />
+      )}
       {tasking && <NoteToTask note={tasking} onClose={() => setTasking(null)} />}
       {posting && <NoteToTimeline note={posting} onClose={() => setPosting(null)} />}
 
@@ -223,6 +276,7 @@ export function Notebook({ notes, canEdit }: { notes: Note[]; canEdit: boolean }
 function EditNote({ note, onClose }: { note: Note; onClose: () => void }) {
   const router = useRouter()
   const [text, setText] = useState(note.body)
+  const [title, setTitle] = useState(note.title ?? "")
   const [pending, start] = useTransition()
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -231,6 +285,10 @@ function EditNote({ note, onClose }: { note: Note; onClose: () => void }) {
           <DialogTitle>Edit note</DialogTitle>
           <DialogDescription>Only you can see this note.</DialogDescription>
         </DialogHeader>
+        <Label htmlFor="edit-note-title" className="sr-only">
+          Title
+        </Label>
+        <Input id="edit-note-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" maxLength={120} />
         <Label htmlFor="edit-note" className="sr-only">
           Note
         </Label>
@@ -243,7 +301,7 @@ function EditNote({ note, onClose }: { note: Note; onClose: () => void }) {
             disabled={pending || text.trim().length === 0}
             onClick={() =>
               start(async () => {
-                const r = await updateNote(note.id, text)
+                const r = await updateNote(note.id, text, title)
                 if (r.ok) {
                   toast.success(r.message)
                   onClose()
@@ -261,7 +319,7 @@ function EditNote({ note, onClose }: { note: Note; onClose: () => void }) {
 }
 
 function NoteToTask({ note, onClose }: { note: Note; onClose: () => void }) {
-  const [title, setTitle] = useState(firstLine(note.body, 200))
+  const [title, setTitle] = useState((note.title || firstLine(note.body, 200)).slice(0, 200))
   const [pending, start] = useTransition()
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>

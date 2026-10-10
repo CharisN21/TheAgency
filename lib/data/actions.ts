@@ -29,6 +29,7 @@ import { askForJson } from "@/lib/ai/claude"
 import { openBody, sealBody, type ChatBody } from "@/lib/chat/at-rest"
 import { actorName, notify } from "./notify"
 import { isPushEndpoint, isPushKey } from "@/lib/push/hosts"
+import { cleanDrawing } from "@/lib/notes/drawing"
 import { isClock, isZone } from "@/lib/push/quiet"
 import { deliverPush, pushConfigured } from "@/lib/push/send"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
@@ -40,6 +41,7 @@ import {
   stageOf,
   type ActivityType,
   type Database,
+  type Note,
   type Channel,
   type OrgCategory,
   type Role,
@@ -3016,54 +3018,112 @@ export async function setNotificationMuted(type: NotificationType, muted: boolea
 }
 
 /* ------------------------------------------------- notebook (Phase 2) */
-// A private notebook. Only the author can read, change or delete a note: owners
-// and admins cannot. Making a task from a note, or posting it to a record's
-// timeline, goes through createTask and logActivity, which copy the words.
+// A private notebook of written notes and whiteboards. Only the author can
+// read, change or delete one: owners and admins cannot. Making a task from a
+// note, or posting it to a record's timeline, goes through createTask and
+// logActivity, which copy the words.
 
 const MAX_NOTE = 10000
+const MAX_TITLE = 120
 const MAX_NOTES_EACH = 2000
 
 const cleanNote = (text: unknown) => (typeof text === "string" ? text.trim() : "")
+const cleanTitle = (text: unknown) => (typeof text === "string" ? text.replace(/\s+/g, " ").trim() : "")
+const tooLong = { ok: false as const, message: `Keep a note under ${MAX_NOTE.toLocaleString("en-GB")} characters` }
+const titleTooLong = { ok: false as const, message: `Keep a title under ${MAX_TITLE} characters` }
 
-/** Keeps a thought in your notebook. Anyone in the workspace may, viewers included: it is theirs alone. */
-export async function captureNote(text: string): Promise<Result & { id?: string }> {
-  const { user, workspace } = await requireContext()
-  const body = cleanNote(text)
-  if (!body) return { ok: false, message: "Write something to keep" }
-  if (body.length > MAX_NOTE) return { ok: false, message: `Keep a note under ${MAX_NOTE.toLocaleString("en-GB")} characters` }
+const ownNote = (d: Database, id: string, workspaceId: string, userId: string) =>
+  d.notes.find((x) => x.id === id && x.workspace_id === workspaceId && x.author_id === userId)
 
+/** Adds a note or board for this person, unless their notebook is full. */
+async function addToNotebook(
+  workspaceId: string,
+  userId: string,
+  fields: Pick<Note, "body"> & Partial<Pick<Note, "title" | "kind" | "drawing">>,
+  message: string
+): Promise<Result & { id?: string }> {
   const id = newId()
   const result = await mutate((d) => {
-    if (d.notes.filter((n) => n.workspace_id === workspace.id && n.author_id === user.id).length >= MAX_NOTES_EACH) {
+    if (d.notes.filter((n) => n.workspace_id === workspaceId && n.author_id === userId).length >= MAX_NOTES_EACH) {
       return { ok: false as const, message: "Your notebook is full. Delete some old notes first." }
     }
-    d.notes.unshift({ id, workspace_id: workspace.id, author_id: user.id, body, pinned: false, created_at: now(), updated_at: now() })
-    return { ok: true as const, message: "Kept in your notebook", id }
+    d.notes.unshift({ id, workspace_id: workspaceId, author_id: userId, pinned: false, created_at: now(), updated_at: now(), ...fields })
+    return { ok: true as const, message, id }
   })
   revalidatePath("/notebook")
   return result
 }
 
-export async function updateNote(id: string, text: string): Promise<Result> {
+/** Keeps a written note. Anyone in the workspace may, viewers included: it is theirs alone. */
+export async function captureNote(text: string, title?: string): Promise<Result & { id?: string }> {
   const { user, workspace } = await requireContext()
   const body = cleanNote(text)
-  if (!body) return { ok: false, message: "A note cannot be empty. Delete it instead." }
-  if (body.length > MAX_NOTE) return { ok: false, message: `Keep a note under ${MAX_NOTE.toLocaleString("en-GB")} characters` }
-  const found = await mutate((d) => {
-    const n = d.notes.find((x) => x.id === id && x.workspace_id === workspace.id && x.author_id === user.id)
-    if (!n) return false
+  const name = cleanTitle(title)
+  if (!body) return { ok: false, message: "Write something to keep" }
+  if (body.length > MAX_NOTE) return tooLong
+  if (name.length > MAX_TITLE) return titleTooLong
+  return addToNotebook(workspace.id, user.id, { body, title: name || undefined, kind: "text" }, "Kept in your notebook")
+}
+
+/** Changes a note's words and title. A whiteboard's words are its caption, and may be empty. */
+export async function updateNote(id: string, text: string, title?: string): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const body = cleanNote(text)
+  const name = cleanTitle(title)
+  if (body.length > MAX_NOTE) return tooLong
+  if (name.length > MAX_TITLE) return titleTooLong
+  const result = await mutate((d) => {
+    const n = ownNote(d, id, workspace.id, user.id)
+    if (!n) return { ok: false as const, message: "That note is not here" }
+    if (!body && n.kind !== "board") return { ok: false as const, message: "A note cannot be empty. Delete it instead." }
     n.body = body
+    if (title !== undefined) n.title = name || undefined
     n.updated_at = now()
-    return true
+    return { ok: true as const, message: "Saved" }
   })
   revalidatePath("/notebook")
-  return found ? { ok: true, message: "Saved" } : { ok: false, message: "That note is not here" }
+  return result
+}
+
+/**
+ * Saves a whiteboard: a new one when there is no id, otherwise the changes to
+ * your own. The drawing is checked here, never trusted from the browser.
+ */
+export async function saveBoard(input: {
+  id?: string
+  title: string
+  caption: string
+  drawing: unknown
+}): Promise<Result & { id?: string }> {
+  const { user, workspace } = await requireContext()
+  const name = cleanTitle(input?.title)
+  const caption = cleanNote(input?.caption)
+  const drawing = cleanDrawing(input?.drawing)
+  if (!drawing) return { ok: false, message: "That drawing could not be saved. It may be too big: start a new board." }
+  if (name.length > MAX_TITLE) return titleTooLong
+  if (caption.length > MAX_NOTE) return tooLong
+  if (!input.id && drawing.length === 0 && !name && !caption) return { ok: false, message: "Draw something first" }
+
+  if (!input.id) {
+    return addToNotebook(workspace.id, user.id, { body: caption, title: name || undefined, kind: "board", drawing }, "Whiteboard saved")
+  }
+  const result = await mutate((d) => {
+    const n = ownNote(d, input.id!, workspace.id, user.id)
+    if (!n || n.kind !== "board") return { ok: false as const, message: "That whiteboard is not here" }
+    n.title = name || undefined
+    n.body = caption
+    n.drawing = drawing
+    n.updated_at = now()
+    return { ok: true as const, message: "Whiteboard saved", id: n.id }
+  })
+  revalidatePath("/notebook")
+  return result
 }
 
 export async function setNotePinned(id: string, pinned: boolean): Promise<Result> {
   const { user, workspace } = await requireContext()
   const found = await mutate((d) => {
-    const n = d.notes.find((x) => x.id === id && x.workspace_id === workspace.id && x.author_id === user.id)
+    const n = ownNote(d, id, workspace.id, user.id)
     if (!n) return false
     n.pinned = Boolean(pinned)
     return true

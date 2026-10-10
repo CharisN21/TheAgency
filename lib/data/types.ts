@@ -519,7 +519,14 @@ export type Note = {
   id: string
   workspace_id: string
   author_id: string
+  /** A short name, optional. */
+  title?: string
+  /** A written note, or a whiteboard. Older notes have no kind and are written. */
+  kind?: "text" | "board"
+  /** The note's words; for a whiteboard, an optional caption. */
   body: string
+  /** A whiteboard's strokes (see lib/notes/drawing.ts). */
+  drawing?: Stroke[]
   pinned: boolean
   created_at: string
   updated_at: string
@@ -625,6 +632,8 @@ export type ChannelRead = {
   user_id: string
   read_at: string
 }
+
+import type { Stroke } from "@/lib/notes/drawing"
 
 export type Database = {
   profiles: Profile[]

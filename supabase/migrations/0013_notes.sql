@@ -1,4 +1,5 @@
--- Phase 2: the private notebook. Adds one table; changes nothing that exists.
+-- Phase 2: the private notebook of written notes and whiteboards. Adds one
+-- table; changes nothing that exists.
 -- Design: docs/phase-2-today-capture-notebook-palette.md.
 --
 -- A note is visible only to the person who wrote it: not owners, not admins.
@@ -9,10 +10,16 @@ create table public.notes (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces on delete cascade,
   author_id uuid not null references public.profiles (id) on delete cascade,
-  body text not null check (char_length(body) between 1 and 10000),
+  title text check (title is null or char_length(title) <= 120),
+  kind text not null default 'text' check (kind in ('text', 'board')),
+  -- The words, or a whiteboard's caption (which may be empty).
+  body text not null default '' check (char_length(body) <= 10000),
+  -- A whiteboard's strokes; the server checks their shape and size before saving.
+  drawing jsonb check (drawing is null or pg_column_size(drawing) <= 1000000),
   pinned boolean not null default false,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  check (kind = 'board' or char_length(body) >= 1)
 );
 
 create index notes_author_idx on public.notes (workspace_id, author_id, pinned desc, updated_at desc);

@@ -9,13 +9,14 @@ Four pieces, built in this order because each one feeds the next.
 **What it is.** A private notebook, and a way to get a thought into it in two seconds from anywhere.
 
 - **Quick Capture:** a pencil button in the top bar, or Alt N. A box opens, you type, press Ctrl Enter (or Save), and it is kept. "Save as a task" makes a task for you instead. Nothing else to fill in.
-- **Notebook** (`/notebook`): your notes, newest first, pinned ones on top, with a search box. From any note: pin it, edit it, make it a task, post it onto an organisation, person or deal timeline, or delete it.
+- **Notebook** (`/notebook`): your notes, newest first, pinned ones on top, with a search box. Each note can have a title. From any note: pin it, edit it, make it a task, post it onto an organisation, person or deal timeline, or delete it.
+- **Whiteboards**, in the same notebook: "New whiteboard" opens a board to scribble on with a mouse, finger or pen, in ink or maroon, thin or thick, with an eraser, undo and clear, plus a title and an optional caption. Stored as lines (not a picture), so it stays sharp at any size and follows dark mode. Private like notes.
 
 **Privacy (the rule that does not bend).** A note is visible only to the person who wrote it. Not owners, not admins. It becomes visible to others only when you choose "Post to a timeline", which copies the words onto a record's timeline as an ordinary note; the private original stays yours. The page says so in plain words.
 
-**Data.** `notes`: id, workspace_id, author_id, body (up to 10,000 characters), pinned, created_at, updated_at. Row-Level Security: author only, and a member of the workspace. At most 2,000 notes per person per workspace.
+**Data.** `notes`: id, workspace_id, author_id, title (optional, up to 120), kind (text or board), body (up to 10,000 characters; a board's caption), drawing (a board's strokes, checked by the server, `lib/notes/drawing.ts`), pinned, created_at, updated_at. Row-Level Security: author only, and a member of the workspace. At most 2,000 notes per person per workspace.
 
-**Not in this slice:** attachments, folders, tags, voice notes, a shared notebook. Notes link to records only by being posted to their timeline.
+**Not in this slice:** attachments, folders, tags, voice notes, shared notes or shared whiteboards (everyone in the workspace drawing on one board). Notes link to records only by being posted to their timeline.
 
 ## 2. Ctrl K palette
 
