@@ -14,6 +14,10 @@ import { captureNote, createTask } from "@/lib/data/actions"
 
 const CaptureContext = createContext<{ open: () => void } | null>(null)
 
+export function useQuickCapture() {
+  return useContext(CaptureContext)
+}
+
 /** The pencil in the top bar. Opens Quick Capture; Alt N does the same from anywhere. */
 export function CaptureButton() {
   const capture = useContext(CaptureContext)

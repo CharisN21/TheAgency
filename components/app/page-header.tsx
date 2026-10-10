@@ -1,4 +1,5 @@
 import { ChatButton } from "@/components/app/chat"
+import { SearchButton } from "@/components/app/command-palette"
 import { NotificationBell } from "@/components/app/notification-bell"
 import { CaptureButton } from "@/components/app/quick-capture"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -24,6 +25,7 @@ export function PageHeader({
           </span>
         )}
       </div>
+      <SearchButton />
       {children}
       <CaptureButton />
       <ChatButton />

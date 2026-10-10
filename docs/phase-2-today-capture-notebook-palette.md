@@ -25,7 +25,9 @@ A shared written note is read by others and changed only by its author; a shared
 
 **Not in this slice:** attachments, folders, tags, voice notes, live drawing together, sharing with one named person. Notes link to records only by being posted to their timeline.
 
-## 2. Ctrl K palette
+## 2. Ctrl K palette (built 10 Oct 2026)
+
+Built: Ctrl K (Cmd K on a Mac), or the Search button in the top bar. `components/app/command-palette.tsx`, search in `searchEverything` (lib/data/actions.ts), tests in `tests/search.test.ts`. Arrow keys and Enter; results grouped by kind, five of each, names that start with your words first. Actions: New note, New whiteboard, Open team chat, Invite someone; every main page; switch workspace.
 
 One box to find anything and jump or act. Searches organisations, people, deals, projects, tasks and your own notes in the workspace you are in; also pages ("Settings") and actions ("New task", "New note", "Switch workspace"). Server-side search with the same permission checks as the lists, so nobody finds what they cannot open. Chat messages stay in the chat's own search.
 

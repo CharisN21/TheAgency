@@ -29,7 +29,7 @@ import { askForJson } from "@/lib/ai/claude"
 import { openBody, sealBody, type ChatBody } from "@/lib/chat/at-rest"
 import { actorName, notify } from "./notify"
 import { isPushEndpoint, isPushKey } from "@/lib/push/hosts"
-import { canDrawOn, type Audience } from "@/lib/notes/access"
+import { canDrawOn, canSeeNote, type Audience } from "@/lib/notes/access"
 import { cleanDrawing, type Stroke } from "@/lib/notes/drawing"
 import { isClock, isZone } from "@/lib/push/quiet"
 import { deliverPush, pushConfigured } from "@/lib/push/send"
@@ -41,6 +41,7 @@ import {
   STAGES,
   stageOf,
   type ActivityType,
+  ROLE_LABEL,
   type Database,
   type Note,
   type Channel,
@@ -3206,6 +3207,122 @@ export async function deleteNote(id: string): Promise<Result> {
   })
   revalidatePath("/notebook")
   return removed ? { ok: true, message: "Deleted" } : { ok: false, message: "That note is not here" }
+}
+
+/* ------------------------------------------------ Ctrl K search (Phase 2) */
+
+export type SearchHit = {
+  id: string
+  kind: "organisation" | "person" | "deal" | "project" | "task" | "member" | "note" | "board"
+  title: string
+  /** A second line: where it belongs, its stage, who has it. */
+  hint?: string
+  href: string
+}
+
+const MAX_QUERY = 100
+const HITS_EACH = 5
+
+/**
+ * Finds anything in the workspace you are in, by name: organisations, people,
+ * deals, projects, tasks, team members, and the notes and whiteboards you can
+ * see. Never private flags, never another workspace, never someone else's
+ * private notes. Names only: chat has its own search.
+ */
+export async function searchEverything(query: string): Promise<{ ok: true; hits: SearchHit[] } | { ok: false; message: string }> {
+  const { user, workspace } = await requireContext()
+  const q = typeof query === "string" ? query.replace(/\s+/g, " ").trim().toLowerCase() : ""
+  if (q.length === 0) return { ok: true, hits: [] }
+  if (q.length > MAX_QUERY) return { ok: false, message: "That search is too long" }
+
+  const db = await readDb()
+  const here = <T extends { workspace_id: string }>(rows: T[]) => rows.filter((r) => r.workspace_id === workspace.id)
+  // Names that start with the words come first, then names that contain them.
+  const score = (...fields: (string | undefined)[]) => {
+    let best = 0
+    for (const f of fields) {
+      const v = f?.toLowerCase()
+      if (!v) continue
+      if (v.startsWith(q)) best = Math.max(best, 3)
+      else if (v.split(/[\s,.\-/]+/).some((w) => w.startsWith(q))) best = Math.max(best, 2)
+      else if (v.includes(q)) best = Math.max(best, 1)
+    }
+    return best
+  }
+  const top = <T,>(rows: T[], rank: (r: T) => number, hit: (r: T) => SearchHit) =>
+    rows
+      .map((r) => ({ r, s: rank(r) }))
+      .filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, HITS_EACH)
+      .map((x) => hit(x.r))
+
+  const orgName = (id?: string) => (id ? db.organisations.find((o) => o.id === id)?.name : undefined)
+  const personName = (id: string) => db.profiles.find((p) => p.id === id)?.full_name ?? "Someone"
+  const stage = (id: string) => STAGES.find((s) => s.id === id)?.label ?? id
+
+  const hits: SearchHit[] = [
+    ...top(
+      here(db.organisations),
+      (o) => score(o.name, o.email),
+      (o) => ({ id: o.id, kind: "organisation", title: o.name, hint: ORG_CATEGORY_LABEL[o.category], href: `/organisations/${o.id}` })
+    ),
+    ...top(
+      here(db.contacts),
+      (c) => score(c.full_name, c.email, c.phone),
+      (c) => ({
+        id: c.id,
+        kind: "person",
+        title: c.full_name,
+        hint: [c.title, orgName(c.organisation_id)].filter(Boolean).join(" · ") || undefined,
+        href: `/people/${c.id}`,
+      })
+    ),
+    ...top(
+      here(db.deals),
+      (d) => score(d.title),
+      (d) => ({
+        id: d.id,
+        kind: "deal",
+        title: d.title,
+        hint: [orgName(d.organisation_id), stage(d.stage)].filter(Boolean).join(" · "),
+        href: `/deals/${d.id}`,
+      })
+    ),
+    ...top(
+      here(db.projects),
+      (p) => score(p.name),
+      (p) => ({ id: p.id, kind: "project", title: p.name, hint: p.status === "closed" ? "Closed project" : "Project", href: `/projects/${p.id}` })
+    ),
+    ...top(
+      here(db.tasks),
+      (t) => score(t.title),
+      (t) => ({
+        id: t.id,
+        kind: "task",
+        title: t.title,
+        hint: `${TASK_STATUS[t.status].label} · ${personName(t.assignee_id).split(" ")[0]}`,
+        href: taskHref(t, t.assignee_id),
+      })
+    ),
+    ...top(
+      db.memberships.filter((m) => m.workspace_id === workspace.id),
+      (m) => score(personName(m.user_id), db.profiles.find((p) => p.id === m.user_id)?.email),
+      (m) => ({ id: m.user_id, kind: "member", title: personName(m.user_id), hint: ROLE_LABEL[m.role], href: `/team/${m.user_id}` })
+    ),
+    ...top(
+      here(db.notes).filter((n) => canSeeNote(db, n, user.id)),
+      (n) => score(n.title, n.body),
+      (n) => ({
+        id: n.id,
+        kind: n.kind === "board" ? "board" : "note",
+        title: n.title || (n.kind === "board" ? "Whiteboard" : n.body.split("\n")[0].slice(0, 80)),
+        hint: n.author_id === user.id ? (n.kind === "board" ? "Your whiteboard" : "Your note") : `Shared by ${personName(n.author_id).split(" ")[0]}`,
+        href: `/notebook?open=${n.id}`,
+      })
+    ),
+  ]
+  return { ok: true, hits }
 }
 
 /* --------------------------------------------- banners on phones and laptops */

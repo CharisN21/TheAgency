@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app/app-sidebar"
 import { ChatProvider } from "@/components/app/chat"
+import { CommandPaletteProvider } from "@/components/app/command-palette"
 import { LaunchSplash } from "@/components/app/launch-splash"
 import { PushListener } from "@/components/app/push-card"
 import { QuickCaptureProvider } from "@/components/app/quick-capture"
@@ -54,7 +55,13 @@ export default async function AppLayout({
           <PushListener />
           <QuickCaptureProvider key={workspace.id} canEdit={can.edit(role)}>
             <ChatProvider key={workspace.id} userId={user.id}>
-              {children}
+              <CommandPaletteProvider
+                workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
+                currentId={workspace.id}
+                canInvite={can.invite(role)}
+              >
+                {children}
+              </CommandPaletteProvider>
             </ChatProvider>
           </QuickCaptureProvider>
         </SidebarInset>
