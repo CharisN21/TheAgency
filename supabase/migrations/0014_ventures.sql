@@ -10,6 +10,8 @@ create table public.ventures (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(name) between 2 and 80),
   accent_color text not null default '#7c1f35' check (accent_color ~ '^#[0-9a-fA-F]{6}$'),
+  -- The logo's file in the public 'venture-logos' Storage bucket, redrawn as 256 by 256 WebP by the server.
+  logo_path text check (logo_path is null or logo_path ~ '^[0-9a-f-]{36}-[0-9]{13}\.webp$'),
   created_by uuid not null references public.profiles (id),
   created_at timestamptz not null default now()
 );

@@ -64,6 +64,7 @@ export function notify(
         id: n.workspace_id,
         name: venture && venture.name.toLowerCase() !== name.toLowerCase() ? `${venture.name} · ${name}` : name,
         color: venture?.accent_color ?? workspace?.accent_color ?? "",
+        logo: venture?.logo ? `/venture-logo/${venture.logo}` : undefined,
       },
       href: n.href,
       tag: id,

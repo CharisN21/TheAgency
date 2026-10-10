@@ -1,16 +1,22 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { ArrowRight, Loader2, Plus, UserMinus } from "lucide-react"
+import { ArrowRight, ImagePlus, Loader2, Plus, Trash2, UserMinus } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { appointFounder, createWorkspace, enterWorkspace, removeFounder } from "@/lib/data/actions"
+import { appointFounder, createWorkspace, enterWorkspace, removeFounder, removeVentureLogo, setVentureLogo } from "@/lib/data/actions"
 
-/** The venture's mark: its colour and first letter. A logo can replace it once uploads exist. */
-export function VentureMark({ name, color, size = 44 }: { name: string; color: string; size?: number }) {
+/** The venture's mark: its logo, or else its colour and first letter. */
+export function VentureMark({ name, color, logo, size = 44 }: { name: string; color: string; logo?: string; size?: number }) {
+  if (logo) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- a small, already-sized picture from our own server
+      <img src={logo} alt="" width={size} height={size} className="shrink-0 rounded-[22%] object-cover" style={{ width: size, height: size }} />
+    )
+  }
   return (
     <span
       aria-hidden="true"
@@ -37,6 +43,54 @@ export function EnterButton({ workspaceId, name }: { workspaceId: string; name: 
     >
       {pending ? <Loader2 className="animate-spin" /> : <ArrowRight />} Enter
     </Button>
+  )
+}
+
+/** For a venture's founders: change or remove its logo. */
+export function LogoControls({ ventureId, hasLogo }: { ventureId: string; hasLogo: boolean }) {
+  const [pending, start] = useTransition()
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="focus-within:ring-ring hover:bg-muted/60 inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm font-medium focus-within:ring-2">
+        {pending ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+        {hasLogo ? "Change logo" : "Add a logo"}
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="sr-only"
+          disabled={pending}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ""
+            if (!file) return
+            const fd = new FormData()
+            fd.set("venture_id", ventureId)
+            fd.set("logo", file)
+            start(async () => {
+              const r = await setVentureLogo(fd)
+              if (r.ok) toast.success(r.message)
+              else toast.error(r.message)
+            })
+          }}
+        />
+      </label>
+      {hasLogo && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              const r = await removeVentureLogo(ventureId)
+              if (r.ok) toast.success(r.message)
+              else toast.error(r.message)
+            })
+          }
+        >
+          <Trash2 /> Remove logo
+        </Button>
+      )}
+    </div>
   )
 }
 

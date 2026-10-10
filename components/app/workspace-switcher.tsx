@@ -25,7 +25,7 @@ export type SwitcherWorkspace = {
   venture_id: string
 }
 
-export type SwitcherVenture = { id: string; name: string; accent_color: string; canAdd: boolean }
+export type SwitcherVenture = { id: string; name: string; accent_color: string; logo?: string; canAdd: boolean }
 
 const mark = (name: string) => Array.from(name.trim())[0]?.toUpperCase()
 
@@ -53,12 +53,17 @@ export function WorkspaceSwitcher({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton size="lg" className="gap-3" disabled={pending}>
-              <span
-                className="flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white"
-                style={{ backgroundColor: venture.accent_color }}
-              >
-                {mark(venture.name)}
-              </span>
+              {venture.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element -- a small, already-sized picture from our own server
+                <img src={venture.logo} alt="" className="size-8 shrink-0 rounded-md object-cover" />
+              ) : (
+                <span
+                  className="flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white"
+                  style={{ backgroundColor: venture.accent_color }}
+                >
+                  {mark(venture.name)}
+                </span>
+              )}
               <span className="grid flex-1 text-left leading-tight">
                 <span className="truncate font-medium">{current.name}</span>
                 <span className="text-muted-foreground truncate text-xs">

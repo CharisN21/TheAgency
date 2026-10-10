@@ -34,7 +34,7 @@ export default async function VenturesPage() {
                 href={`/ventures/${v.id}`}
                 className="bg-card hover:bg-muted/50 focus-visible:ring-ring flex min-h-20 items-center gap-4 rounded-xl border p-4 transition-colors focus-visible:ring-2 focus-visible:outline-none"
               >
-                <VentureMark name={v.name} color={v.accent_color} />
+                <VentureMark name={v.name} color={v.accent_color} logo={v.logo} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-lg font-semibold">{v.name}</span>
                   <span className="text-muted-foreground block truncate text-sm">

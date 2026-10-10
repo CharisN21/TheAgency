@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import { ArrowLeft, Users } from "lucide-react"
 
 import { EntryShell } from "@/components/app/entry-shell"
-import { EnterButton, NewWorkspaceForm, VentureMark } from "@/components/app/venture-forms"
+import { EnterButton, LogoControls, NewWorkspaceForm, VentureMark } from "@/components/app/venture-forms"
 import { Badge } from "@/components/ui/badge"
 import { listMyVentures } from "@/lib/data/queries"
 import { getUser } from "@/lib/data/session"
@@ -24,9 +24,14 @@ export default async function VenturePage({ params }: { params: Promise<{ id: st
       </Link>
 
       <div className="mt-4 flex items-center gap-4">
-        <VentureMark name={venture.name} color={venture.accent_color} size={56} />
+        <VentureMark name={venture.name} color={venture.accent_color} logo={venture.logo} size={56} />
         <h1 className="min-w-0 truncate text-3xl font-bold tracking-tight">{venture.name}</h1>
       </div>
+      {venture.canAdd && (
+        <div className="mt-4">
+          <LogoControls ventureId={venture.id} hasLogo={Boolean(venture.logo)} />
+        </div>
+      )}
 
       {venture.workspaces.length === 0 ? (
         <p className="text-muted-foreground mt-8 text-sm">No workspaces yet.</p>

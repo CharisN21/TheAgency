@@ -12,6 +12,7 @@ import {
   type MatchReason,
 } from "./match"
 import { audienceOf, canDrawOn, canSeeNote, type Audience } from "@/lib/notes/access"
+import { logoUrl } from "@/lib/ventures/logo"
 import { isFounder, isPlatformOwner, runsVenture } from "./founders"
 import { readDb } from "./store"
 import {
@@ -1227,6 +1228,8 @@ export type VentureCard = {
   id: string
   name: string
   accent_color: string
+  /** Where its logo loads from, if it has one. */
+  logo?: string
   /** Whether this person may add workspaces to it. */
   canAdd: boolean
   workspaces: { id: string; name: string; role: Role; title?: string; people: number }[]
@@ -1247,6 +1250,7 @@ export async function listMyVentures(userId: string): Promise<VentureCard[]> {
       id: v.id,
       name: v.name,
       accent_color: v.accent_color,
+      logo: logoUrl(v.logo),
       canAdd: runsVenture(db, me, v),
       workspaces: mine
         .map((m) => ({ m, w: db.workspaces.find((w) => w.id === m.workspace_id && w.venture_id === v.id) }))

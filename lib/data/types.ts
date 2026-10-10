@@ -43,6 +43,8 @@ export type Venture = {
   id: string
   name: string
   accent_color: string
+  /** The stored logo's file name (lib/ventures/logo.ts). Without one, the mark is the colour and first letter. */
+  logo?: string
   created_by: string
   created_at: string
 }

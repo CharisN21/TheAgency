@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
+import { deleteLogo, saveLogo } from "@/lib/ventures/logo"
 import { isFounder, isPlatformOwner, runsVenture } from "./founders"
 import {
   clearSession,
@@ -195,8 +196,17 @@ export async function createVenture(formData: FormData): Promise<Result> {
   if (first.length < 2 || first.length > 80) return { ok: false, message: "Give its first workspace a name" }
   if (!COLOUR.test(accent)) return { ok: false, message: "Pick one of the colours" }
 
+  const ventureId = newId()
+  const upload = formData.get("logo")
+  let logo: string | undefined
+  if (upload instanceof File && upload.size > 0) {
+    const saved = await saveLogo(ventureId, upload)
+    if (!saved.ok) return saved
+    logo = saved.file
+  }
+
   const workspaceId = await mutate((db) => {
-    const venture = { id: newId(), name, accent_color: accent, created_by: user.id, created_at: now() }
+    const venture = { id: ventureId, name, accent_color: accent, logo, created_by: user.id, created_at: now() }
     db.ventures.push(venture)
     const id = newId()
     db.workspaces.push({ id, venture_id: venture.id, name: first, accent_color: accent, created_by: user.id, created_at: now() })
@@ -208,6 +218,45 @@ export async function createVenture(formData: FormData): Promise<Result> {
   await setCurrentWorkspace(workspaceId)
   revalidatePath("/", "layout")
   redirect("/today?created=1")
+}
+
+/** Changes a venture's logo. Only its founders. */
+export async function setVentureLogo(formData: FormData): Promise<Result> {
+  const user = await getUser()
+  if (!user) redirect("/sign-in")
+  const ventureId = str(formData, "venture_id")
+  const db = await readDb()
+  const venture = db.ventures.find((v) => v.id === ventureId)
+  if (!venture || !runsVenture(db, user, venture)) return { ok: false, message: "Only the founders of this venture can change its logo" }
+
+  const saved = await saveLogo(venture.id, formData.get("logo"))
+  if (!saved.ok) return saved
+  const old = await mutate((d) => {
+    const v = d.ventures.find((x) => x.id === venture.id)!
+    const was = v.logo
+    v.logo = saved.file
+    return was
+  })
+  await deleteLogo(old)
+  revalidatePath("/", "layout")
+  return { ok: true, message: "Logo changed" }
+}
+
+export async function removeVentureLogo(ventureId: string): Promise<Result> {
+  const user = await getUser()
+  if (!user) redirect("/sign-in")
+  const db = await readDb()
+  const venture = db.ventures.find((v) => v.id === ventureId)
+  if (!venture || !runsVenture(db, user, venture)) return { ok: false, message: "Only the founders of this venture can change its logo" }
+  const old = await mutate((d) => {
+    const v = d.ventures.find((x) => x.id === venture.id)!
+    const was = v.logo
+    v.logo = undefined
+    return was
+  })
+  await deleteLogo(old)
+  revalidatePath("/", "layout")
+  return { ok: true, message: "Logo removed. The mark is the colour and first letter again." }
 }
 
 /** Adds a workspace (a team) to a venture you run. */

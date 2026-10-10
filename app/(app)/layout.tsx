@@ -11,6 +11,7 @@ import { listContacts, listDeals, listFlags, listOrganisations, listProjects } f
 import { requireContext } from "@/lib/data/session"
 import { readDb } from "@/lib/data/store"
 import { runsVenture } from "@/lib/data/founders"
+import { logoUrl } from "@/lib/ventures/logo"
 import { can, OPEN_STAGES } from "@/lib/data/types"
 
 /** The app shell: sidebar on desktop, tab bar on iPhone. */
@@ -29,7 +30,7 @@ export default async function AppLayout({
 
   return (
     <TooltipProvider delayDuration={400}>
-      <LaunchSplash name={venture.name} title={workspace.name} color={venture.accent_color} />
+      <LaunchSplash name={venture.name} title={workspace.name} color={venture.accent_color} logo={logoUrl(venture.logo)} />
       <a href="#content" className="skip-link">
         Skip to content
       </a>
@@ -44,7 +45,7 @@ export default async function AppLayout({
             venture_id: w.venture_id,
           }))}
           currentId={workspace.id}
-          venture={{ id: venture.id, name: venture.name, accent_color: venture.accent_color, canAdd: canAddWorkspace }}
+          venture={{ id: venture.id, name: venture.name, accent_color: venture.accent_color, logo: logoUrl(venture.logo), canAdd: canAddWorkspace }}
           user={{ full_name: user.full_name, email: user.email }}
           role={role}
           counts={{
