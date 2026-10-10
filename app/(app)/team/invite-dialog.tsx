@@ -21,7 +21,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { createInvite } from "@/lib/data/actions"
 import { ROLE_HELP, ROLE_LABEL, type Role } from "@/lib/data/types"
 
-const CHOICES: Role[] = ["admin", "member", "viewer"]
+const CHOICES: Role[] = ["admin", "member", "observer", "viewer"]
 
 export function InviteDialog({ workspaceName }: { workspaceName: string }) {
   const params = useSearchParams()

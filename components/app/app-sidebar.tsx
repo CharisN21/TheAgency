@@ -47,10 +47,13 @@ export function AppSidebar({
   user,
   role,
   counts,
+  hidden = [],
 }: {
   workspaces: SwitcherWorkspace[]
   currentId: string
   venture: SwitcherVenture
+  /** Pages this person may not open (an Observer's closed tabs). */
+  hidden?: string[]
   user: { full_name: string; email: string }
   role: Role
   counts: { organisations: number; people: number; openDeals: number; projects: number; flags: number }
@@ -123,18 +126,21 @@ export function AppSidebar({
 
       <SidebarContent>
         <nav aria-label="Main" className="contents">
-        <SidebarGroup>
-          <SidebarGroupLabel>Relationships</SidebarGroupLabel>
-          <SidebarMenu>{RELATIONSHIPS.filter((n) => !n.soon).map(item)}</SidebarMenu>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Work</SidebarGroupLabel>
-          <SidebarMenu>{WORK.filter((n) => !n.soon).map(item)}</SidebarMenu>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-          <SidebarMenu>{WORKSPACE.filter((n) => !n.soon).map(item)}</SidebarMenu>
-        </SidebarGroup>
+        {(
+          [
+            ["Relationships", RELATIONSHIPS],
+            ["Work", WORK],
+            ["Workspace", WORKSPACE],
+          ] as const
+        ).map(([label, items]) => {
+          const shown = items.filter((n) => !n.soon && !hidden.includes(n.href))
+          return shown.length === 0 ? null : (
+            <SidebarGroup key={label}>
+              <SidebarGroupLabel>{label}</SidebarGroupLabel>
+              <SidebarMenu>{shown.map(item)}</SidebarMenu>
+            </SidebarGroup>
+          )
+        })}
         </nav>
       </SidebarContent>
 

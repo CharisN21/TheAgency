@@ -35,7 +35,7 @@ export function canSeeNote(db: Database, n: Note, userId: string): boolean {
 export function canDrawOn(db: Database, n: Note, userId: string, role: Role): boolean {
   if (n.kind !== "board" || !canSeeNote(db, n, userId)) return false
   if (n.author_id === userId) return true
-  if (role === "viewer") return false
+  if (role === "viewer" || role === "observer") return false
   const audience = audienceOf(db, n)
   if (audience === "workspace") return true
   if (audience === "project") {

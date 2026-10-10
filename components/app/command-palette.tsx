@@ -83,11 +83,14 @@ export function CommandPaletteProvider({
   workspaces,
   currentId,
   canInvite,
+  hidden = [],
   children,
 }: {
   workspaces: { id: string; name: string }[]
   currentId: string
   canInvite: boolean
+  /** Pages this person may not open (an Observer's closed tabs). */
+  hidden?: string[]
   children: React.ReactNode
 }) {
   const router = useRouter()
@@ -153,11 +156,11 @@ export function CommandPaletteProvider({
   const matches = (label: string) => !q || label.toLowerCase().includes(q.toLowerCase())
   const actions = [
     { id: "note", label: "New note", hint: "Alt N", icon: PenLine, do: () => run(() => capture?.open()) },
-    { id: "board", label: "New whiteboard", icon: PenTool, do: () => go("/notebook?new=board") },
+    ...(hidden.includes("/notebook") ? [] : [{ id: "board", label: "New whiteboard", icon: PenTool, do: () => go("/notebook?new=board") }]),
     { id: "chat", label: "Open team chat", hint: "Ctrl J", icon: MessageSquare, do: () => run(() => chat?.open()) },
     ...(canInvite ? [{ id: "invite", label: "Invite someone", icon: UserPlus, do: () => go("/team?invite=1") }] : []),
   ].filter((a) => matches(a.label))
-  const pages = PAGES.filter((p) => matches(p.label) || matches(`Go to ${p.label}`))
+  const pages = PAGES.filter((p) => !hidden.includes(p.href) && (matches(p.label) || matches(`Go to ${p.label}`)))
   const switches = workspaces
     .filter((w) => w.id !== currentId && (matches(w.name) || matches(`Switch to ${w.name}`)))
     .map((w) => ({ ...w, href: `/open?w=${encodeURIComponent(w.id)}&to=%2Ftoday` }))

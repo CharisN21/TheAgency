@@ -4,12 +4,12 @@ import { ArrowLeft } from "lucide-react"
 
 import { Band } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { can } from "@/lib/data/types"
 import { ImportWizard } from "./wizard"
 
 export default async function ImportPage() {
-  const { role, workspace } = await requireContext()
+  const { role, workspace } = await requireTab("organisations")
   if (!can.edit(role)) redirect("/organisations")
 
   return (

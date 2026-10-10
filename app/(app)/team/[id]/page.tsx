@@ -18,7 +18,7 @@ import {
   listProjects,
   listTasks,
 } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { ORG_CATEGORY_LABEL, ROLE_LABEL, can, money, moneyShort, stageOf } from "@/lib/data/types"
 
 const initials = (name: string) =>
@@ -53,7 +53,7 @@ function Empty({ icon: Icon, children }: { icon: typeof Contact; children: React
 
 export default async function MemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("team")
   // Someone who may not see this page learns nothing about it, not even that it exists.
   if (!can.viewMember(role, user.id, id)) notFound()
 
@@ -67,7 +67,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   const objectives = await listObjectives(workspace.id, id)
   // You set your own objectives; owners and admins set anyone's.
   const canSetObjectives =
-    canEdit && (id === user.id || can.editWorkspace(role)) && found.member.role !== "viewer"
+    canEdit && (id === user.id || can.editWorkspace(role)) && can.work(found.member.role)
 
   const { member, organisations, contacts, openDeals, closedDeals } = found
   const self = member.id === user.id
@@ -137,7 +137,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
             />
           </div>
 
-          {!self && canEdit && (
+          {!self && can.raiseFlag(role) && (
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
               <RaiseFlag
                 people={[{ value: member.id, label: member.full_name }]}

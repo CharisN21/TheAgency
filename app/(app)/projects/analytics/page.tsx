@@ -8,13 +8,13 @@ import { PageHeader } from "@/components/app/page-header"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "cn"
 import { getAnalytics } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { HEALTH, can } from "@/lib/data/types"
 
 const pct = (n: number | null) => (n === null ? "—" : `${n}%`)
 
 export default async function AnalyticsPage() {
-  const { workspace, role } = await requireContext()
+  const { workspace, role } = await requireTab("projects")
   // Owners and admins only. Everyone else learns nothing, not even that it exists.
   if (!can.editWorkspace(role)) notFound()
 

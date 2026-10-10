@@ -45,7 +45,9 @@ import {
   type ActivityType,
   ROLE_LABEL,
   ROLES,
+  OBSERVABLE_TABS,
   type Database,
+  type ObservableTab,
   type Note,
   type Channel,
   type OrgCategory,
@@ -1630,7 +1632,7 @@ function checkTaskLinks(
   if (f.assignee_id) {
     const m = db.memberships.find((x) => x.workspace_id === workspaceId && x.user_id === f.assignee_id)
     if (!m) return "The task has to be for someone in this workspace"
-    if (m.role === "viewer") return "Viewers cannot take tasks. Change their role first."
+    if (!can.work(m.role)) return "Viewers and Observers cannot take tasks. Change their role first."
   }
   const here = (rows: { id: string; workspace_id: string }[], id?: string) =>
     !id || rows.some((r) => r.id === id && r.workspace_id === workspaceId)
@@ -1931,7 +1933,7 @@ export async function createObjective(formData: FormData): Promise<Result> {
 
   const db = await readDb()
   const member = db.memberships.find((m) => m.workspace_id === workspace.id && m.user_id === owner_id)
-  if (!member || member.role === "viewer") return { ok: false, message: "Objectives are for people who can work in this workspace" }
+  if (!member || !can.work(member.role)) return { ok: false, message: "Objectives are for people who can work in this workspace" }
 
   const title = str(formData, "title")
   if (title.length < 2) return { ok: false, message: "Say what the objective is" }
@@ -2077,7 +2079,7 @@ export async function postCheckIn(projectId: string, formData: FormData): Promis
 
 export async function raiseFlag(formData: FormData): Promise<Result & { id?: string }> {
   const { user, workspace, role } = await requireContext()
-  if (!can.edit(role)) return { ok: false, message: "Viewers cannot raise flags" }
+  if (!can.raiseFlag(role)) return { ok: false, message: "Viewers cannot raise flags" }
 
   const severity = str(formData, "severity") as FlagSeverity
   if (!(severity in SEVERITY)) return { ok: false, message: "Pick note, warning or serious" }
@@ -2353,7 +2355,7 @@ export async function suggestTeam(projectId: string): Promise<Result & { id?: st
   const { ctx, db, project } = got
 
   const people = db.memberships
-    .filter((m) => m.workspace_id === ctx.workspace.id && m.role !== "viewer")
+    .filter((m) => m.workspace_id === ctx.workspace.id && can.work(m.role))
     .map((m) => ({
       id: m.user_id,
       name: firstName(db.profiles.find((x) => x.id === m.user_id)?.full_name),
@@ -2434,7 +2436,7 @@ export async function decideSuggestion(
     if (kind === "role") {
       const member = (line as SuggestedRole).suggested_member_id
       const canWork = d.memberships.some(
-        (m) => m.workspace_id === workspace.id && m.user_id === member && m.role !== "viewer"
+        (m) => m.workspace_id === workspace.id && m.user_id === member && can.work(m.role)
       )
       if (member && canWork) {
         if (!project.member_ids.includes(member)) project.member_ids.push(member)
@@ -2554,7 +2556,7 @@ export async function bulkPeopleOwner(ids: string[], userId: string): Promise<Re
   if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
   const member = g.db.memberships.find((m) => m.workspace_id === g.ctx.workspace.id && m.user_id === userId)
   const target = g.db.profiles.find((p) => p.id === userId)
-  if (!member || !target || member.role === "viewer") {
+  if (!member || !target || !can.work(member.role)) {
     return { ok: false, message: "The owner has to be someone who can work in this workspace" }
   }
 
@@ -2693,7 +2695,7 @@ export async function bulkDealsOwner(ids: string[], userId: string): Promise<Res
   if ("error" in g) return { ok: false, message: g.error ?? "Not allowed" }
   const member = g.db.memberships.find((m) => m.workspace_id === g.ctx.workspace.id && m.user_id === userId)
   const target = g.db.profiles.find((p) => p.id === userId)
-  if (!member || !target || member.role === "viewer") {
+  if (!member || !target || !can.work(member.role)) {
     return { ok: false, message: "The owner has to be someone who can work in this workspace" }
   }
 
@@ -3078,7 +3080,7 @@ export async function updateContact(contactId: string, formData: FormData): Prom
   }
   const owner_id = str(formData, "owner_id") || person.owner_id
   const owner = db.memberships.find((m) => m.workspace_id === workspace.id && m.user_id === owner_id)
-  if (!owner || owner.role === "viewer") {
+  if (!owner || !can.work(owner.role)) {
     return { ok: false, message: "The owner has to be someone who can work in this workspace" }
   }
 
@@ -3372,7 +3374,7 @@ const HITS_EACH = 5
  * private notes. Names only: chat has its own search.
  */
 export async function searchEverything(query: string): Promise<{ ok: true; hits: SearchHit[] } | { ok: false; message: string }> {
-  const { user, workspace } = await requireContext()
+  const { user, workspace, role } = await requireContext()
   const q = typeof query === "string" ? query.replace(/\s+/g, " ").trim().toLowerCase() : ""
   if (q.length === 0) return { ok: true, hits: [] }
   if (q.length > MAX_QUERY) return { ok: false, message: "That search is too long" }
@@ -3464,7 +3466,18 @@ export async function searchEverything(query: string): Promise<{ ok: true; hits:
       })
     ),
   ]
-  return { ok: true, hits }
+  // An Observer only finds what lives in the tabs open to them. Tasks live with projects.
+  const tabOf: Record<SearchHit["kind"], ObservableTab> = {
+    organisation: "organisations",
+    person: "people",
+    deal: "deals",
+    project: "projects",
+    task: "projects",
+    member: "team",
+    note: "notebook",
+    board: "notebook",
+  }
+  return { ok: true, hits: hits.filter((h) => can.seeTab(role, workspace, tabOf[h.kind])) }
 }
 
 /* --------------------------------------------- banners on phones and laptops */
@@ -3577,6 +3590,24 @@ export async function setBannerSettings(input: {
     }
   })
   revalidatePath("/settings")
+  return { ok: true, message: "Saved" }
+}
+
+/** Which tabs Observers in this workspace may open. Owners and admins only. */
+export async function setObserverTabs(tabs: string[]): Promise<Result> {
+  const { user, workspace, role } = await requireContext()
+  if (!can.editWorkspace(role)) return { ok: false, message: "Only owners and admins choose what Observers see" }
+  if (!Array.isArray(tabs)) return { ok: false, message: "Pick the tabs" }
+  const allowed = OBSERVABLE_TABS.map((t) => t.key)
+  const chosen = [...new Set(tabs)].filter((t): t is ObservableTab => (allowed as string[]).includes(t))
+  if (chosen.length !== new Set(tabs).size) return { ok: false, message: "That is not a tab" }
+
+  await mutate((d) => {
+    const w = d.workspaces.find((x) => x.id === workspace.id)!
+    w.observer_tabs = chosen
+    log(d, workspace.id, user.id, chosen.length ? `let Observers see ${chosen.join(", ")}` : "closed every tab to Observers")
+  })
+  revalidatePath("/", "layout")
   return { ok: true, message: "Saved" }
 }
 

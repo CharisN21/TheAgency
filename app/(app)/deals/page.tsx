@@ -7,7 +7,7 @@ import { FilterBar } from "@/components/app/filter-bar"
 import { PageHeader } from "@/components/app/page-header"
 import { cn } from "cn"
 import { getPipeline, listMembers, listOrganisations, listViews } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { can, money, moneyShort } from "@/lib/data/types"
 import { DealTable } from "./deal-table"
 import { NewDeal } from "./new-deal"
@@ -26,7 +26,7 @@ export default async function DealsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>
 }) {
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("deals")
   const sp = await searchParams
   const asList = sp.view === "list"
   const filters = {
@@ -219,7 +219,7 @@ export default async function DealsPage({
                     ownerName: d.owner?.full_name ?? "Unassigned",
                   }))}
                   owners={members
-                    .filter((m) => m.role !== "viewer")
+                    .filter((m) => can.work(m.role))
                     .map((m) => ({ value: m.id, label: m.full_name }))}
                   canEdit={can.edit(role)}
                   canDelete={can.editWorkspace(role)}

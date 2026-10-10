@@ -5,7 +5,7 @@ import { redirect } from "next/navigation"
 
 import { readDb } from "./store"
 import { isFounder } from "./founders"
-import type { Membership, Profile, Role, Venture, Workspace } from "./types"
+import { can, type Membership, type ObservableTab, type Profile, type Role, type Venture, type Workspace } from "./types"
 
 export const SESSION_COOKIE = "agency_user"
 export const WORKSPACE_COOKIE = "agency_workspace"
@@ -83,4 +83,14 @@ export async function requireContext(): Promise<Context> {
     ({ id: workspace.venture_id, name: workspace.name, accent_color: workspace.accent_color, created_by: workspace.created_by, created_at: workspace.created_at } as Venture)
 
   return { user, workspace, venture, role: workspace.role, workspaces }
+}
+
+/**
+ * For a page under one of the tabs Observers may or may not see: an Observer
+ * whose workspace has not opened that tab to them goes back to Today.
+ */
+export async function requireTab(tab: ObservableTab): Promise<Context> {
+  const ctx = await requireContext()
+  if (!can.seeTab(ctx.role, ctx.workspace, tab)) redirect("/today")
+  return ctx
 }

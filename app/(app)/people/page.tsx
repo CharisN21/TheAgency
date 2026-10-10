@@ -15,7 +15,7 @@ import {
   listPeopleTags,
   listViews,
 } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { can } from "@/lib/data/types"
 import { PeopleTable } from "./people-table"
 
@@ -32,7 +32,7 @@ export default async function PeoplePage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>
 }) {
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("people")
   const sp = await searchParams
 
   const [shown, everyone, duplicates, members, organisations, tags, views] = await Promise.all([
@@ -181,7 +181,7 @@ export default async function PeoplePage({
                     ownerName: p.owner?.full_name ?? "Unassigned",
                   }))}
                   owners={members
-                    .filter((m) => m.role !== "viewer")
+                    .filter((m) => can.work(m.role))
                     .map((m) => ({ value: m.id, label: m.full_name }))}
                   canEdit={can.edit(role)}
                   canDelete={can.editWorkspace(role)}

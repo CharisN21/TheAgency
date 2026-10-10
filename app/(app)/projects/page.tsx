@@ -8,7 +8,7 @@ import { ProjectForm } from "@/components/app/projects"
 import { Button } from "@/components/ui/button"
 import { cn } from "cn"
 import { listAssignees, listOrganisations, listProjects, type ProjectRow } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { HEALTH, can } from "@/lib/data/types"
 
 const initials = (name: string) =>
@@ -89,7 +89,7 @@ function ProjectCard({ p }: { p: ProjectRow }) {
 }
 
 export default async function ProjectsPage() {
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("projects")
   const [projects, people, organisations] = await Promise.all([
     listProjects(workspace.id),
     listAssignees(workspace.id),

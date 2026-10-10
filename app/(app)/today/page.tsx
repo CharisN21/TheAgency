@@ -70,13 +70,19 @@ export default async function TodayPage() {
   const greeting = hour < 12 ? "Morning" : hour < 18 ? "Afternoon" : "Evening"
   const firstName = user.full_name.split(" ")[0]
   const { pipeline, touchesDue, stale } = numbers
+  // An Observer sees only what lives in the tabs open to them.
+  const sees = {
+    deals: can.seeTab(role, workspace, "deals"),
+    people: can.seeTab(role, workspace, "people"),
+    organisations: can.seeTab(role, workspace, "organisations"),
+  }
 
   // Which bands are showing decides their tone, so neighbours always differ.
   const shown = [
     tasksNow.length > 0 && "tasks",
     checkInsDue.length > 0 && "checkins",
-    touchesDue.length > 0 && "speak",
-    pipeline.closingSoon.length > 0 && "closing",
+    sees.people && touchesDue.length > 0 && "speak",
+    sees.deals && pipeline.closingSoon.length > 0 && "closing",
     setup.done < setup.total && "setup",
   ].filter(Boolean)
   const band = {
@@ -136,6 +142,7 @@ export default async function TodayPage() {
 
           {/* The three numbers that matter before anything else. */}
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {sees.deals && (
             <Link href="/deals">
               <Card className="hover:border-primary/40 h-full py-0 transition-colors">
                 <CardContent className="p-4">
@@ -150,6 +157,8 @@ export default async function TodayPage() {
                 </CardContent>
               </Card>
             </Link>
+            )}
+            {sees.people && (
             <Link href="/people">
               <Card className="hover:border-primary/40 h-full py-0 transition-colors">
                 <CardContent className="p-4">
@@ -163,6 +172,8 @@ export default async function TodayPage() {
                 </CardContent>
               </Card>
             </Link>
+            )}
+            {sees.organisations && (
             <Link href="/organisations?stale=1">
               <Card className="hover:border-primary/40 h-full py-0 transition-colors">
                 <CardContent className="p-4">
@@ -174,6 +185,7 @@ export default async function TodayPage() {
                 </CardContent>
               </Card>
             </Link>
+            )}
           </div>
         </Band>
 
