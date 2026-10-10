@@ -119,6 +119,8 @@ describe("working with your own notes", () => {
     as(f.wanjiru.id)
     const first = (await actions.captureNote("first"))!.id!
     const second = (await actions.captureNote("second"))!.id!
+    // The edit must come after "second" was written, even on a fast machine.
+    await new Promise((r) => setTimeout(r, 5))
 
     expect((await actions.updateNote(first, "first, edited")).ok).toBe(true)
     expect((await actions.updateNote(first, "   ")).ok).toBe(false)
