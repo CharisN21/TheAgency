@@ -19,6 +19,7 @@ The look is fixed and lives in a published design system (maroon `#7c1f35` on wa
 - Colours, radii and spacing are CSS variables in `app/globals.css`, mapped to shadcn role names. **Never hard-code a hex in a component.**
 - `primary` is the maroon. `accent` / `accent-foreground` is the soft maroon tint used for selected rows. `ok` / `warn` / `destructive` / `info` are status only, and every status also carries a word.
 - `brass` is decorative only: the logo ring, the hairline on the landing page. Never text, never a control.
+- **Venture themes** (decided 10 Oct 2026): a venture with a logo dresses its workspaces in the logo's colours. `lib/ventures/palette.ts` picks a primary and a secondary from the logo and builds every colour role (primary, hover, secondary, accent, ring, sidebar, charts, band glow) for light and dark, each text-on-colour pair at least 4.5:1. Status colours are never themed. Main Hub, and ventures without a logo, keep the maroon. Components still never hard-code a hex.
 - The brand mark lives in `components/brand/logo.tsx`. The landing-page logo sequence is in `components/brand/logo-intro.tsx` plus the `brand-*` rules at the end of `globals.css`.
 
 ## Naming (settled 24 Sep 2026)

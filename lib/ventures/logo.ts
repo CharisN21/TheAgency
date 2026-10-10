@@ -5,6 +5,8 @@ import path from "node:path"
 
 import sharp from "sharp"
 
+import { pickColours, type BrandColours } from "./palette"
+
 /**
  * A venture's logo. The file someone uploads is never kept: it is checked to
  * be a real JPG, PNG or WebP, then drawn again as a clean 256 by 256 picture,
@@ -29,7 +31,7 @@ function kindOf(b: Buffer): "jpeg" | "png" | "webp" | null {
   return null
 }
 
-export type LogoResult = { ok: true; file: string } | { ok: false; message: string }
+export type LogoResult = { ok: true; file: string; colours: BrandColours | null } | { ok: false; message: string }
 
 /** Checks, redraws and saves a logo for a venture. Returns the stored file's name. */
 export async function saveLogo(ventureId: string, upload: unknown): Promise<LogoResult> {
@@ -49,10 +51,14 @@ export async function saveLogo(ventureId: string, upload: unknown): Promise<Logo
     return { ok: false, message: "That picture could not be read. Try another one." }
   }
 
+  // The theme comes from the cleaned picture, shrunk so picking colours is quick.
+  const { data } = await sharp(clean).resize(64, 64, { fit: "inside" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const colours = pickColours(data, 4)
+
   const file = `${ventureId}-${Date.now()}.webp`
   await mkdir(folder(), { recursive: true })
   await writeFile(path.join(folder(), file), clean)
-  return { ok: true, file }
+  return { ok: true, file, colours }
 }
 
 export async function deleteLogo(file: string | undefined) {
@@ -68,6 +74,14 @@ export async function readLogo(file: string): Promise<Buffer | null> {
   } catch {
     return null
   }
+}
+
+/** The colours of a logo already stored, for ventures whose logo came before themes did. */
+export async function coloursOf(file: string): Promise<BrandColours | null> {
+  const stored = await readLogo(file)
+  if (!stored) return null
+  const { data } = await sharp(stored).resize(64, 64, { fit: "inside" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  return pickColours(data, 4)
 }
 
 /** Where the browser loads a logo from. */

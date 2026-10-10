@@ -201,14 +201,16 @@ export async function createVenture(formData: FormData): Promise<Result> {
   const ventureId = newId()
   const upload = formData.get("logo")
   let logo: string | undefined
+  let theme: { primary: string; secondary: string } | undefined
   if (upload instanceof File && upload.size > 0) {
     const saved = await saveLogo(ventureId, upload)
     if (!saved.ok) return saved
     logo = saved.file
+    theme = saved.colours ?? undefined
   }
 
   const workspaceId = await mutate((db) => {
-    const venture = { id: ventureId, name, accent_color: accent, logo, created_by: user.id, created_at: now() }
+    const venture = { id: ventureId, name, accent_color: accent, logo, theme, created_by: user.id, created_at: now() }
     db.ventures.push(venture)
     const id = newId()
     db.workspaces.push({ id, venture_id: venture.id, name: first, accent_color: accent, created_by: user.id, created_at: now() })
@@ -237,6 +239,7 @@ export async function setVentureLogo(formData: FormData): Promise<Result> {
     const v = d.ventures.find((x) => x.id === venture.id)!
     const was = v.logo
     v.logo = saved.file
+    v.theme = saved.colours ?? undefined
     return was
   })
   await deleteLogo(old)
@@ -254,11 +257,12 @@ export async function removeVentureLogo(ventureId: string): Promise<Result> {
     const v = d.ventures.find((x) => x.id === venture.id)!
     const was = v.logo
     v.logo = undefined
+    v.theme = undefined
     return was
   })
   await deleteLogo(old)
   revalidatePath("/", "layout")
-  return { ok: true, message: "Logo removed. The mark is the colour and first letter again." }
+  return { ok: true, message: "Logo removed. Its workspaces are back to The Agency's colours." }
 }
 
 /** Adds a workspace (a team) to a venture you run. */

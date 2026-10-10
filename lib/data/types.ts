@@ -62,6 +62,8 @@ export type Venture = {
   accent_color: string
   /** The stored logo's file name (lib/ventures/logo.ts). Without one, the mark is the colour and first letter. */
   logo?: string
+  /** The two colours picked from the logo. Its workspaces take their theme from them; without a logo, The Agency's maroon. */
+  theme?: { primary: string; secondary: string }
   created_by: string
   created_at: string
 }

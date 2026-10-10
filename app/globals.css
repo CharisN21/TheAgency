@@ -233,6 +233,7 @@
 :root {
   --band-maroon: var(--primary);
   --band-ink: #1b1719;
+  --band-glow: rgb(124 31 53 / 0.35);
 }
 .dark {
   --band-ink: #1c1a1b;
@@ -271,7 +272,7 @@
 }
 .band-ink {
   background-color: var(--band-ink);
-  background-image: radial-gradient(120% 160% at 100% 0%, rgb(124 31 53 / 0.35), transparent 60%);
+  background-image: radial-gradient(120% 160% at 100% 0%, var(--band-glow), transparent 60%);
 }
 
 /* ---- Navigation: a page fades in on arrival (app/(app)/template.tsx), and the
