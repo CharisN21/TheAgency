@@ -23,3 +23,7 @@ jobs:
         run: npm run lint
       - name: Privacy tests
         run: npm test
+      - name: Database migrations run in order, every table protected
+        run: npm run check:migrations
+      - name: Production build
+        run: npm run build
