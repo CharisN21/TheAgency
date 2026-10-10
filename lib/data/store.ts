@@ -25,14 +25,16 @@ export const newToken = () => randomBytes(9).toString("base64url")
 
 /** Demo data so the screens have something to judge. Reset it from Settings. */
 export function seed(): Database {
-  const charis = { id: newId(), email: "charis@example.com", full_name: "Charis N.", created_at: now() }
+  const charis = { id: newId(), email: "charis@example.com", full_name: "Charis N.", founder: true, created_at: now() }
   const wanjiru = { id: newId(), email: "wanjiru@example.com", full_name: "Wanjiru Kamau", created_at: now() }
   const otieno = { id: newId(), email: "otieno@example.com", full_name: "Otieno Odhiambo", created_at: now() }
   const achieng = { id: newId(), email: "achieng@example.com", full_name: "Achieng Njeri", created_at: now() }
   const brian = { id: newId(), email: "brian@example.com", full_name: "Brian Mwangi", created_at: now() }
 
-  const kilima = { id: newId(), name: "Kilima Labs", accent_color: "#7c1f35", created_by: charis.id, created_at: now() }
-  const ppe = { id: newId(), name: "Nairobi PPE Supply", accent_color: "#186b33", created_by: charis.id, created_at: now() }
+  const kilimaVenture = { id: newId(), name: "Kilima Labs", accent_color: "#7c1f35", created_by: charis.id, created_at: now() }
+  const ppeVenture = { id: newId(), name: "Nairobi PPE Supply", accent_color: "#186b33", created_by: charis.id, created_at: now() }
+  const kilima = { id: newId(), venture_id: kilimaVenture.id, name: "Kilima Labs", accent_color: "#7c1f35", created_by: charis.id, created_at: now() }
+  const ppe = { id: newId(), venture_id: ppeVenture.id, name: "Nairobi PPE Supply", accent_color: "#186b33", created_by: charis.id, created_at: now() }
 
   const org = (
     name: string,
@@ -252,6 +254,7 @@ export function seed(): Database {
 
   return {
     profiles: [charis, wanjiru, otieno, achieng, brian],
+    ventures: [kilimaVenture, ppeVenture],
     workspaces: [kilima, ppe],
     memberships: [
       { workspace_id: kilima.id, user_id: charis.id, role: "owner", title: "Founder", created_at: now() },
@@ -393,6 +396,19 @@ export async function readDb(): Promise<Database> {
     // A store written before the workspace rename is not worth migrating by hand.
     if (!parsed.workspaces || !parsed.deals) throw new Error("stale shape")
     parsed.views ??= []
+    // Ventures came later: each workspace without one becomes its own venture,
+    // and anyone who had created a workspace stays able to (a founder).
+    parsed.ventures ??= []
+    for (const w of parsed.workspaces) {
+      if (!w.venture_id || !parsed.ventures.some((v) => v.id === w.venture_id)) {
+        const v = { id: randomUUID(), name: w.name, accent_color: w.accent_color, created_by: w.created_by, created_at: w.created_at }
+        parsed.ventures.push(v)
+        w.venture_id = v.id
+      }
+    }
+    for (const p of parsed.profiles ?? []) {
+      if (p.founder === undefined && parsed.workspaces.some((w) => w.created_by === p.id)) p.founder = true
+    }
     parsed.not_duplicates ??= []
     parsed.projects ??= []
     parsed.tasks ??= []

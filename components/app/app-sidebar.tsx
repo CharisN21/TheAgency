@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/sidebar"
 import { ROLE_LABEL, type Role } from "@/lib/data/types"
 import { LinkPending } from "./link-pending"
-import { WorkspaceSwitcher, type SwitcherWorkspace } from "./workspace-switcher"
+import { WorkspaceSwitcher, type SwitcherVenture, type SwitcherWorkspace } from "./workspace-switcher"
 
 type Item = {
   href: string
@@ -43,12 +43,14 @@ type Item = {
 export function AppSidebar({
   workspaces,
   currentId,
+  venture,
   user,
   role,
   counts,
 }: {
   workspaces: SwitcherWorkspace[]
   currentId: string
+  venture: SwitcherVenture
   user: { full_name: string; email: string }
   role: Role
   counts: { organisations: number; people: number; openDeals: number; projects: number; flags: number }
@@ -116,7 +118,7 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <WorkspaceSwitcher workspaces={workspaces} currentId={currentId} />
+        <WorkspaceSwitcher workspaces={workspaces} currentId={currentId} venture={venture} />
       </SidebarHeader>
 
       <SidebarContent>

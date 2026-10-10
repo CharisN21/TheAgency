@@ -8,7 +8,7 @@ export type PushItem = {
   /** What happened. Safe to read on a lock screen. */
   title: string
   /** The workspace it is about: its name heads the banner and its mark is the icon. */
-  workspace: { id: string; name: string; color: string }
+  workspace: { id: string; name: string; color: string; logo?: string }
   /** The page inside the app it opens. */
   href?: string
   /** Same tag replaces an earlier banner instead of stacking. */

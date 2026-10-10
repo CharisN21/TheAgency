@@ -9,13 +9,16 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { listContacts, listDeals, listFlags, listOrganisations, listProjects } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
+import { readDb } from "@/lib/data/store"
+import { runsVenture } from "@/lib/data/founders"
+import { logoUrl } from "@/lib/ventures/logo"
 import { can, OPEN_STAGES } from "@/lib/data/types"
 
 /** The app shell: sidebar on desktop, tab bar on iPhone. */
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const { user, workspace, role, workspaces } = await requireContext()
+  const { user, workspace, venture, role, workspaces } = await requireContext()
   const [organisations, people, deals, projects, flags] = await Promise.all([
     listOrganisations(workspace.id),
     listContacts(workspace.id),
@@ -23,10 +26,11 @@ export default async function AppLayout({
     listProjects(workspace.id),
     listFlags(workspace.id, { id: user.id, role }),
   ])
+  const canAddWorkspace = runsVenture(await readDb(), user, venture)
 
   return (
     <TooltipProvider delayDuration={400}>
-      <LaunchSplash name={workspace.name} color={workspace.accent_color} />
+      <LaunchSplash name={venture.name} title={workspace.name} color={venture.accent_color} logo={logoUrl(venture.logo)} />
       <a href="#content" className="skip-link">
         Skip to content
       </a>
@@ -38,8 +42,10 @@ export default async function AppLayout({
             role: w.role,
             people: w.people,
             accent_color: w.accent_color,
+            venture_id: w.venture_id,
           }))}
           currentId={workspace.id}
+          venture={{ id: venture.id, name: venture.name, accent_color: venture.accent_color, logo: logoUrl(venture.logo), canAdd: canAddWorkspace }}
           user={{ full_name: user.full_name, email: user.email }}
           role={role}
           counts={{

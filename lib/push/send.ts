@@ -40,7 +40,7 @@ export async function deliverPush(items: PushItem[]): Promise<{ sent: number; re
           const payload = JSON.stringify({
             title: item.workspace.name,
             body: item.title,
-            icon: workspaceIconPath(item.workspace.name, item.workspace.color),
+            icon: item.workspace.logo ?? workspaceIconPath(item.workspace.name, item.workspace.color),
             href: openLink(item.workspace.id, item.href),
             tag: item.tag,
           })

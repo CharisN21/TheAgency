@@ -15,14 +15,16 @@ export async function loadFixture() {
   const person = (first: string) => db.profiles.find((p) => p.full_name.startsWith(first))!
 
   const zawadi = { id: randomUUID(), email: "zawadi@example.com", full_name: "Zawadi Achieng", created_at: kilima.created_at }
-  const elsewhere = { ...kilima, id: randomUUID(), name: "Elsewhere", created_by: zawadi.id }
+  const elsewhereVenture = { id: randomUUID(), name: "Elsewhere", accent_color: "#0b62c4", created_by: zawadi.id, created_at: kilima.created_at }
+  const elsewhere = { ...kilima, id: randomUUID(), venture_id: elsewhereVenture.id, name: "Elsewhere", created_by: zawadi.id }
   db.profiles.push(zawadi)
+  db.ventures.push(elsewhereVenture)
   db.workspaces.push(elsewhere)
   db.memberships.push({ workspace_id: elsewhere.id, user_id: zawadi.id, role: "owner", created_at: kilima.created_at })
 
   // Copy every Kilima record into Elsewhere, giving each copy (and every link between copies) a new id.
   const tables = (Object.keys(db) as (keyof Database)[]).filter(
-    (t) => t !== "workspaces" && t !== "memberships" && t !== "profiles",
+    (t) => t !== "workspaces" && t !== "memberships" && t !== "profiles" && t !== "ventures",
   )
   const rows: { table: keyof Database; row: Record<string, unknown> }[] = []
   for (const table of tables) {
@@ -44,6 +46,7 @@ export async function loadFixture() {
     db,
     kilima,
     elsewhere,
+    elsewhereVenture,
     zawadi,
     charis: person("Charis"),
     wanjiru: person("Wanjiru"),

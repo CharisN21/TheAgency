@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
+import { deleteLogo, saveLogo } from "@/lib/ventures/logo"
+import { isFounder, isPlatformOwner, runsVenture } from "./founders"
 import {
   clearSession,
   getUser,
@@ -42,6 +44,7 @@ import {
   stageOf,
   type ActivityType,
   ROLE_LABEL,
+  ROLES,
   type Database,
   type Note,
   type Channel,
@@ -144,9 +147,7 @@ export async function signIn(formData: FormData): Promise<Result> {
 
   await setSession(userId)
 
-  const db = await readDb()
-  const hasWorkspace = db.memberships.some((m) => m.user_id === userId)
-  redirect(hasWorkspace ? "/today" : "/new-workspace")
+  redirect(homeFor(await readDb(), userId))
 }
 
 export async function signOut(): Promise<void> {
@@ -167,38 +168,173 @@ export async function switchWorkspace(workspaceId: string): Promise<void> {
 
 /* -------------------------------------------------------------- workspaces */
 
-export async function createWorkspace(formData: FormData): Promise<Result> {
+const COLOUR = /^#[0-9a-fA-F]{6}$/
+
+/** Where someone goes once signed in: their only workspace, or the list of ventures. */
+function homeFor(db: Database, userId: string) {
+  const mine = db.memberships.filter((m) => m.user_id === userId)
+  if (mine.length === 1) return "/today"
+  if (mine.length > 1) return "/ventures"
+  const p = db.profiles.find((x) => x.id === userId)
+  return p && isFounder(p) ? "/ventures" : "/welcome"
+}
+
+/**
+ * Starts a venture with its first workspace. Founders only: everyone else only
+ * gets into the workspaces they are invited to.
+ */
+export async function createVenture(formData: FormData): Promise<Result> {
   const user = await getUser()
   if (!user) redirect("/sign-in")
+  if (!isFounder(user)) return { ok: false, message: "Only founders can start a venture. Ask the person who runs The Agency." }
 
   const name = str(formData, "name")
+  const first = str(formData, "workspace") || "Main team"
   const title = str(formData, "title")
   const accent = str(formData, "accent") || "#7c1f35"
-  if (name.length < 2) return { ok: false, message: "Give the workspace a name" }
+  if (name.length < 2 || name.length > 80) return { ok: false, message: "Give the venture a name" }
+  if (first.length < 2 || first.length > 80) return { ok: false, message: "Give its first workspace a name" }
+  if (!COLOUR.test(accent)) return { ok: false, message: "Pick one of the colours" }
+
+  const ventureId = newId()
+  const upload = formData.get("logo")
+  let logo: string | undefined
+  if (upload instanceof File && upload.size > 0) {
+    const saved = await saveLogo(ventureId, upload)
+    if (!saved.ok) return saved
+    logo = saved.file
+  }
 
   const workspaceId = await mutate((db) => {
+    const venture = { id: ventureId, name, accent_color: accent, logo, created_by: user.id, created_at: now() }
+    db.ventures.push(venture)
     const id = newId()
-    db.workspaces.push({
-      id,
-      name,
-      accent_color: accent,
-      created_by: user.id,
-      created_at: now(),
-    })
-    db.memberships.push({
-      workspace_id: id,
-      user_id: user.id,
-      role: "owner",
-      title: title || undefined,
-      created_at: now(),
-    })
-    log(db, id, user.id, `created ${name}`)
+    db.workspaces.push({ id, venture_id: venture.id, name: first, accent_color: accent, created_by: user.id, created_at: now() })
+    db.memberships.push({ workspace_id: id, user_id: user.id, role: "owner", title: title || undefined, created_at: now() })
+    log(db, id, user.id, `started ${name} with ${first}`)
     return id
   })
 
   await setCurrentWorkspace(workspaceId)
   revalidatePath("/", "layout")
   redirect("/today?created=1")
+}
+
+/** Changes a venture's logo. Only its founders. */
+export async function setVentureLogo(formData: FormData): Promise<Result> {
+  const user = await getUser()
+  if (!user) redirect("/sign-in")
+  const ventureId = str(formData, "venture_id")
+  const db = await readDb()
+  const venture = db.ventures.find((v) => v.id === ventureId)
+  if (!venture || !runsVenture(db, user, venture)) return { ok: false, message: "Only the founders of this venture can change its logo" }
+
+  const saved = await saveLogo(venture.id, formData.get("logo"))
+  if (!saved.ok) return saved
+  const old = await mutate((d) => {
+    const v = d.ventures.find((x) => x.id === venture.id)!
+    const was = v.logo
+    v.logo = saved.file
+    return was
+  })
+  await deleteLogo(old)
+  revalidatePath("/", "layout")
+  return { ok: true, message: "Logo changed" }
+}
+
+export async function removeVentureLogo(ventureId: string): Promise<Result> {
+  const user = await getUser()
+  if (!user) redirect("/sign-in")
+  const db = await readDb()
+  const venture = db.ventures.find((v) => v.id === ventureId)
+  if (!venture || !runsVenture(db, user, venture)) return { ok: false, message: "Only the founders of this venture can change its logo" }
+  const old = await mutate((d) => {
+    const v = d.ventures.find((x) => x.id === venture.id)!
+    const was = v.logo
+    v.logo = undefined
+    return was
+  })
+  await deleteLogo(old)
+  revalidatePath("/", "layout")
+  return { ok: true, message: "Logo removed. The mark is the colour and first letter again." }
+}
+
+/** Adds a workspace (a team) to a venture you run. */
+export async function createWorkspace(formData: FormData): Promise<Result> {
+  const user = await getUser()
+  if (!user) redirect("/sign-in")
+
+  const ventureId = str(formData, "venture_id")
+  const name = str(formData, "name")
+  const title = str(formData, "title")
+  if (name.length < 2 || name.length > 80) return { ok: false, message: "Give the workspace a name" }
+
+  const db = await readDb()
+  const venture = db.ventures.find((v) => v.id === ventureId)
+  if (!venture || !runsVenture(db, user, venture)) {
+    return { ok: false, message: "Only the founders of this venture can add workspaces to it" }
+  }
+  if (db.workspaces.some((w) => w.venture_id === venture.id && w.name.toLowerCase() === name.toLowerCase())) {
+    return { ok: false, message: `${venture.name} already has a workspace called ${name}` }
+  }
+
+  const workspaceId = await mutate((d) => {
+    const id = newId()
+    d.workspaces.push({ id, venture_id: venture.id, name, accent_color: venture.accent_color, created_by: user.id, created_at: now() })
+    d.memberships.push({ workspace_id: id, user_id: user.id, role: "owner", title: title || undefined, created_at: now() })
+    log(d, id, user.id, `created ${name} in ${venture.name}`)
+    return id
+  })
+
+  await setCurrentWorkspace(workspaceId)
+  revalidatePath("/", "layout")
+  redirect("/today?created=1")
+}
+
+/** Goes into one of your workspaces from the venture list. */
+export async function enterWorkspace(workspaceId: string): Promise<Result> {
+  const user = await getUser()
+  if (!user) redirect("/sign-in")
+  const db = await readDb()
+  if (!db.memberships.some((m) => m.user_id === user.id && m.workspace_id === workspaceId)) {
+    return { ok: false, message: "You are not in that workspace" }
+  }
+  await setCurrentWorkspace(workspaceId)
+  revalidatePath("/", "layout")
+  redirect("/today")
+}
+
+/** The platform owner appoints founders by email. They sign in with that email. */
+export async function appointFounder(formData: FormData): Promise<Result> {
+  const user = await getUser()
+  if (!user) redirect("/sign-in")
+  if (!isPlatformOwner(user)) return { ok: false, message: "Only the platform owner appoints founders" }
+  const email = str(formData, "email").toLowerCase()
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, message: "Enter a full email address" }
+
+  await mutate((d) => {
+    const existing = d.profiles.find((p) => p.email.toLowerCase() === email)
+    if (existing) existing.founder = true
+    else d.profiles.push({ id: newId(), email, full_name: titleCase(email), founder: true, created_at: now() })
+  })
+  revalidatePath("/founders")
+  return { ok: true, message: `${email} is a founder. They can sign in and start a venture.` }
+}
+
+export async function removeFounder(profileId: string): Promise<Result> {
+  const user = await getUser()
+  if (!user) redirect("/sign-in")
+  if (!isPlatformOwner(user)) return { ok: false, message: "Only the platform owner changes founders" }
+  const done = await mutate((d) => {
+    const p = d.profiles.find((x) => x.id === profileId)
+    if (!p || isPlatformOwner(p)) return false
+    p.founder = false
+    return true
+  })
+  revalidatePath("/founders")
+  return done
+    ? { ok: true, message: "No longer a founder. Their ventures and workspaces carry on." }
+    : { ok: false, message: "That person cannot be changed" }
 }
 
 export async function updateWorkspace(formData: FormData): Promise<Result> {
@@ -229,9 +365,13 @@ export async function createInvite(formData: FormData): Promise<Result> {
 
   const email = str(formData, "email").toLowerCase()
   const inviteRole = (str(formData, "role") || "member") as Role
+  const inviteTitle = str(formData, "title").slice(0, 60)
   if (!email.includes("@") || email.endsWith("@")) {
     return { ok: false, message: "Enter a full email address" }
   }
+  if (!ROLES.includes(inviteRole)) return { ok: false, message: "Pick a role" }
+  // Nobody hands out more than they have: only owners make owners.
+  if (inviteRole === "owner" && role !== "owner") return { ok: false, message: "Only owners can invite another owner" }
 
   const db = await readDb()
   const already = db.memberships.some((m) => {
@@ -251,6 +391,7 @@ export async function createInvite(formData: FormData): Promise<Result> {
       workspace_id: workspace.id,
       email,
       role: inviteRole,
+      title: inviteTitle || undefined,
       token: newToken(),
       invited_by: user.id,
       expires_at: new Date(Date.now() + 7 * 864e5).toISOString(),
@@ -303,10 +444,11 @@ export async function acceptInvite(token: string): Promise<Result> {
         workspace_id: i.workspace_id,
         user_id: user.id,
         role: i.role,
+        title: i.title,
         created_at: now(),
       })
     }
-    log(d, i.workspace_id, user.id, `joined as ${i.role}`)
+    log(d, i.workspace_id, user.id, `joined as ${i.title ?? i.role}`)
     notify(d, {
       workspace_id: i.workspace_id,
       user_id: i.invited_by,

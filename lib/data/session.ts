@@ -4,7 +4,8 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { readDb } from "./store"
-import type { Membership, Profile, Role, Workspace } from "./types"
+import { isFounder } from "./founders"
+import type { Membership, Profile, Role, Venture, Workspace } from "./types"
 
 export const SESSION_COOKIE = "agency_user"
 export const WORKSPACE_COOKIE = "agency_workspace"
@@ -43,6 +44,8 @@ export async function getUser(): Promise<Profile | null> {
 export type Context = {
   user: Profile
   workspace: Workspace
+  /** The venture the workspace belongs to: its name and mark head the screen. */
+  venture: Venture
   role: Role
   workspaces: (Workspace & { role: Role; people: number })[]
 }
@@ -57,7 +60,8 @@ export async function requireContext(): Promise<Context> {
 
   const db = await readDb()
   const mine = db.memberships.filter((m) => m.user_id === user.id)
-  if (mine.length === 0) redirect("/new-workspace")
+  // Nobody makes their own workspace: founders start ventures, everyone else waits for an invite.
+  if (mine.length === 0) redirect(isFounder(user) ? "/ventures" : "/welcome")
 
   const workspaces = mine
     .map((m: Membership) => {
@@ -74,5 +78,9 @@ export async function requireContext(): Promise<Context> {
   const wanted = jar.get(WORKSPACE_COOKIE)?.value
   const workspace = workspaces.find((w) => w.id === wanted) ?? workspaces[0]
 
-  return { user, workspace, role: workspace.role, workspaces }
+  const venture =
+    db.ventures.find((v) => v.id === workspace.venture_id) ??
+    ({ id: workspace.venture_id, name: workspace.name, accent_color: workspace.accent_color, created_by: workspace.created_by, created_at: workspace.created_at } as Venture)
+
+  return { user, workspace, venture, role: workspace.role, workspaces }
 }

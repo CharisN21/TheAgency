@@ -82,6 +82,13 @@ export function InviteDialog({ workspaceName }: { workspaceName: string }) {
             </div>
 
             <div className="flex flex-col gap-2">
+              <Label htmlFor="invite-title">
+                What they do here <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Input id="invite-title" name="title" placeholder="Sales admin, Marketing, Director" maxLength={60} autoComplete="off" />
+            </div>
+
+            <div className="flex flex-col gap-2">
               <Label>Joins as</Label>
               <RadioGroup
                 value={role}

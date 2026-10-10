@@ -55,10 +55,17 @@ export function notify(
   // banners are on and it is not the person's quiet hours.
   if (bannersAllowed(prefs)) {
     const workspace = db.workspaces.find((w) => w.id === n.workspace_id)
+    const venture = db.ventures.find((v) => v.id === workspace?.venture_id)
+    const name = workspace?.name ?? "The Agency"
     queuePush(db, {
       user_id: n.user_id,
       title: n.title,
-      workspace: { id: n.workspace_id, name: workspace?.name ?? "The Agency", color: workspace?.accent_color ?? "" },
+      workspace: {
+        id: n.workspace_id,
+        name: venture && venture.name.toLowerCase() !== name.toLowerCase() ? `${venture.name} · ${name}` : name,
+        color: venture?.accent_color ?? workspace?.accent_color ?? "",
+        logo: venture?.logo ? `/venture-logo/${venture.logo}` : undefined,
+      },
       href: n.href,
       tag: id,
     })

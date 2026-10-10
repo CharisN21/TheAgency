@@ -12,6 +12,8 @@ import {
   type MatchReason,
 } from "./match"
 import { audienceOf, canDrawOn, canSeeNote, type Audience } from "@/lib/notes/access"
+import { logoUrl } from "@/lib/ventures/logo"
+import { isFounder, isPlatformOwner, runsVenture } from "./founders"
 import { readDb } from "./store"
 import {
   OPEN_STAGES,
@@ -1220,6 +1222,65 @@ function noteRows(db: Database, notes: Note[], userId: string, role: Role): Note
     projectName: n.project_id ? db.projects.find((p) => p.id === n.project_id)?.name : undefined,
     canDraw: canDrawOn(db, n, userId, role),
   }))
+}
+
+export type VentureCard = {
+  id: string
+  name: string
+  accent_color: string
+  /** Where its logo loads from, if it has one. */
+  logo?: string
+  /** Whether this person may add workspaces to it. */
+  canAdd: boolean
+  workspaces: { id: string; name: string; role: Role; title?: string; people: number }[]
+}
+
+/**
+ * The ventures this person can see, each with the workspaces they are in. A
+ * venture shows only because they are in one of its workspaces (or founded it):
+ * its other workspaces stay out of sight.
+ */
+export async function listMyVentures(userId: string): Promise<VentureCard[]> {
+  const db = await readDb()
+  const me = db.profiles.find((p) => p.id === userId)
+  if (!me) return []
+  const mine = db.memberships.filter((m) => m.user_id === userId)
+  return db.ventures
+    .map((v) => ({
+      id: v.id,
+      name: v.name,
+      accent_color: v.accent_color,
+      logo: logoUrl(v.logo),
+      canAdd: runsVenture(db, me, v),
+      workspaces: mine
+        .map((m) => ({ m, w: db.workspaces.find((w) => w.id === m.workspace_id && w.venture_id === v.id) }))
+        .filter((x): x is { m: (typeof mine)[number]; w: NonNullable<typeof x.w> } => Boolean(x.w))
+        .map(({ m, w }) => ({
+          id: w.id,
+          name: w.name,
+          role: m.role,
+          title: m.title,
+          people: db.memberships.filter((x) => x.workspace_id === w.id).length,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .filter((v) => v.workspaces.length > 0 || v.canAdd)
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** The platform owner's list of founders. */
+export async function listFounders() {
+  const db = await readDb()
+  return db.profiles
+    .filter((p) => isFounder(p))
+    .map((p) => ({
+      id: p.id,
+      email: p.email,
+      full_name: p.full_name,
+      platformOwner: isPlatformOwner(p),
+      ventures: db.ventures.filter((v) => v.created_by === p.id).map((v) => v.name),
+    }))
+    .sort((a, b) => a.full_name.localeCompare(b.full_name))
 }
 
 /** Your notebook: your own notes and boards, and what others have shared with you here. */
