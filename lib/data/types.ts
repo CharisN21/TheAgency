@@ -6,14 +6,30 @@
  * a client, a partner. People belong to organisations; deals belong to both.
  */
 
-export type Role = "owner" | "admin" | "member" | "viewer"
+export type Role = "owner" | "admin" | "member" | "observer" | "viewer"
 
-export const ROLES: Role[] = ["owner", "admin", "member", "viewer"]
+export const ROLES: Role[] = ["owner", "admin", "member", "observer", "viewer"]
+
+/**
+ * The tabs a workspace's owners and admins can open to Observers. Today, Flags,
+ * Notifications, Settings and chat are always theirs.
+ */
+export type ObservableTab = "organisations" | "people" | "deals" | "projects" | "notebook" | "team"
+export const OBSERVABLE_TABS: { key: ObservableTab; label: string }[] = [
+  { key: "organisations", label: "Organisations" },
+  { key: "people", label: "People" },
+  { key: "deals", label: "Deals" },
+  { key: "projects", label: "Projects" },
+  { key: "notebook", label: "Notebook" },
+  { key: "team", label: "Team" },
+]
+export const DEFAULT_OBSERVER_TABS: ObservableTab[] = ["deals", "projects"]
 
 export const ROLE_LABEL: Record<Role, string> = {
   owner: "Owner",
   admin: "Admin",
   member: "Member",
+  observer: "Observer",
   viewer: "Viewer",
 }
 
@@ -21,6 +37,7 @@ export const ROLE_HELP: Record<Role, string> = {
   owner: "Everything, including billing and deleting the workspace.",
   admin: "Invite people, change roles, see private flags, manage all work.",
   member: "Work on what they are added to: deals, contacts, tasks, notes.",
+  observer: "Look at the tabs you choose, raise flags, chat, and ask for task changes. Never edits.",
   viewer: "See the work and the progress. Cannot create or edit anything.",
 }
 
@@ -55,6 +72,8 @@ export type Workspace = {
   venture_id: string
   /** Its title inside the venture, e.g. "Marketing and sales". */
   name: string
+  /** The tabs Observers here may open. Unset means DEFAULT_OBSERVER_TABS. */
+  observer_tabs?: ObservableTab[]
   accent_color: string
   created_by: string
   created_at: string
@@ -698,12 +717,19 @@ export const can = {
   removeMember: (r: Role) => r === "owner" || r === "admin",
   editWorkspace: (r: Role) => r === "owner" || r === "admin",
   deleteWorkspace: (r: Role) => r === "owner",
-  /** Viewers read everything they can see, and change nothing. */
-  edit: (r: Role) => r !== "viewer",
+  /** Owners, admins and members do the work: they can be given tasks and objectives. */
+  work: (r: Role) => r === "owner" || r === "admin" || r === "member",
+  /** Observers and viewers read what they can see, and change nothing. */
+  edit: (r: Role) => r === "owner" || r === "admin" || r === "member",
+  /** Everyone but viewers: Observers (such as Directors) raise flags too. */
+  raiseFlag: (r: Role) => r !== "viewer",
+  /** Observers open only the tabs their workspace chose; everyone else, every tab. */
+  seeTab: (r: Role, w: { observer_tabs?: ObservableTab[] }, tab: ObservableTab) =>
+    r !== "observer" || (w.observer_tabs ?? DEFAULT_OBSERVER_TABS).includes(tab),
   seeFlags: (r: Role) => r === "owner" || r === "admin",
   /** Posting in Announcements. Everyone reads it. */
   announce: (r: Role) => r === "owner" || r === "admin",
-  /** Starting a team group. Viewers can be added, and can message, but do not start groups. */
+  /** Starting a team group. Viewers can be added, and can message, but do not start groups. Observers can. */
   createGroup: (r: Role) => r !== "viewer",
   /**
    * A private flag: the person who raised it, and owners and admins — but never

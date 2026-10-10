@@ -18,7 +18,7 @@ import {
   listOrganisations,
   listTasks,
 } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { ORG_CATEGORY_LABEL, can, money, stageOf } from "@/lib/data/types"
 import { AddContact, LogActivity } from "./record-actions"
 
@@ -32,7 +32,7 @@ const initials = (name: string) =>
 
 export default async function OrganisationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { workspace, role, user } = await requireContext()
+  const { workspace, role, user } = await requireTab("organisations")
   const found = await getOrganisation(workspace.id, id)
   if (!found) notFound()
 

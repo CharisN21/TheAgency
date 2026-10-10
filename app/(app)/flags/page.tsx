@@ -52,7 +52,7 @@ export default async function FlagsPage() {
   const closed = flags.filter((f) => f.status === "closed")
   const admin = can.seeFlags(role)
 
-  const raise = can.edit(role) && (
+  const raise = can.raiseFlag(role) && (
     <RaiseFlag
       people={members.filter((m) => m.id !== user.id).map((m) => ({ value: m.id, label: m.full_name }))}
       projects={projects.filter((p) => p.status === "active").map((p) => ({ value: p.id, label: p.name }))}

@@ -14,7 +14,7 @@ import {
   listTags,
   listViews,
 } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { ORG_CATEGORIES, ORG_CATEGORY_LABEL, can, money, moneyShort } from "@/lib/data/types"
 import { FilterBar } from "@/components/app/filter-bar"
 import { NewOrganisation } from "./new-organisation"
@@ -33,7 +33,7 @@ export default async function OrganisationsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>
 }) {
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("organisations")
   const sp = await searchParams
 
   const [rows, all, members, tags, views, duplicates] = await Promise.all([

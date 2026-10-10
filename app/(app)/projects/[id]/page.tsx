@@ -26,7 +26,7 @@ import {
   noticeForRetro,
 } from "@/lib/data/queries"
 import { aiAvailable } from "@/lib/ai/claude"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { can } from "@/lib/data/types"
 
 const initials = (name: string) =>
@@ -44,7 +44,7 @@ const longDate = (iso?: string) =>
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("projects")
   const [found, tasks, people, organisations, notes, projects] = await Promise.all([
     getProject(workspace.id, id),
     listTasks(workspace.id, { project: id, withDone: true }),
@@ -299,7 +299,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <div>
               <BandTitle
                 action={
-                  editable && (
+                  can.raiseFlag(role) && p.status === "active" && (
                     <RaiseFlag
                       people={p.members
                         .filter((m) => m.id !== user.id)

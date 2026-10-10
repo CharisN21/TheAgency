@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { getCustomValues, getDeal, listAssignees, listMembers, listTasks } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { can, money, moneyShort, stageOf } from "@/lib/data/types"
 import { EditDeal, StageSteps } from "./deal-actions"
 
@@ -32,7 +32,7 @@ function closing(iso?: string) {
 
 export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("deals")
   const [found, members, tasks, assignees, customFields] = await Promise.all([
     getDeal(workspace.id, id),
     listMembers(workspace.id),
@@ -65,7 +65,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               label: c.title ? `${c.full_name} · ${c.title}` : c.full_name,
             }))}
             owners={members
-              .filter((m) => m.role !== "viewer")
+              .filter((m) => can.work(m.role))
               .map((m) => ({ value: m.id, label: m.full_name }))}
           />
         )}

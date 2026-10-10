@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { listInvites, listMembers } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { ROLE_HELP, ROLE_LABEL, ROLES, can, type Role } from "@/lib/data/types"
 import { CopyLink, InviteDialog } from "./invite-dialog"
 import { MemberActions, RevokeInvite } from "./member-actions"
@@ -26,7 +26,7 @@ const daysLeft = (iso: string) =>
   Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 864e5))
 
 export default async function TeamPage() {
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("team")
   const [members, invites] = await Promise.all([
     listMembers(workspace.id),
     listInvites(workspace.id),

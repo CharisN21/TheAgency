@@ -10,7 +10,8 @@ import { NotificationSwitches } from "@/components/app/notifications"
 import { BannerControls, PushCard } from "@/components/app/push-card"
 import { getBannerSettings, getMutedNotifications, listCustomFields } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
-import { can, ROLE_HELP, ROLE_LABEL } from "@/lib/data/types"
+import { can, DEFAULT_OBSERVER_TABS, ROLE_HELP, ROLE_LABEL } from "@/lib/data/types"
+import { ObserverTabs } from "@/components/app/observer-tabs"
 import { WorkspaceNameForm, ResetDemo } from "./forms"
 
 const INSTALL = [
@@ -54,6 +55,16 @@ export default async function SettingsPage() {
               )}
             </CardContent>
           </Card>
+          {can.editWorkspace(role) && (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>What Observers see</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ObserverTabs initial={workspace.observer_tabs ?? DEFAULT_OBSERVER_TABS} />
+              </CardContent>
+            </Card>
+          )}
         </Band>
 
         <Band tone="soft" index={2} narrow label="Appearance and notifications">

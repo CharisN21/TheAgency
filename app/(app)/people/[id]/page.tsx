@@ -18,7 +18,7 @@ import {
   listOrganisations,
   listTasks,
 } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { can, money, stageOf } from "@/lib/data/types"
 import { EditPerson } from "./edit-person"
 
@@ -48,7 +48,7 @@ function touch(days: number | null) {
 
 export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("people")
   const [found, tasks, assignees, organisations, customFields] = await Promise.all([
     getPerson(workspace.id, id),
     listTasks(workspace.id, { contact: id, withDone: true }),

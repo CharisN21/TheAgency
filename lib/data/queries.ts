@@ -52,7 +52,7 @@ export type Member = Profile & { role: Role; title?: string; joined: string }
 
 export async function listMembers(workspaceId: string): Promise<Member[]> {
   const db = await readDb()
-  const order: Record<Role, number> = { owner: 0, admin: 1, member: 2, viewer: 3 }
+  const order: Record<Role, number> = { owner: 0, admin: 1, member: 2, observer: 3, viewer: 4 }
   return db.memberships
     .filter((m) => m.workspace_id === workspaceId)
     .map((m) => {
@@ -715,7 +715,7 @@ export async function listTasks(workspaceId: string, f: TaskFilter = {}): Promis
 /** People a task can be for: everyone in the workspace who can edit. */
 export async function listAssignees(workspaceId: string) {
   return (await listMembers(workspaceId))
-    .filter((m) => m.role !== "viewer")
+    .filter((m) => can.work(m.role))
     .map((m) => ({ value: m.id, label: m.full_name }))
 }
 
@@ -1073,7 +1073,7 @@ export async function getAnalytics(workspaceId: string) {
     }
   }
 
-  const members = (await listMembers(workspaceId)).filter((m) => m.role !== "viewer")
+  const members = (await listMembers(workspaceId)).filter((m) => can.work(m.role))
   return {
     overall: summarise(tasks),
     people: members

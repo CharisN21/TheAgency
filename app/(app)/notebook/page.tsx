@@ -4,11 +4,11 @@ import { Band, BandTitle } from "@/components/app/band"
 import { Notebook } from "@/components/app/notebook"
 import { PageHeader } from "@/components/app/page-header"
 import { listNotebook, listProjects } from "@/lib/data/queries"
-import { requireContext } from "@/lib/data/session"
+import { requireTab } from "@/lib/data/session"
 import { can } from "@/lib/data/types"
 
 export default async function NotebookPage() {
-  const { user, workspace, role } = await requireContext()
+  const { user, workspace, role } = await requireTab("notebook")
   const [{ mine, shared }, projects] = await Promise.all([listNotebook(workspace.id, user.id, role), listProjects(workspace.id)])
   const place = {
     canEdit: can.edit(role),

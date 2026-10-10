@@ -12,7 +12,7 @@ import { requireContext } from "@/lib/data/session"
 import { readDb } from "@/lib/data/store"
 import { runsVenture } from "@/lib/data/founders"
 import { logoUrl } from "@/lib/ventures/logo"
-import { can, OPEN_STAGES } from "@/lib/data/types"
+import { can, OBSERVABLE_TABS, OPEN_STAGES } from "@/lib/data/types"
 
 /** The app shell: sidebar on desktop, tab bar on iPhone. */
 export default async function AppLayout({
@@ -27,6 +27,8 @@ export default async function AppLayout({
     listFlags(workspace.id, { id: user.id, role }),
   ])
   const canAddWorkspace = runsVenture(await readDb(), user, venture)
+  // An Observer sees only the tabs this workspace opened to Observers.
+  const hidden = OBSERVABLE_TABS.filter((t) => !can.seeTab(role, workspace, t.key)).map((t) => `/${t.key}`)
 
   return (
     <TooltipProvider delayDuration={400}>
@@ -48,6 +50,7 @@ export default async function AppLayout({
           venture={{ id: venture.id, name: venture.name, accent_color: venture.accent_color, logo: logoUrl(venture.logo), canAdd: canAddWorkspace }}
           user={{ full_name: user.full_name, email: user.email }}
           role={role}
+          hidden={hidden}
           counts={{
             organisations: organisations.length,
             people: people.length,
@@ -65,13 +68,14 @@ export default async function AppLayout({
                 workspaces={workspaces.map((w) => ({ id: w.id, name: w.name }))}
                 currentId={workspace.id}
                 canInvite={can.invite(role)}
+                hidden={hidden}
               >
                 {children}
               </CommandPaletteProvider>
             </ChatProvider>
           </QuickCaptureProvider>
         </SidebarInset>
-        <MobileTabBar />
+        <MobileTabBar hidden={hidden} />
       </SidebarProvider>
     </TooltipProvider>
   )
