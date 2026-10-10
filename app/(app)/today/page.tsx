@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, Check, ClipboardCheck, Clock, Search, TrendingUp, UserPlus } from "lucide-react"
+import { ArrowRight, Check, ClipboardCheck, Clock, TrendingUp, UserPlus } from "lucide-react"
 
 import { Band, BandTitle, toneAfterLead } from "@/components/app/band"
 import { PageHeader } from "@/components/app/page-header"
@@ -118,12 +118,6 @@ export default async function TodayPage() {
       <WelcomeToast />
 
       <PageHeader title="Today">
-        <span className="text-muted-foreground hidden items-center gap-2 text-sm md:flex">
-          <Search className="size-4" /> Search
-          <kbd className="border-border text-muted-foreground ml-1 rounded border px-1.5 text-[11px]">
-            Ctrl K
-          </kbd>
-        </span>
         {can.invite(role) && (
           <Button asChild variant="secondary" size="sm">
             <Link href="/team?invite=1">

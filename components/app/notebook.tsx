@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   ClipboardList,
   FilePlus2,
@@ -89,10 +89,17 @@ function Audience({ note, workspaceName }: { note: NoteRow; workspaceName: strin
 /** The whole notebook: write a note or start a whiteboard, search, yours and shared with you. */
 export function Notebook({ mine, shared, ...place }: { mine: NoteRow[]; shared: NoteRow[] } & Place) {
   const router = useRouter()
+  const params = useSearchParams()
+  const openId = params.get("open") ?? undefined
   const [text, setText] = useState("")
   const [title, setTitle] = useState("")
   const [find, setFind] = useState("")
-  const [newBoard, setNewBoard] = useState(false)
+  const [newBoard, setNewBoard] = useState(() => params.get("new") === "board")
+
+  // The address only carries the request once; clear it so a refresh does not repeat it.
+  useEffect(() => {
+    if (params.get("new") || params.get("open")) router.replace("/notebook", { scroll: false })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [pending, start] = useTransition()
 
   const match = (rows: NoteRow[]) => {
@@ -194,7 +201,7 @@ export function Notebook({ mine, shared, ...place }: { mine: NoteRow[]; shared: 
             {mine.length === 0 ? (
               <p className="text-muted-foreground text-sm">Nothing of yours yet.</p>
             ) : (
-              <NoteCards notes={yours} {...place} emptyMatch={find} />
+              <NoteCards notes={yours} {...place} emptyMatch={find} openId={openId} />
             )}
           </section>
           {shared.length > 0 && (
@@ -202,7 +209,7 @@ export function Notebook({ mine, shared, ...place }: { mine: NoteRow[]; shared: 
               <h3 id="shared-heading" className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 Shared with you
               </h3>
-              <NoteCards notes={theirs} {...place} emptyMatch={find} />
+              <NoteCards notes={theirs} {...place} emptyMatch={find} openId={openId} />
             </section>
           )}
         </>
@@ -263,15 +270,21 @@ export function ProjectNotes({
 }
 
 /** A list of notes and whiteboards, each with what this person may do to it. */
-function NoteCards({ notes, emptyMatch, ...place }: { notes: NoteRow[]; emptyMatch?: string } & Place) {
+function NoteCards({ notes, emptyMatch, openId, ...place }: { notes: NoteRow[]; emptyMatch?: string; openId?: string } & Place) {
   const router = useRouter()
+  const [highlight] = useState(openId)
   const [pending, start] = useTransition()
   const [editing, setEditing] = useState<NoteRow | null>(null)
   const [tasking, setTasking] = useState<NoteRow | null>(null)
   const [posting, setPosting] = useState<NoteRow | null>(null)
   const [sharing, setSharing] = useState<NoteRow | null>(null)
   const [deleting, setDeleting] = useState<NoteRow | null>(null)
-  const [board, setBoard] = useState<NoteRow | null>(null)
+  const [board, setBoard] = useState<NoteRow | null>(() => notes.find((n) => n.id === openId && isBoard(n)) ?? null)
+
+  // Arriving from search: bring the note into view.
+  useEffect(() => {
+    if (highlight) document.getElementById(`note-${highlight}`)?.scrollIntoView({ block: "center" })
+  }, [highlight])
 
   if (notes.length === 0) {
     return (
@@ -285,7 +298,7 @@ function NoteCards({ notes, emptyMatch, ...place }: { notes: NoteRow[]; emptyMat
     <>
       <ul className="flex flex-col gap-3">
         {notes.map((n) => (
-          <li key={n.id} className="bg-card rounded-xl border p-4">
+          <li key={n.id} id={`note-${n.id}`} className={`bg-card scroll-mt-20 rounded-xl border p-4 ${n.id === highlight ? "ring-ring ring-2" : ""}`}>
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 {(n.title || isBoard(n)) && <h4 className="mb-1 font-semibold break-words">{n.title || "Whiteboard"}</h4>}
