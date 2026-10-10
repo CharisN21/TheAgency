@@ -23,7 +23,9 @@ The look is fixed and lives in a published design system (maroon `#7c1f35` on wa
 
 ## Naming (settled 24 Sep 2026)
 
-- A **workspace** is one of Charis's own ventures (Kilima Labs). It holds the people, the records and the work.
+- A **venture** is one of the businesses run on The Agency (Telecast). It has a name and a mark, and holds one or more **workspaces**, one per team ("Marketing and sales", "Directors"). Decided 10 Oct 2026.
+- A **workspace** holds the people, the records and the work of one team. People belong to workspaces, never to a venture directly.
+- Only **founders** (appointed by the platform owner, `PLATFORM_OWNER_EMAILS`) start ventures and add workspaces. Everyone else gets in by invite, with a role and a title ("Sales admin").
 - An **organisation** is a business he deals with: supplier, client, partner, prospect, service provider.
 - **People** (contacts) belong to organisations. **Deals** belong to an organisation and usually a person.
 - Never use "company" in the interface. It is ambiguous now.

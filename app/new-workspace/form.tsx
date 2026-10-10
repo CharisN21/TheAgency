@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { createWorkspace } from "@/lib/data/actions"
+import { createVenture } from "@/lib/data/actions"
 
 const COLOURS = [
   { value: "#7c1f35", name: "Maroon" },
@@ -26,7 +26,7 @@ export function NewCompanyForm() {
   function submit(formData: FormData) {
     formData.set("accent", accent)
     start(async () => {
-      const result = await createWorkspace(formData)
+      const result = await createVenture(formData)
       if (result && !result.ok) toast.error(result.message)
     })
   }
@@ -36,17 +36,24 @@ export function NewCompanyForm() {
   return (
     <form action={submit} className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <Label htmlFor="name">Workspace name</Label>
+        <Label htmlFor="name">Venture name</Label>
         <Input
           id="name"
           name="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Kilima Labs"
+          placeholder="Telecast"
           className="h-11"
+          maxLength={80}
           autoFocus
           required
         />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="workspace">First workspace</Label>
+        <Input id="workspace" name="workspace" placeholder="Marketing and sales" defaultValue="Main team" maxLength={80} className="h-11" />
+        <p className="text-muted-foreground text-sm">You can add more workspaces later, one per team.</p>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -87,7 +94,7 @@ export function NewCompanyForm() {
           </span>
         </div>
         <p className="text-muted-foreground text-sm">
-          Used for the workspace tile in the switcher.
+          The venture&rsquo;s mark, on every workspace in it and on banners.
         </p>
       </div>
 
@@ -97,7 +104,7 @@ export function NewCompanyForm() {
             <Loader2 className="animate-spin" /> Creating…
           </>
         ) : (
-          "Create workspace"
+          "Start venture"
         )}
       </Button>
     </form>

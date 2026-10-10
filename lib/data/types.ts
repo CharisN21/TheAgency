@@ -29,11 +29,29 @@ export type Profile = {
   email: string
   full_name: string
   phone?: string
+  /** Appointed by the platform owner. Only founders create ventures and workspaces. */
+  founder?: boolean
+  created_at: string
+}
+
+/**
+ * A venture: one name and mark (Telecast) holding several workspaces, one per
+ * team ("Marketing and sales", "Directors"). People belong to workspaces, never
+ * to a venture directly; you see a venture because you are in one of its workspaces.
+ */
+export type Venture = {
+  id: string
+  name: string
+  accent_color: string
+  created_by: string
   created_at: string
 }
 
 export type Workspace = {
   id: string
+  /** The venture it belongs to. */
+  venture_id: string
+  /** Its title inside the venture, e.g. "Marketing and sales". */
   name: string
   accent_color: string
   created_by: string
@@ -53,6 +71,8 @@ export type Invite = {
   workspace_id: string
   email: string
   role: Role
+  /** What they do here, shown next to their name, e.g. "Sales admin". */
+  title?: string
   token: string
   invited_by: string
   expires_at: string
@@ -640,6 +660,7 @@ import type { Stroke } from "@/lib/notes/drawing"
 
 export type Database = {
   profiles: Profile[]
+  ventures: Venture[]
   workspaces: Workspace[]
   memberships: Membership[]
   invites: Invite[]

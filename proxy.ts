@@ -9,6 +9,9 @@ const PROTECTED = [
   "/meetings",
   "/notebook",
   "/new-workspace",
+  "/ventures",
+  "/founders",
+  "/welcome",
 ]
 
 /**

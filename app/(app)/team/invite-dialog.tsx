@@ -82,6 +82,14 @@ export function InviteDialog({ workspaceName }: { workspaceName: string }) {
             </div>
 
             <div className="flex flex-col gap-2">
+              <Label htmlFor="invite-title">
+                What they do here <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Input id="invite-title" name="title" placeholder="Sales admin, Marketing, Director" maxLength={60} autoComplete="off" />
+              <p className="text-muted-foreground text-xs">Shown next to their name. What they can do is set by the role below.</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
               <Label>Joins as</Label>
               <RadioGroup
                 value={role}

@@ -5,7 +5,7 @@
  * `.launch-splash` in globals.css), so it needs no script, and it is shown only
  * when the app runs installed, never in an ordinary browser tab.
  */
-export function LaunchSplash({ name, color }: { name: string; color: string }) {
+export function LaunchSplash({ name, title, color }: { name: string; title?: string; color: string }) {
   return (
     <div className="launch-splash" aria-hidden="true">
       <div className="launch-splash-mark flex flex-col items-center gap-4">
@@ -15,7 +15,12 @@ export function LaunchSplash({ name, color }: { name: string; color: string }) {
         >
           {Array.from(name.trim())[0]?.toUpperCase()}
         </span>
-        <span className="text-lg font-semibold tracking-tight">{name}</span>
+        <span className="flex flex-col items-center">
+          <span className="text-lg font-semibold tracking-tight">{name}</span>
+          {title && title.trim().toLowerCase() !== name.trim().toLowerCase() && (
+            <span className="text-muted-foreground text-sm">{title}</span>
+          )}
+        </span>
       </div>
       <span className="launch-splash-by text-muted-foreground">by The Agency</span>
     </div>
