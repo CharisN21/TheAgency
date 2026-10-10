@@ -3,7 +3,8 @@
 -- Adds a role and a column; nothing is lost. Existing workspaces open Deals and
 -- Projects to Observers until an owner or admin changes it.
 
-alter type public.member_role add value if not exists 'observer' before 'viewer';
+-- The 'observer' role itself is added in 0015: Postgres cannot use a new
+-- role in the same step that adds it.
 
 alter table public.workspaces
   add column observer_tabs text[] not null default '{deals,projects}'
