@@ -9,9 +9,10 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { listContacts, listDeals, listFlags, listOrganisations, listProjects } from "@/lib/data/queries"
 import { requireContext } from "@/lib/data/session"
-import { readDb } from "@/lib/data/store"
+import { mutate, readDb } from "@/lib/data/store"
 import { runsVenture } from "@/lib/data/founders"
-import { logoUrl } from "@/lib/ventures/logo"
+import { coloursOf, logoUrl } from "@/lib/ventures/logo"
+import { themeCss } from "@/lib/ventures/palette"
 import { can, OBSERVABLE_TABS, OPEN_STAGES } from "@/lib/data/types"
 
 /** The app shell: sidebar on desktop, tab bar on iPhone. */
@@ -30,8 +31,23 @@ export default async function AppLayout({
   // An Observer sees only the tabs this workspace opened to Observers.
   const hidden = OBSERVABLE_TABS.filter((t) => !can.seeTab(role, workspace, t.key)).map((t) => `/${t.key}`)
 
+  // A venture with a logo dresses its workspaces in the logo's colours; Main Hub stays maroon.
+  // A logo from before themes existed gets its colours worked out once, here.
+  if (venture.logo && !venture.theme) {
+    const colours = await coloursOf(venture.logo)
+    if (colours) {
+      venture.theme = colours
+      await mutate((d) => {
+        const v = d.ventures.find((x) => x.id === venture.id)
+        if (v && v.logo === venture.logo) v.theme = colours
+      })
+    }
+  }
+  const theme = themeCss(venture.theme)
+
   return (
     <TooltipProvider delayDuration={400}>
+      {theme && <style data-venture-theme>{theme}</style>}
       <LaunchSplash name={venture.name} title={workspace.name} color={venture.accent_color} logo={logoUrl(venture.logo)} />
       <a href="#content" className="skip-link">
         Skip to content
