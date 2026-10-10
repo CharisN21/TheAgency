@@ -511,9 +511,9 @@ export type PushDevice = {
 }
 
 /**
- * A private note. Only the person who wrote it can read, change or delete it:
- * not owners, not admins. It reaches anyone else only when its author posts it
- * onto a record's timeline, which copies the words and leaves this untouched.
+ * A note or whiteboard. Private to its author unless the author shares it with
+ * the workspace or a project (lib/notes/access.ts). Owners and admins cannot
+ * see a private one. Posting a note to a record's timeline copies the words.
  */
 export type Note = {
   id: string
@@ -527,6 +527,9 @@ export type Note = {
   body: string
   /** A whiteboard's strokes (see lib/notes/drawing.ts). */
   drawing?: Stroke[]
+  /** Unset is only the author. See lib/notes/access.ts for who sees and draws on what. */
+  shared?: "workspace" | "project"
+  project_id?: string
   pinned: boolean
   created_at: string
   updated_at: string

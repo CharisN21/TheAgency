@@ -238,3 +238,153 @@ describe("whiteboards", () => {
     expect((await actions.saveBoard({ id, title: "", caption: "", drawing: line })).ok).toBe(false)
   })
 })
+
+describe("sharing", () => {
+  const line = [{ c: "ink" as const, w: 1 as const, p: [0.1, 0.1, 0.5, 0.5] }]
+  const project = () => f.db.projects.find((p) => p.workspace_id === f.kilima.id && p.status === "active")!
+  const kilimaPeople = () => f.db.memberships.filter((m) => m.workspace_id === f.kilima.id)
+  const notebookOf = async (id: string) => {
+    const m = (await readDb()).memberships.find((x) => x.user_id === id && x.workspace_id === f.kilima.id)!
+    return q.listNotebook(f.kilima.id, id, m.role)
+  }
+  const setRole = async (id: string, role: "owner" | "admin" | "member" | "viewer") => {
+    await mutate((d) => {
+      d.memberships.find((m) => m.user_id === id && m.workspace_id === f.kilima.id)!.role = role
+    })
+  }
+
+  it("a private board is still only its author's, even for owners", async () => {
+    as(f.wanjiru.id)
+    await actions.saveBoard({ title: "Mine", caption: "", drawing: line })
+    for (const m of kilimaPeople()) {
+      if (m.user_id === f.wanjiru.id) continue
+      const nb = await notebookOf(m.user_id)
+      expect(nb.shared, m.user_id).toHaveLength(0)
+    }
+  })
+
+  it("shared with the workspace: everyone opens it, anyone who can edit draws, viewers only look", async () => {
+    as(f.wanjiru.id)
+    const id = (await actions.saveBoard({ title: "Office plan", caption: "", drawing: line, share: { to: "workspace" } }))!.id!
+    await setRole(f.brian.id, "viewer")
+
+    for (const m of kilimaPeople()) {
+      if (m.user_id === f.wanjiru.id) continue
+      const nb = await notebookOf(m.user_id)
+      const row = nb.shared.find((n) => n.id === id)!
+      expect(row, m.user_id).toBeTruthy()
+      expect(row.audience).toBe("workspace")
+      expect(row.authorName).toMatch(/Wanjiru/)
+      expect(row.canDraw, m.user_id).toBe(m.user_id !== f.brian.id)
+    }
+
+    as(f.achieng.id)
+    const db = await readDb()
+    const at = db.notes.find((n) => n.id === id)!.updated_at
+    const r = await actions.saveBoard({ id, title: "Office plan", caption: "", drawing: [...line, ...line], baseUpdatedAt: at })
+    expect(r.ok).toBe(true)
+
+    as(f.brian.id)
+    expect((await actions.saveBoard({ id, title: "x", caption: "", drawing: [] })).ok).toBe(false)
+  })
+
+  it("never shows a shared board to another workspace", async () => {
+    as(f.wanjiru.id)
+    await actions.saveBoard({ title: "Office plan", caption: "", drawing: line, share: { to: "workspace" } })
+    const nb = await q.listNotebook(f.elsewhere.id, f.zawadi.id, "owner")
+    expect(nb.shared).toHaveLength(0)
+    expect(nb.mine).toHaveLength(0)
+  })
+
+  it("shared with a project: on its page, everyone looks, only its team and owners or admins draw", async () => {
+    const p = project()
+    const team = new Set([p.lead_id, ...p.member_ids])
+    as(p.lead_id)
+    const id = (await actions.saveBoard({ title: "Sprint", caption: "", drawing: line, share: { to: "project", projectId: p.id } }))!.id!
+
+    const onPage = await q.listProjectNotes(f.kilima.id, p.id, p.lead_id, "member")
+    expect(onPage.map((n) => n.id)).toEqual([id])
+
+    for (const m of kilimaPeople()) {
+      const rows = await q.listProjectNotes(f.kilima.id, p.id, m.user_id, m.role)
+      expect(rows, m.user_id).toHaveLength(1)
+      const shouldDraw = m.role !== "viewer" && (team.has(m.user_id) || m.role === "owner" || m.role === "admin")
+      expect(rows[0].canDraw, `${m.user_id} ${m.role}`).toBe(shouldDraw)
+    }
+
+    const outsider = kilimaPeople().find((m) => m.role === "member" && !team.has(m.user_id))
+    if (outsider) {
+      as(outsider.user_id)
+      expect((await actions.saveBoard({ id, title: "x", caption: "", drawing: [] })).ok).toBe(false)
+    }
+  })
+
+  it("refuses a project from another workspace", async () => {
+    as(f.wanjiru.id)
+    const theirs = f.db.projects.find((p) => p.workspace_id === f.elsewhere.id)!
+    expect((await actions.saveBoard({ title: "x", caption: "", drawing: line, share: { to: "project", projectId: theirs.id } })).ok).toBe(false)
+    const id = (await actions.captureNote("words"))!.id!
+    expect((await actions.shareNote(id, { to: "project", projectId: theirs.id })).ok).toBe(false)
+  })
+
+  it("only the author shares, unshares, pins, edits a note or deletes", async () => {
+    as(f.wanjiru.id)
+    const id = (await actions.captureNote("Team update draft"))!.id!
+    expect((await actions.shareNote(id, { to: "workspace" })).ok).toBe(true)
+
+    as(f.achieng.id)
+    const seen = (await notebookOf(f.achieng.id)).shared.find((n) => n.id === id)!
+    expect(seen.body).toBe("Team update draft")
+    expect(seen.canDraw).toBe(false)
+    expect((await actions.shareNote(id, { to: "me" })).ok).toBe(false)
+    expect((await actions.updateNote(id, "changed")).ok).toBe(false)
+    expect((await actions.setNotePinned(id, true)).ok).toBe(false)
+    expect((await actions.deleteNote(id)).ok).toBe(false)
+
+    as(f.wanjiru.id)
+    expect((await actions.shareNote(id, { to: "me" })).ok).toBe(true)
+    expect((await notebookOf(f.achieng.id)).shared).toHaveLength(0)
+  })
+
+  it("adds your lines on top when someone else saved first, and never overwrites theirs", async () => {
+    as(f.wanjiru.id)
+    const id = (await actions.saveBoard({ title: "Plan", caption: "", drawing: line, share: { to: "workspace" } }))!.id!
+    const start = (await readDb()).notes.find((n) => n.id === id)!.updated_at
+
+    // Achieng saves first.
+    as(f.achieng.id)
+    await new Promise((r) => setTimeout(r, 5))
+    const theirs = { c: "primary" as const, w: 2 as const, p: [0.9, 0.9] }
+    expect((await actions.saveBoard({ id, title: "Plan", caption: "", drawing: [...line, theirs], baseUpdatedAt: start })).ok).toBe(true)
+
+    // Wanjiru still has the old version open: the server refuses and hands back the latest.
+    as(f.wanjiru.id)
+    const mineNew = { c: "ink" as const, w: 1 as const, p: [0.2, 0.2] }
+    const clash = await actions.saveBoard({ id, title: "Plan", caption: "", drawing: [...line, mineNew], baseUpdatedAt: start })
+    expect(clash.ok).toBe(false)
+    expect(clash.conflict!.drawing).toEqual([...line, theirs])
+
+    // The editor then saves theirs plus the new line, against the latest version.
+    const merged = await actions.saveBoard({
+      id,
+      title: "Plan",
+      caption: "",
+      drawing: [...clash.conflict!.drawing, mineNew],
+      baseUpdatedAt: clash.conflict!.updatedAt,
+    })
+    expect(merged.ok).toBe(true)
+    expect((await readDb()).notes.find((n) => n.id === id)!.drawing).toEqual([...line, theirs, mineNew])
+  })
+
+  it("a board shared to a deleted project falls back to private", async () => {
+    const p = project()
+    as(p.lead_id)
+    const id = (await actions.saveBoard({ title: "Sprint", caption: "", drawing: line, share: { to: "project", projectId: p.id } }))!.id!
+    await mutate((d) => {
+      d.projects = d.projects.filter((x) => x.id !== p.id)
+    })
+    const someoneElse = kilimaPeople().find((m) => m.user_id !== p.lead_id)!
+    expect((await notebookOf(someoneElse.user_id)).shared.some((n) => n.id === id)).toBe(false)
+    expect((await notebookOf(p.lead_id)).mine.find((n) => n.id === id)!.audience).toBe("me")
+  })
+})

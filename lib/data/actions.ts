@@ -29,7 +29,8 @@ import { askForJson } from "@/lib/ai/claude"
 import { openBody, sealBody, type ChatBody } from "@/lib/chat/at-rest"
 import { actorName, notify } from "./notify"
 import { isPushEndpoint, isPushKey } from "@/lib/push/hosts"
-import { cleanDrawing } from "@/lib/notes/drawing"
+import { canDrawOn, type Audience } from "@/lib/notes/access"
+import { cleanDrawing, type Stroke } from "@/lib/notes/drawing"
 import { isClock, isZone } from "@/lib/push/quiet"
 import { deliverPush, pushConfigured } from "@/lib/push/send"
 import { log, mutate, newId, newToken, readDb, resetDb } from "./store"
@@ -3089,35 +3090,99 @@ export async function updateNote(id: string, text: string, title?: string): Prom
  * Saves a whiteboard: a new one when there is no id, otherwise the changes to
  * your own. The drawing is checked here, never trusted from the browser.
  */
+export type ShareChoice = { to: Audience; projectId?: string }
+
+/** Turns a sharing choice into the note's fields, checking the project is in this workspace. */
+function shareFields(db: Database, workspaceId: string, share: ShareChoice | undefined) {
+  const to = share?.to ?? "me"
+  if (to === "me") return { shared: undefined, project_id: undefined }
+  if (to === "workspace") return { shared: "workspace" as const, project_id: undefined }
+  if (to === "project" && db.projects.some((p) => p.id === share?.projectId && p.workspace_id === workspaceId)) {
+    return { shared: "project" as const, project_id: share!.projectId }
+  }
+  return null
+}
+
+const revalidateNote = (projectId?: string) => {
+  revalidatePath("/notebook")
+  if (projectId) revalidatePath(`/projects/${projectId}`)
+}
+
+/**
+ * Saves a whiteboard: a new one when there is no id, otherwise your changes to
+ * one you may draw on (your own, or one shared with you). The drawing is
+ * checked here, never trusted from the browser. If someone else saved since
+ * you opened it, nothing is overwritten: their latest is sent back so your new
+ * lines can be added on top.
+ */
 export async function saveBoard(input: {
   id?: string
   title: string
   caption: string
   drawing: unknown
-}): Promise<Result & { id?: string }> {
-  const { user, workspace } = await requireContext()
+  share?: ShareChoice
+  /** When the board you started from was last saved. */
+  baseUpdatedAt?: string
+}): Promise<Result & { id?: string; updatedAt?: string; conflict?: { drawing: Stroke[]; updatedAt: string } }> {
+  const { user, workspace, role } = await requireContext()
   const name = cleanTitle(input?.title)
   const caption = cleanNote(input?.caption)
   const drawing = cleanDrawing(input?.drawing)
   if (!drawing) return { ok: false, message: "That drawing could not be saved. It may be too big: start a new board." }
   if (name.length > MAX_TITLE) return titleTooLong
   if (caption.length > MAX_NOTE) return tooLong
-  if (!input.id && drawing.length === 0 && !name && !caption) return { ok: false, message: "Draw something first" }
 
   if (!input.id) {
-    return addToNotebook(workspace.id, user.id, { body: caption, title: name || undefined, kind: "board", drawing }, "Whiteboard saved")
+    if (drawing.length === 0 && !name && !caption) return { ok: false, message: "Draw something first" }
+    const share = shareFields(await readDb(), workspace.id, input.share)
+    if (!share) return { ok: false, message: "That project is not here" }
+    const r = await addToNotebook(workspace.id, user.id, { body: caption, title: name || undefined, kind: "board", drawing, ...share }, "Whiteboard saved")
+    if (share.project_id) revalidatePath(`/projects/${share.project_id}`)
+    return r
   }
+
   const result = await mutate((d) => {
-    const n = ownNote(d, input.id!, workspace.id, user.id)
-    if (!n || n.kind !== "board") return { ok: false as const, message: "That whiteboard is not here" }
+    const n = d.notes.find((x) => x.id === input.id && x.workspace_id === workspace.id)
+    if (!n || n.kind !== "board" || !canDrawOn(d, n, user.id, role)) {
+      return { ok: false as const, message: "You cannot draw on that whiteboard" }
+    }
+    if (input.baseUpdatedAt && n.updated_at !== input.baseUpdatedAt) {
+      return {
+        ok: false as const,
+        message: "Someone saved this whiteboard while you were drawing",
+        conflict: { drawing: n.drawing ?? [], updatedAt: n.updated_at },
+      }
+    }
     n.title = name || undefined
     n.body = caption
     n.drawing = drawing
     n.updated_at = now()
-    return { ok: true as const, message: "Whiteboard saved", id: n.id }
+    return { ok: true as const, message: "Whiteboard saved", id: n.id, updatedAt: n.updated_at, projectId: n.project_id }
   })
-  revalidatePath("/notebook")
+  revalidateNote("projectId" in result ? result.projectId : undefined)
   return result
+}
+
+/** Who can see a note or whiteboard. Only its author decides. */
+export async function shareNote(id: string, share: ShareChoice): Promise<Result> {
+  const { user, workspace } = await requireContext()
+  const fields = shareFields(await readDb(), workspace.id, share)
+  if (!fields) return { ok: false, message: "That project is not here" }
+  const before = await mutate((d) => {
+    const n = ownNote(d, id, workspace.id, user.id)
+    if (!n) return null
+    const was = n.project_id
+    n.shared = fields.shared
+    n.project_id = fields.project_id
+    return { was }
+  })
+  if (!before) return { ok: false, message: "Only the person who wrote it can change who sees it" }
+  revalidateNote(fields.project_id)
+  if (before.was && before.was !== fields.project_id) revalidatePath(`/projects/${before.was}`)
+  return {
+    ok: true,
+    message: fields.shared === "workspace" ? "Shared with everyone here" : fields.shared === "project" ? "Shared with the project" : "Only you can see it now",
+  }
 }
 
 export async function setNotePinned(id: string, pinned: boolean): Promise<Result> {

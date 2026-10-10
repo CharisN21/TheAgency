@@ -12,11 +12,18 @@ Four pieces, built in this order because each one feeds the next.
 - **Notebook** (`/notebook`): your notes, newest first, pinned ones on top, with a search box. Each note can have a title. From any note: pin it, edit it, make it a task, post it onto an organisation, person or deal timeline, or delete it.
 - **Whiteboards**, in the same notebook: "New whiteboard" opens a board to scribble on with a mouse, finger or pen, in ink or maroon, thin or thick, with an eraser, undo and clear, plus a title and an optional caption. Stored as lines (not a picture), so it stays sharp at any size and follows dark mode. Private like notes.
 
-**Privacy (the rule that does not bend).** A note is visible only to the person who wrote it. Not owners, not admins. It becomes visible to others only when you choose "Post to a timeline", which copies the words onto a record's timeline as an ordinary note; the private original stays yours. The page says so in plain words.
+**Privacy and sharing.** Everything starts private: only the author sees it, not owners, not admins. The author can share a note or whiteboard (rules in `lib/notes/access.ts`):
+
+- **Everyone in the workspace:** anyone in it can open it; anyone who can edit can draw on a shared whiteboard; viewers only look.
+- **A project:** it shows in a "Whiteboards and notes" section on the project page. Everyone in the workspace can open it (projects are open to all), but only the project's lead and members, and owners and admins, can draw on it. A new whiteboard started on a project page is shared with that project.
+
+A shared written note is read by others and changed only by its author; a shared whiteboard is drawn on together. Sharing, pinning and deleting stay with the author. If two people save the same board, the second save never overwrites the first: new lines are added on top, and if lines were also removed the second person can load the latest or keep theirs as a private copy. Boards do not yet update live while someone else draws (that comes with Supabase Realtime). "Post to a timeline" still copies a note's words onto a record.
+
+**Why projects (team dynamics).** Shared work is used when it lives where the team already works, and ignored when it sits in a separate drawer. A project page gives every board an obvious audience and owner, keeps the workspace-wide list from becoming a dumping ground, and keeps the private notebook a safe place for half-formed thoughts.
 
 **Data.** `notes`: id, workspace_id, author_id, title (optional, up to 120), kind (text or board), body (up to 10,000 characters; a board's caption), drawing (a board's strokes, checked by the server, `lib/notes/drawing.ts`), pinned, created_at, updated_at. Row-Level Security: author only, and a member of the workspace. At most 2,000 notes per person per workspace.
 
-**Not in this slice:** attachments, folders, tags, voice notes, shared notes or shared whiteboards (everyone in the workspace drawing on one board). Notes link to records only by being posted to their timeline.
+**Not in this slice:** attachments, folders, tags, voice notes, live drawing together, sharing with one named person. Notes link to records only by being posted to their timeline.
 
 ## 2. Ctrl K palette
 
