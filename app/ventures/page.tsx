@@ -17,15 +17,11 @@ export default async function VenturesPage() {
 
   return (
     <EntryShell email={user.email}>
-      <h1 className="text-3xl font-bold tracking-tight">Your ventures</h1>
-      <p className="text-muted-foreground mt-2">Choose one to see its workspaces. Nothing crosses between them.</p>
+      <h1 className="text-3xl font-bold tracking-tight">Main Hub</h1>
 
       {ventures.length === 0 ? (
         <div className="mt-8 flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
-          <h2 className="font-semibold">No ventures yet</h2>
-          <p className="text-muted-foreground max-w-sm text-sm">
-            Start your first venture, then add a workspace for each team: Marketing and sales, Operations, Directors.
-          </p>
+          <h2 className="font-semibold">Nothing here yet</h2>
           <Link href="/new-workspace" className="text-primary text-sm font-medium underline underline-offset-4">
             Start a venture
           </Link>

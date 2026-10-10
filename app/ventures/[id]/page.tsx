@@ -20,21 +20,16 @@ export default async function VenturePage({ params }: { params: Promise<{ id: st
   return (
     <EntryShell email={user.email}>
       <Link href="/ventures" className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-2 text-sm">
-        <ArrowLeft className="size-4" /> All ventures
+        <ArrowLeft className="size-4" /> Main Hub
       </Link>
 
       <div className="mt-4 flex items-center gap-4">
         <VentureMark name={venture.name} color={venture.accent_color} size={56} />
-        <div className="min-w-0">
-          <h1 className="truncate text-3xl font-bold tracking-tight">{venture.name}</h1>
-          <p className="text-muted-foreground">
-            {venture.workspaces.length === 1 ? "1 workspace you are in" : `${venture.workspaces.length} workspaces you are in`}
-          </p>
-        </div>
+        <h1 className="min-w-0 truncate text-3xl font-bold tracking-tight">{venture.name}</h1>
       </div>
 
       {venture.workspaces.length === 0 ? (
-        <p className="text-muted-foreground mt-8 text-sm">No workspaces yet. Add the first one below.</p>
+        <p className="text-muted-foreground mt-8 text-sm">No workspaces yet.</p>
       ) : (
         <ul className="mt-8 flex flex-col gap-3">
           {venture.workspaces.map((w) => (

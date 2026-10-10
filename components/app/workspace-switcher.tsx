@@ -31,7 +31,7 @@ const mark = (name: string) => Array.from(name.trim())[0]?.toUpperCase()
 
 /**
  * Top left: the venture's mark and the workspace you are in. The menu lists the
- * other workspaces of this venture, and "All ventures" goes back to the start.
+ * other workspaces of this venture, and "Main Hub" goes back to the start.
  */
 export function WorkspaceSwitcher({
   workspaces,
@@ -93,7 +93,7 @@ export function WorkspaceSwitcher({
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/ventures">
-                <LayoutGrid /> All ventures
+                <LayoutGrid /> Main Hub
               </Link>
             </DropdownMenuItem>
             {can.invite(current.role) && (

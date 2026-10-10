@@ -53,7 +53,6 @@ export function NewCompanyForm() {
       <div className="flex flex-col gap-2">
         <Label htmlFor="workspace">First workspace</Label>
         <Input id="workspace" name="workspace" placeholder="Marketing and sales" defaultValue="Main team" maxLength={80} className="h-11" />
-        <p className="text-muted-foreground text-sm">You can add more workspaces later, one per team.</p>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -61,9 +60,6 @@ export function NewCompanyForm() {
           Your title <span className="text-muted-foreground">(optional)</span>
         </Label>
         <Input id="title" name="title" placeholder="Founder" className="h-11" />
-        <p className="text-muted-foreground text-sm">
-          Shown to your team next to your name.
-        </p>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -93,9 +89,6 @@ export function NewCompanyForm() {
             {initial}
           </span>
         </div>
-        <p className="text-muted-foreground text-sm">
-          The venture&rsquo;s mark, on every workspace in it and on banners.
-        </p>
       </div>
 
       <Button type="submit" size="lg" disabled={pending} className="mt-2 self-start">

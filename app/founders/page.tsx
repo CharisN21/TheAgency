@@ -19,17 +19,12 @@ export default async function FoundersPage() {
   return (
     <EntryShell email={user.email}>
       <Link href="/ventures" className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-2 text-sm">
-        <ArrowLeft className="size-4" /> All ventures
+        <ArrowLeft className="size-4" /> Main Hub
       </Link>
       <h1 className="mt-4 text-3xl font-bold tracking-tight">Founders</h1>
-      <p className="text-muted-foreground mt-2">
-        Only founders can start a venture and add workspaces to it. Everyone else gets in by invite, in the role and title the
-        founder or an admin gives them.
-      </p>
 
       <div className="mt-8">
         <AppointFounderForm />
-        <p className="text-muted-foreground mt-2 text-sm">They sign in with this email, then start their venture.</p>
       </div>
 
       <ul className="bg-card divide-border mt-8 divide-y rounded-xl border">

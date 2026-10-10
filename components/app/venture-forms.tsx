@@ -64,7 +64,6 @@ export function NewWorkspaceForm({ ventureId, ventureName }: { ventureId: string
       <div className="flex flex-col gap-2">
         <Label htmlFor="ws-name">Workspace name</Label>
         <Input id="ws-name" name="name" placeholder="Marketing and sales" maxLength={80} required autoFocus />
-        <p className="text-muted-foreground text-sm">One team inside {ventureName}, with its own people, records and work.</p>
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="ws-title">
