@@ -13,12 +13,15 @@ import { RaiseFlag } from "@/components/app/flags"
 import { ClaudeOff, SuggestTeamButton, TeamSuggestionList } from "@/components/app/ai"
 import { CloseProject, ReopenProject } from "@/components/app/retro"
 import { Timeline } from "@/components/app/timeline"
+import { ProjectNotes } from "@/components/app/notebook"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   draftCheckIn,
   getProject,
   listAssignees,
   listOrganisations,
+  listProjectNotes,
+  listProjects,
   listTasks,
   noticeForRetro,
 } from "@/lib/data/queries"
@@ -42,11 +45,13 @@ const longDate = (iso?: string) =>
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const { user, workspace, role } = await requireContext()
-  const [found, tasks, people, organisations] = await Promise.all([
+  const [found, tasks, people, organisations, notes, projects] = await Promise.all([
     getProject(workspace.id, id),
     listTasks(workspace.id, { project: id, withDone: true }),
     listAssignees(workspace.id),
     listOrganisations(workspace.id, { sort: "name" }),
+    listProjectNotes(workspace.id, id, user.id, role),
+    listProjects(workspace.id),
   ])
   if (!found) notFound()
 
@@ -226,7 +231,19 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           />
         </Band>
 
-        <Band tone="soft" index={2} label="Check-ins">
+        <Band index={2} label="Whiteboards and notes">
+          <BandTitle>Whiteboards and notes</BandTitle>
+          <ProjectNotes
+            notes={notes}
+            projectId={p.id}
+            projectName={p.name}
+            canEdit={can.edit(role)}
+            workspaceName={workspace.name}
+            projects={projects.filter((x) => x.status === "active").map((x) => ({ value: x.id, label: x.name }))}
+          />
+        </Band>
+
+        <Band tone="soft" index={3} label="Check-ins">
           <BandTitle
             action={
               draft && (

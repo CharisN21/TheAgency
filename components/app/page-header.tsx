@@ -1,5 +1,6 @@
 import { ChatButton } from "@/components/app/chat"
 import { NotificationBell } from "@/components/app/notification-bell"
+import { CaptureButton } from "@/components/app/quick-capture"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 /** Every screen wears the same hat: trigger on phones, title, then actions. */
@@ -24,6 +25,7 @@ export function PageHeader({
         )}
       </div>
       {children}
+      <CaptureButton />
       <ChatButton />
       <NotificationBell />
     </header>

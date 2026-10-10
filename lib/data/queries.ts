@@ -11,6 +11,7 @@ import {
   phoneKey,
   type MatchReason,
 } from "./match"
+import { audienceOf, canDrawOn, canSeeNote, type Audience } from "@/lib/notes/access"
 import { readDb } from "./store"
 import {
   OPEN_STAGES,
@@ -22,6 +23,8 @@ import {
   type Invite,
   type Organisation,
   type Profile,
+  type Database,
+  type Note,
   type Role,
   type SavedView,
   type StageId,
@@ -1197,6 +1200,59 @@ export async function listNotifications(
 export async function unreadNotificationCount(workspaceId: string, userId: string): Promise<number> {
   const db = await readDb()
   return db.notifications.filter((n) => n.workspace_id === workspaceId && n.user_id === userId && !n.read_at).length
+}
+
+export type NoteRow = Note & {
+  mine: boolean
+  authorName: string
+  audience: Audience
+  projectName?: string
+  /** Whether this person may draw on it (whiteboards only). */
+  canDraw: boolean
+}
+
+function noteRows(db: Database, notes: Note[], userId: string, role: Role): NoteRow[] {
+  return notes.map((n) => ({
+    ...n,
+    mine: n.author_id === userId,
+    authorName: db.profiles.find((p) => p.id === n.author_id)?.full_name ?? "Someone",
+    audience: audienceOf(db, n),
+    projectName: n.project_id ? db.projects.find((p) => p.id === n.project_id)?.name : undefined,
+    canDraw: canDrawOn(db, n, userId, role),
+  }))
+}
+
+/** Your notebook: your own notes and boards, and what others have shared with you here. */
+export async function listNotebook(workspaceId: string, userId: string, role: Role) {
+  const db = await readDb()
+  const visible = db.notes.filter((n) => n.workspace_id === workspaceId && canSeeNote(db, n, userId))
+  const byRecent = (a: Note, b: Note) => b.updated_at.localeCompare(a.updated_at)
+  return {
+    mine: noteRows(
+      db,
+      visible.filter((n) => n.author_id === userId).sort((a, b) => Number(b.pinned) - Number(a.pinned) || byRecent(a, b)),
+      userId,
+      role
+    ),
+    shared: noteRows(db, visible.filter((n) => n.author_id !== userId).sort(byRecent), userId, role),
+  }
+}
+
+/** Whiteboards and notes shared with one project, for its page. */
+export async function listProjectNotes(workspaceId: string, projectId: string, userId: string, role: Role) {
+  const db = await readDb()
+  const rows = db.notes
+    .filter((n) => n.workspace_id === workspaceId && n.project_id === projectId && audienceOf(db, n) === "project" && canSeeNote(db, n, userId))
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+  return noteRows(db, rows, userId, role)
+}
+
+/** Your own notes in this workspace, pinned first, then newest. Nobody else's, whatever their role. */
+export async function listMyNotes(workspaceId: string, userId: string) {
+  const db = await readDb()
+  return db.notes
+    .filter((n) => n.workspace_id === workspaceId && n.author_id === userId)
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updated_at.localeCompare(a.updated_at))
 }
 
 export type BannerSettings = { banners: boolean; quietOn: boolean; quietFrom: string; quietTo: string }

@@ -510,6 +510,31 @@ export type PushDevice = {
   created_at: string
 }
 
+/**
+ * A note or whiteboard. Private to its author unless the author shares it with
+ * the workspace or a project (lib/notes/access.ts). Owners and admins cannot
+ * see a private one. Posting a note to a record's timeline copies the words.
+ */
+export type Note = {
+  id: string
+  workspace_id: string
+  author_id: string
+  /** A short name, optional. */
+  title?: string
+  /** A written note, or a whiteboard. Older notes have no kind and are written. */
+  kind?: "text" | "board"
+  /** The note's words; for a whiteboard, an optional caption. */
+  body: string
+  /** A whiteboard's strokes (see lib/notes/drawing.ts). */
+  drawing?: Stroke[]
+  /** Unset is only the author. See lib/notes/access.ts for who sees and draws on what. */
+  shared?: "workspace" | "project"
+  project_id?: string
+  pinned: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type ObjectivePeriod = "week" | "month" | "year"
 
 export const PERIOD_LABEL: Record<ObjectivePeriod, string> = {
@@ -611,6 +636,8 @@ export type ChannelRead = {
   read_at: string
 }
 
+import type { Stroke } from "@/lib/notes/drawing"
+
 export type Database = {
   profiles: Profile[]
   workspaces: Workspace[]
@@ -634,6 +661,7 @@ export type Database = {
   notifications: Notification[]
   notification_prefs: NotificationPrefs[]
   push_subscriptions: PushDevice[]
+  notes: Note[]
   channels: Channel[]
   channel_members: ChannelMember[]
   messages: Message[]
